@@ -316,10 +316,85 @@
         /* Ensure content is always visible */
         .hidden { display: none !important; }
         .visible { display: block !important; }
+
+        /* Draggable header bar */
+        .window-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 32px;
+            -webkit-app-region: drag;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            box-sizing: border-box;
+            background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+            z-index: 50;
+            color: #e5e7eb;
+            font-size: 12px;
+            letter-spacing: 0.3px;
+        }
+        .window-title {
+            pointer-events: none;
+            user-select: none;
+            opacity: 0.9;
+        }
+        .window-controls {
+            display: flex;
+            gap: 6px;
+            -webkit-app-region: no-drag;
+        }
+        .window-btn {
+            width: 22px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.06);
+            color: #e5e7eb;
+            border: 1px solid rgba(255,255,255,0.12);
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+            font-weight: 600;
+            line-height: 1;
+        }
+        .window-btn:hover {
+            background: rgba(255,255,255,0.12);
+            border-color: rgba(255,255,255,0.2);
+        }
+        .window-btn-close:hover {
+            background: rgba(239, 68, 68, 0.25);
+            border-color: rgba(239, 68, 68, 0.45);
+            color: #fff;
+        }
+        
+        /* Push content below header */
+        .has-header #response-content,
+        .has-header #loading {
+            margin-top: 32px;
+        }
+        .has-header .split-layout,
+        .has-header .full-content,
+        .has-header .loading {
+            height: calc(100vh - 32px);
+        }
     </style>
 </head>
 <body class="text-white">
-    <div class="main-container">
+    <div class="main-container has-header">
+        <!-- Draggable Header -->
+        <div class="window-header">
+            <div class="window-title">AI Response</div>
+            <div class="window-controls">
+                <button id="close-window-btn" class="window-btn window-btn-close" title="Close">×</button>
+            </div>
+        </div>
+
         <!-- Loading State -->
         <div id="loading" class="loading">
             <div class="loading-compact">
@@ -786,6 +861,26 @@
             const loadingElement = document.getElementById('loading');
             const responseElement = document.getElementById('response-content');
         };
+
+        // Close button handler
+        (function(){
+            const btn = document.getElementById('close-window-btn');
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    try {
+                        if (window.electronAPI && window.electronAPI.closeWindow) {
+                            window.electronAPI.closeWindow();
+                        } else if (window.api && window.api.send) {
+                            window.api.send('quit-app');
+                        } else {
+                            window.close();
+                        }
+                    } catch (e) {
+                        try { window.close(); } catch (_) {}
+                    }
+                });
+            }
+        })();
     </script>
 </body>
 </html>
