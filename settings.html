@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+    <link href="./src/styles/common.css" rel="stylesheet">
+    <script src="https://kit.fontawesome.com/your-font-awesome-kit.js" crossorigin="anonymous"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+        }
+
+        .settings-container {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0%, rgba(20, 20, 20, 0.4) 100%);
+            backdrop-filter: blur(25px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .settings-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-app-region: drag;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            -webkit-app-region: no-drag;
+        }
+
+        .settings-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            color: rgba(255, 255, 255, 0.9);
+            max-height: calc(100vh - 70px);
+        }
+
+        .settings-section {
+            margin-bottom: 24px;
+        }
+
+        .settings-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .settings-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.95);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .settings-section-content {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .settings-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 8px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .settings-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .settings-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .settings-item-label {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .settings-item-description {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 4px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .btn.btn-danger {
+            background: rgba(244, 67, 54, 0.8);
+        }
+
+        .btn.btn-danger:hover {
+            background: rgba(244, 67, 54, 1);
+        }
+
+        .btn.btn-quit {
+            background: rgba(255, 71, 87, 0.8);
+        }
+
+        .btn.btn-quit:hover {
+            background: rgba(255, 71, 87, 1);
+        }
+
+        .input-field {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 13px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Stealth scrollbar */
+        ::-webkit-scrollbar {
+            width: 2px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 1px;
+        }
+
+        /* Feedback notification styling */
+        #tempFeedback {
+            font-size: 10px !important;
+            padding: 6px 10px !important;
+            background: rgba(0, 0, 0, 0.8) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            backdrop-filter: blur(5px) !important;
+        }
+
+        /* Additional styles for new sections */
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .icon-option {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 12px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .icon-option:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .icon-option.selected {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .icon-option img {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 8px;
+            object-fit: contain;
+        }
+
+        .icon-option div {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        select.input-field {
+            cursor: pointer;
+            padding-right: 30px;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255, 255, 255, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 16px;
+        }
+
+        select.input-field option {
+            background: #1a1a1a;
+            color: #ffffff;
+            padding: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <div class="settings-header">
+            <div class="header-title">
+                <i class="fas fa-cog"></i>
+                Settings
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-quit" id="quitButton">
+                    <i class="fas fa-power-off"></i>
+                    Quit
+                </button>
+                <button class="btn" id="closeButton">
+                    <i class="fas fa-times"></i>
+                    Close
+                </button>
+            </div>
+        </div>
+        
+        <div class="settings-content">
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-code"></i>
+                    Language & Skills
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Coding Language</div>
+                            <div class="settings-item-description">Select your preferred programming language</div>
+                        </div>
+                        <select class="input-field" id="codingLanguage">
+                            <option value="cpp">C++</option>
+                            <option value="c">C</option>
+                            <option value="python">Python</option>
+                            <option value="java">Java</option>
+                            <option value="javascript">JavaScript</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Active Skill</div>
+                            <div class="settings-item-description">Choose your current focus area</div>
+                        </div>
+                        <select class="input-field" id="activeSkill">
+                            <option value="dsa">Data Structures & Algorithms</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-icons"></i>
+                    App Icon
+                </div>
+                <div class="settings-section-content">
+                    <div class="icon-grid" id="iconGrid">
+                        <div class="icon-option" data-icon="terminal">
+                            <img src="./assests/icons/terminal.png" alt="Terminal">
+                            <div>Terminal</div>
+                        </div>
+                        <div class="icon-option" data-icon="activity">
+                            <img src="./assests/icons/activity.png" alt="Activity">
+                            <div>Activity</div>
+                        </div>
+                        <div class="icon-option" data-icon="settings">
+                            <img src="./assests/icons/settings.png" alt="Settings">
+                            <div>Settings</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-microphone"></i>
+                    Speech Recognition
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Azure Speech Key</div>
+                            <div class="settings-item-description">Your Azure Cognitive Services API key</div>
+                        </div>
+                        <input type="password" class="input-field" id="azureKey" placeholder="Enter your Azure key">
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Azure Region</div>
+                            <div class="settings-item-description">Your Azure service region</div>
+                        </div>
+                        <input type="text" class="input-field" id="azureRegion" placeholder="e.g. eastus">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-robot"></i>
+                    Gemini Settings
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Google API Key</div>
+                            <div class="settings-item-description">Your Google API key for Gemini models</div>
+                        </div>
+                        <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-window-maximize"></i>
+                    Window Settings
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Window Gap</div>
+                            <div class="settings-item-description">Gap between bound windows (in pixels)</div>
+                        </div>
+                        <input type="number" class="input-field" id="windowGap" placeholder="20" min="0" max="100">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./src/ui/settings-window.js"></script>
+</body>
+</html>

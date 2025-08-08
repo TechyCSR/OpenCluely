@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCluely</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(20, 20, 20, 0.5) 100%);;
+            -webkit-app-region: no-drag;
+            color: white;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        .content-area {
+            -webkit-app-region: no-drag;
+        }
+        .markdown-content {
+            line-height: 1.6;
+            color: white;
+            font-size: 0.875rem;
+        }
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+            margin-top: 1.2rem;
+            margin-bottom: 0.8rem;
+            font-weight: bold;
+            color: white;
+        }
+        .markdown-content h1 { font-size: 1.2rem; }
+        .markdown-content h2 { font-size: 1.1rem; }
+        .markdown-content h3 { font-size: 1rem; }
+        .markdown-content p { margin-bottom: 0.8rem; color: white; font-size: 0.875rem; }
+        .markdown-content ul, .markdown-content ol { margin-bottom: 0.8rem; padding-left: 1.2rem; font-size: 0.875rem; }
+        .markdown-content li { margin-bottom: 0.4rem; color: white; font-size: 0.875rem; }
+        .markdown-content code { 
+            background-color: rgba(0, 0, 0, 0.4); 
+            padding: 0.2rem 0.4rem; 
+            border-radius: 0.25rem; 
+            font-family: 'Courier New', monospace;
+            color: #e5e7eb;
+        }
+        .markdown-content pre { 
+            background-color: rgba(0, 0, 0, 0.4); 
+            padding: 1rem; 
+            border-radius: 0.5rem; 
+            margin: 1rem 0;
+            overflow-x: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .markdown-content pre code { 
+            background-color: transparent; 
+            padding: 0; 
+            color: #e5e7eb;
+        }
+        .markdown-content blockquote { 
+            border-left: 4px solid #6b7280; 
+            padding-left: 1rem; 
+            margin: 1rem 0;
+            font-style: italic;
+            color: #d1d5db;
+        }
+
+        /* Main container - ensures full viewport usage */
+        .main-container {
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
+            background: transparent;
+        }
+
+        /* Split layout improvements */
+        .split-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            height: 100vh;
+            padding: 0;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        /* Panel improvements with proper scrolling */
+        .text-panel, .code-panel {
+            background: transparent;
+            overflow: hidden;
+            position: relative;
+            min-height: 0; /* Important for grid items */
+        }
+
+        .panel-content {
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: auto;
+            padding: 1rem;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        /* Full content layout */
+        .full-content {
+            height: 100vh;
+            padding: 0;
+            box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .full-content-inner {
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+            overflow-x: auto;
+            padding: 1rem;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        /* Hide scrollbars completely while maintaining scrollability */
+        .panel-content::-webkit-scrollbar, 
+        .full-content-inner::-webkit-scrollbar {
+            width: 0px;
+            height: 0px;
+            display: none;
+        }
+        
+        /* For Firefox and other browsers */
+        .panel-content, 
+        .full-content-inner {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        /* Code block styling */
+        .code-block {
+            background-color: rgba(0, 0, 0, 0.3); 
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .code-header {
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem 0.5rem 0 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: #d1d5db;
+            font-weight: bold;
+        }
+        .code-content {
+            padding: 1rem;
+            overflow-x: auto;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 0 0 0.5rem 0.5rem;
+        }
+        .code-content pre {
+            background-color: transparent;
+            border: none;
+            margin: 0;
+            padding: 0;
+        }
+        .code-content code {
+            background-color: transparent;
+            color: #e5e7eb;
+        }
+        .no-code {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        /* Loading state */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+        }
+        
+        .loading-compact {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 200px;
+            height: 60px;
+            background: transparent;
+        }
+        
+        .dots-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        
+        .bouncing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #4CAF50;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        
+        .bouncing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .bouncing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .bouncing-dot:nth-child(3) { animation-delay: 0s; }
+        
+        @keyframes bounce {
+            0%, 80%, 100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Interactive scrolling enhancements */
+        .interactive-scrolling .panel-content,
+        .interactive-scrolling .full-content-inner {
+            cursor: grab;
+        }
+
+        .interactive-scrolling .panel-content:active,
+        .interactive-scrolling .full-content-inner:active {
+            cursor: grabbing;
+        }
+
+        /* Remove hover effects for clean content appearance */
+
+        /* Override Prism theme for better visibility */
+        .token.comment,
+        .token.prolog,
+        .token.doctype,
+        .token.cdata {
+            color: #6a737d;
+        }
+        
+        .token.punctuation {
+            color: #e1e4e8;
+        }
+        
+        .token.property,
+        .token.tag,
+        .token.boolean,
+        .token.number,
+        .token.constant,
+        .token.symbol,
+        .token.deleted {
+            color: #79b8ff;
+        }
+        
+        .token.selector,
+        .token.attr-name,
+        .token.string,
+        .token.char,
+        .token.builtin,
+        .token.inserted {
+            color: #85e89d;
+        }
+        
+        .token.operator,
+        .token.entity,
+        .token.url,
+        .language-css .token.string,
+        .style .token.string {
+            color: #f97583;
+        }
+        
+        .token.atrule,
+        .token.attr-value,
+        .token.keyword {
+            color: #f97583;
+        }
+        
+        .token.function,
+        .token.class-name {
+            color: #b392f0;
+        }
+        
+        .token.regex,
+        .token.important,
+        .token.variable {
+            color: #ffab70;
+        }
+        
+        .token.important,
+        .token.bold {
+            font-weight: bold;
+        }
+        
+        .token.italic {
+            font-style: italic;
+        }
+        
+        .token.entity {
+            cursor: help;
+        }
+
+        /* Ensure content is always visible */
+        .hidden { display: none !important; }
+        .visible { display: block !important; }
+    </style>
+</head>
+<body class="text-white">
+    <div class="main-container">
+        <!-- Loading State -->
+        <div id="loading" class="loading">
+            <div class="loading-compact">
+                <span class="text-gray-300 text-sm font-medium mr-2">Analyzing</span>
+                <div class="dots-container">
+                    <div class="bouncing-dot"></div>
+                    <div class="bouncing-dot"></div>
+                    <div class="bouncing-dot"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Response Content -->
+        <div id="response-content" class="content-area hidden">
+            <!-- Split Layout -->
+            <div id="split-layout" class="split-layout hidden">
+                <!-- Text Panel -->
+                <div class="text-panel">
+                    <div class="panel-content" tabindex="0">
+                        <div id="text-content" class="markdown-content"></div>
+                    </div>
+                </div>
+
+                <!-- Code Panel -->
+                <div class="code-panel">
+                    <div class="panel-content" tabindex="0">
+                        <div id="code-content"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Full Content (when no code detected) -->
+            <div id="full-content" class="full-content hidden">
+                <div class="full-content-inner" tabindex="0">
+                    <div id="full-markdown" class="markdown-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentLayout = 'split';
+        let hasCode = false;
+        let currentSkill = 'dsa';
+        let isInteractive = false;
+        let scrollableElements = [];
+
+        // Configure marked for better rendering
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (Prism.languages[lang]) {
+                    return Prism.highlight(code, Prism.languages[lang], lang);
+                }
+                return code;
+            },
+            breaks: true,
+            gfm: true
+        });
+
+        // Set up event listeners using electronAPI from preload script
+        if (window.electronAPI) {
+            // Set up show-loading event listener
+            window.electronAPI.onShowLoading(() => {
+                showLoadingState();
+            });
+            
+            window.electronAPI.onDisplayLlmResponse((event, data) => {
+                const response = data.content || data.response;
+            
+            // Check if window is still small (compact size) and request expansion
+            if (window.innerWidth < 500 || window.innerHeight < 300) {
+                // Pre-calculate content metrics for initial sizing
+                if (response) {
+                    const codeBlocks = extractCodeBlocks(response);
+                    const contentMetrics = calculateContentMetrics(response, codeBlocks);
+                    
+                    window.electronAPI.expandLlmWindow(contentMetrics)
+                        .then(() => {
+                            setTimeout(() => {
+                                hideLoadingState();
+                                displayResponse(data);
+                                setupScrolling();
+                                setTimeout(verifyDisplayState, 300);
+                            }, 200);
+                        })
+                        .catch(error => {
+                            console.error('Failed to expand window:', error);
+                            hideLoadingState();
+                            displayResponse(data);
+                            setupScrolling();
+                            setTimeout(verifyDisplayState, 300);
+                        });
+                } else {
+                    // Fallback for missing response data
+                    hideLoadingState();
+                    displayResponse(data);
+                    setupScrolling();
+                    // Verify display state after fallback
+                    setTimeout(verifyDisplayState, 400);
+                }
+            } else {
+                hideLoadingState();
+                displayResponse(data);
+                setupScrolling();
+                
+                // Verify display state after a short delay
+                setTimeout(verifyDisplayState, 500);
+            }
+            });
+        } else {
+            console.error('electronAPI not available! Cannot set up event listeners.');
+        }
+
+        function showLoadingState() {
+            const loadingElement = document.getElementById('loading');
+            const responseElement = document.getElementById('response-content');
+            
+            if (loadingElement) {
+                loadingElement.classList.remove('hidden');
+                loadingElement.style.display = ''; // Remove any forced display styles
+            }
+            
+            if (responseElement) {
+                responseElement.classList.add('hidden');
+            }
+            
+            console.log('Loading state shown - should see Analyzing...');
+        }
+
+        function hideLoadingState() {
+            const loadingElement = document.getElementById('loading');
+            if (loadingElement) {
+                loadingElement.classList.add('hidden');
+                loadingElement.style.display = 'none'; // Force hide
+                console.log('Loading state hidden');
+            } else {
+                console.error('Loading element not found!');
+            }
+        }
+
+        function calculateContentMetrics(response, codeBlocks) {
+            // Count lines in the response
+            const lineCount = response.split('\n').length;
+            
+            // Check for long lines (over 80 characters)
+            const hasLongLines = response.split('\n').some(line => line.length > 80);
+            
+            // Count code blocks
+            const codeBlockCount = codeBlocks.length;
+            
+            // Estimate content complexity
+            const hasCode = codeBlockCount > 0;
+            const isLongContent = lineCount > 30;
+            const hasMultipleCodeBlocks = codeBlockCount > 2;
+            
+            return {
+                lineCount,
+                hasLongLines,
+                codeBlocks: codeBlockCount,
+                hasCode,
+                isLongContent,
+                hasMultipleCodeBlocks,
+                complexity: isLongContent || hasMultipleCodeBlocks ? 'high' : hasCode ? 'medium' : 'low'
+            };
+        }
+
+        function displayResponse(data) {
+            // Show content
+            const responseElement = document.getElementById('response-content');
+            
+            if (responseElement) {
+                responseElement.classList.remove('hidden');
+            }
+
+            // Parse the response - check both content and response properties for compatibility
+            const response = data.content || data.response;
+            
+            if (!response) {
+                console.error('No response data received', {
+                    dataKeys: Object.keys(data),
+                    hasContent: !!data.content,
+                    hasResponse: !!data.response
+                });
+                return;
+            }
+            
+            // Check if response contains code blocks
+            const codeBlocks = extractCodeBlocks(response);
+            hasCode = codeBlocks.length > 0;
+
+            // Calculate content metrics for dynamic sizing
+            const contentMetrics = calculateContentMetrics(response, codeBlocks);
+
+            if (hasCode) {
+                // Split layout: text on left, code on right
+                displaySplitLayout(response, codeBlocks);
+            } else {
+                // Full layout: all content in one panel
+                displayFullLayout(response);
+            }
+            
+            // Request dynamic window sizing based on content
+            setTimeout(() => {
+                window.electronAPI.resizeLlmWindowForContent(contentMetrics)
+                    .then(result => {
+                    })
+                    .catch(error => {
+                        console.error('Failed to resize window:', error);
+                    });
+            }, 200);
+        }
+
+        function setupScrolling() {
+            // Set up scrollable elements based on current layout
+            setTimeout(() => {
+                if (hasCode) {
+                    scrollableElements = [
+                        document.querySelector('.text-panel .panel-content'),
+                        document.querySelector('.code-panel .panel-content')
+                    ].filter(el => el !== null);
+                } else {
+                    scrollableElements = [
+                        document.querySelector('.full-content-inner')
+                    ].filter(el => el !== null);
+                }
+                // Reset scroll positions and ensure elements are focusable
+                scrollableElements.forEach(element => {
+                    element.scrollTop = 0;
+                    element.scrollLeft = 0;
+                    element.setAttribute('tabindex', '0');
+                });
+
+                // Enable scrolling if interactive mode is on
+                if (isInteractive) {
+                    enableScrolling();
+                }
+            }, 100);
+        }
+
+        function enableScrolling() {
+            scrollableElements.forEach(element => {
+                if (element) {
+                    // Enable mouse/trackpad scrolling with smooth behavior
+                    element.style.scrollBehavior = 'smooth';
+                    
+                    // Add mouse enter handler to ensure focus for scrolling
+                    element.addEventListener('mouseenter', handleMouseEnter, { passive: true });
+                    element.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+                    
+                    // Add wheel event for enhanced scrolling
+                    element.addEventListener('wheel', handleWheelScroll, { passive: false });
+                    
+                }
+            });
+        }
+
+        function disableScrolling() {
+            scrollableElements.forEach(element => {
+                if (element) {
+                    element.removeEventListener('mouseenter', handleMouseEnter);
+                    element.removeEventListener('mouseleave', handleMouseLeave);
+                    element.removeEventListener('wheel', handleWheelScroll);
+                }
+            });
+        }
+
+        function handleMouseEnter(e) {
+            // Focus the element for keyboard scrolling and ensure it's ready for mouse scrolling
+            e.target.focus({ preventScroll: true });
+            e.target.style.cursor = 'grab';
+        }
+
+        function handleMouseLeave(e) {
+            e.target.style.cursor = 'default';
+        }
+
+        function handleWheelScroll(e) {
+            // Allow natural scrolling behavior
+            // Don't prevent default to maintain smooth native scrolling
+            logger.info('Wheel scroll detected on element');
+        }
+
+        function extractCodeBlocks(text) {
+            const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+            const blocks = [];
+            let match;
+
+            while ((match = codeBlockRegex.exec(text)) !== null) {
+                blocks.push({
+                    language: match[1] || 'text',
+                    code: match[2].trim(),
+                    fullMatch: match[0]
+                });
+            }
+
+            return blocks;
+        }
+
+        function displaySplitLayout(response, codeBlocks) {
+            // Show split layout, hide full layout
+            document.getElementById('split-layout').classList.remove('hidden');
+            document.getElementById('full-content').classList.add('hidden');
+
+            // Remove code blocks from text content
+            let textContent = response;
+            codeBlocks.forEach(block => {
+                textContent = textContent.replace(block.fullMatch, '');
+            });
+
+            // Clean up text content
+            textContent = textContent.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
+
+            // Render text content
+            const textHtml = marked.parse(textContent);
+            document.getElementById('text-content').innerHTML = textHtml;
+
+            // Render code blocks
+            const codeContainer = document.getElementById('code-content');
+            codeContainer.innerHTML = '';
+
+            if (codeBlocks.length === 0) {
+                codeContainer.innerHTML = '<div class="no-code">No code examples found</div>';
+            } else {
+                codeBlocks.forEach((block, index) => {
+                    const codeBlock = document.createElement('div');
+                    codeBlock.className = 'code-block';
+                    codeBlock.innerHTML = `
+                        <div class="code-header">${block.language.toUpperCase()}</div>
+                        <div class="code-content">
+                            <pre><code class="language-${block.language}">${escapeHtml(block.code)}</code></pre>
+                        </div>
+                    `;
+                    codeContainer.appendChild(codeBlock);
+                });
+            }
+
+            // Highlight code
+            Prism.highlightAll();
+        }
+
+        function displayFullLayout(response) {
+            // Show full layout, hide split layout
+            document.getElementById('split-layout').classList.add('hidden');
+            document.getElementById('full-content').classList.remove('hidden');
+
+            // Render full markdown
+            const html = marked.parse(response);
+            document.getElementById('full-markdown').innerHTML = html;
+
+            // Highlight any code
+            Prism.highlightAll();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Handle window focus
+        window.addEventListener('focus', () => {
+            logger.info('LLM Response window focused');
+        });
+
+        // Handle window close
+        window.addEventListener('beforeunload', () => {
+            logger.info('LLM Response window closing');
+        });
+
+        // Add keyboard scrolling support for when interactive
+        document.addEventListener('keydown', (e) => {
+            if (!isInteractive) return;
+            
+            const activeElement = document.activeElement;
+            let targetElement = null;
+            
+            // Find the currently focused scrollable element
+            for (let element of scrollableElements) {
+                if (element === activeElement || element.contains(activeElement)) {
+                    targetElement = element;
+                    break;
+                }
+            }
+            
+            // Default to first scrollable element if none focused
+            if (!targetElement && scrollableElements.length > 0) {
+                targetElement = scrollableElements[0];
+            }
+            
+            if (!targetElement) return;
+            
+            const scrollAmount = 50; // Pixels to scroll
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                    e.preventDefault();
+                    targetElement.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    targetElement.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    targetElement.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    targetElement.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+                    break;
+                case 'PageUp':
+                    e.preventDefault();
+                    targetElement.scrollBy({ top: -targetElement.clientHeight * 0.8, behavior: 'smooth' });
+                    break;
+                case 'PageDown':
+                    e.preventDefault();
+                    targetElement.scrollBy({ top: targetElement.clientHeight * 0.8, behavior: 'smooth' });
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    targetElement.scrollTo({ top: 0, behavior: 'smooth' });
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    targetElement.scrollTo({ top: targetElement.scrollHeight, behavior: 'smooth' });
+                    break;
+            }
+        });
+
+        // Add verification function to ensure content is properly displayed
+        function verifyDisplayState() {
+            const loadingElement = document.getElementById('loading');
+            const responseElement = document.getElementById('response-content');
+            
+            const isLoadingHidden = loadingElement ? loadingElement.classList.contains('hidden') : true;
+            const isContentVisible = responseElement ? !responseElement.classList.contains('hidden') : false;
+            
+            console.log('Display state verification:', {
+                loadingHidden: isLoadingHidden,
+                contentVisible: isContentVisible,
+                windowVisible: !document.hidden
+            });
+            
+            if (!isLoadingHidden || !isContentVisible) {
+                console.warn('Display state inconsistent - forcing correction');
+                if (loadingElement) {
+                    loadingElement.classList.add('hidden');
+                    loadingElement.style.display = 'none';
+                }
+                if (responseElement) {
+                    responseElement.classList.remove('hidden');
+                }
+            }
+        }
+
+        // Add global debugging function
+        window.debugLLMWindow = function() {
+            logger.debug('=== LLM Window Debug Info ===');
+            logger.debug('Current layout:', currentLayout);
+            logger.debug('Has code:', hasCode);
+            logger.debug('Is interactive:', isInteractive);
+            logger.debug('Scrollable elements:', scrollableElements.length);
+            
+            const loadingElement = document.getElementById('loading');
+            const responseElement = document.getElementById('response-content');
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>OpenCluely</title>
+    <link href="./dist/output.css" rel="stylesheet" />
+    <link href="./src/styles/common.css" rel="stylesheet" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        width: fit-content;
+        height: fit-content;
+        background: transparent;
+        -webkit-app-region: no-drag;
+      }
+
+      .command-tab {
+        height: 28px;
+        background: linear-gradient(
+          135deg,
+          rgba(0, 0, 0, 0.4) 0%,
+          rgba(20, 20, 20, 0.5) 100%
+        );
+        backdrop-filter: blur(20px);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 0 12px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 11px;
+        font-weight: 600;
+        -webkit-app-region: drag;
+        flex-wrap: nowrap;
+        overflow: visible;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        width: 100%;
+        min-width: 400px;
+      }
+
+      .command-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        -webkit-app-region: no-drag;
+      }
+
+      .command-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .command-item i {
+        font-size: 14px;
+        transition: all 0.3s ease;
+      }
+
+      .command-item span {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 11px;
+      }
+
+      .command-item.recording i {
+        color: #ff4757;
+        text-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
+        animation: pulse 2s infinite;
+      }
+
+      .command-item.active {
+        color: #4caf50;
+        text-shadow: 0 1px 2px rgba(76, 175, 80, 0.3);
+      }
+
+      .command-item.active:hover {
+        background: rgba(76, 175, 80, 0.15);
+        color: #4caf50;
+      }
+
+      .command-separator {
+        width: 1px;
+        height: 16px;
+        background: linear-gradient(
+          to bottom,
+          transparent,
+          rgba(255, 255, 255, 0.25),
+          transparent
+        );
+        flex-shrink: 0;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        transition: all 0.3s ease;
+        position: relative;
+      }
+
+      .status-dot.interactive {
+        background-color: #10b981; /* Green for active/interactive */
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+        animation: pulse-green 2s infinite;
+      }
+
+      .status-dot.non-interactive {
+        background: #f44336;
+        box-shadow: 0 0 10px rgba(244, 67, 54, 0.692);
+      }
+
+      .hidden-indicator {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: rgba(255, 255, 255, 0.9);
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        z-index: 1000;
+      }
+
+      .hidden-indicator.show {
+        opacity: 1;
+      }
+
+      #skillIndicator {
+        color: #ffffff;
+        transition: all 0.3s ease;
+      }
+
+      #skillIndicator:hover {
+        color: #ffffff;
+      }
+
+      #skillIndicator.non-interactive {
+        color: #ffffff;
+        opacity: 0.7;
+      }
+
+      #skillIndicator.non-interactive:hover {
+        background: rgba(76, 175, 80, 0.05);
+        border-color: rgba(76, 175, 80, 0.15);
+        color: #ffffff;
+      }
+
+      #settingsIndicator {
+        color: #ffffff;
+        transition: all 0.3s ease;
+      }
+
+      #settingsIndicator:hover {
+        color: #ffa726;
+        background: rgba(255, 167, 38, 0.15);
+        text-shadow: 0 1px 2px rgba(255, 167, 38, 0.3);
+      }
+
+      #settingsIndicator.active {
+        color: #ffa726;
+        text-shadow: 0 1px 2px rgba(255, 167, 38, 0.3);
+      }
+
+      .command-item select {
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 12px;
+        outline: none;
+        -webkit-app-region: no-drag;
+      }
+
+      .command-item select option {
+        color: #000;
+      }
+
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.7;
+          transform: scale(1.1);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="command-tab">
+      <div class="command-item">
+        <i class="fas fa-camera"></i>
+        <span>⌘⇧S</span>
+      </div>
+      <div class="command-separator"></div>
+      <div class="command-item" id="micButton">
+        <i class="fas fa-microphone"></i>
+      </div>
+      <div class="command-separator"></div>
+      <div class="command-item" id="skillIndicator">
+        <i class="fas fa-brain"></i>
+        <span>DSA</span>
+      </div>
+      <div class="command-separator"></div>
+      <div class="command-item" id="languageSelector">
+        <i class="fas fa-code"></i>
+        <select id="codingLanguage">
+          <option value="cpp">C++</option>
+          <option value="c">C</option>
+          <option value="python">Python</option>
+          <option value="java">Java</option>
+          <option value="javascript">JavaScript</option>
+        </select>
+      </div>
+      <div class="command-separator"></div>
+      <div class="status-dot non-interactive" id="statusDot"></div>
+    </div>
+
+    <script src="./src/ui/main-window.js"></script>
+  </body>
+</html>
