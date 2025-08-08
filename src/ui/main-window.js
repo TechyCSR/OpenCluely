@@ -15,6 +15,7 @@ class MainWindowUI {
         this.skillIndicator = null;
         this.micButton = null;
         this.isRecording = false;
+        this.speechAvailable = false; // track availability
         
         // Define available skills for navigation
         this.availableSkills = [
@@ -34,6 +35,9 @@ class MainWindowUI {
             
             // Load current interaction state
             await this.loadCurrentInteractionState();
+            
+            // Fetch speech availability
+            await this.loadSpeechAvailability();
             
             this.updateSkillIndicator();
             this.updateAllElementStates(); // Update all elements with current state
@@ -96,6 +100,30 @@ class MainWindowUI {
         }
     }
 
+    async loadSpeechAvailability() {
+        try {
+            if (window.electronAPI && window.electronAPI.getSpeechAvailability) {
+                this.speechAvailable = await window.electronAPI.getSpeechAvailability();
+                this.applyMicVisibility();
+            }
+        } catch (e) {
+            this.speechAvailable = false;
+            this.applyMicVisibility();
+        }
+    }
+
+    applyMicVisibility() {
+        if (this.micButton) {
+            if (this.speechAvailable) {
+                this.micButton.style.display = '';
+            } else {
+                this.micButton.style.display = 'none';
+            }
+            // Resize to reflect layout change
+            setTimeout(() => this.resizeWindowToContent(), 50);
+        }
+    }
+
     updateAllElementStates() {
         // Update all interactive elements with current state
         this.updateStatusDot();
@@ -154,6 +182,8 @@ class MainWindowUI {
 
     updateMicButtonState() {
         if (this.micButton) {
+            // Also hide when unavailable
+            this.applyMicVisibility();
             // Remove both classes first
             this.micButton.classList.remove('interactive', 'non-interactive');
             
@@ -325,10 +355,16 @@ class MainWindowUI {
                 }
             });
 
+            window.electronAPI.onSpeechAvailability((event, data) => {
+                this.speechAvailable = !!(data && data.available);
+                this.applyMicVisibility();
+            });
+            
             // Global keyboard shortcuts
             document.addEventListener('keydown', (e) => {
                 if (e.altKey && e.key === 'r' && this.isInteractive) {
                     e.preventDefault();
+                    if (!this.speechAvailable) return; // guard when unavailable
                     if (this.isRecording) {
                         window.electronAPI.stopSpeechRecognition();
                     } else {

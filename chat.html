@@ -658,6 +658,36 @@
       let isInteractive = true;
       let listeningStartTime = null;
       let listeningTimer = null;
+      let speechAvailable = false;
+      
+      function applyMicVisibility() {
+        if (micButton) {
+          micButton.style.display = speechAvailable ? '' : 'none';
+        }
+      }
+      
+      async function initSpeechAvailability() {
+        try {
+          if (window.electronAPI && window.electronAPI.getSpeechAvailability) {
+            speechAvailable = await window.electronAPI.getSpeechAvailability();
+            applyMicVisibility();
+          }
+        } catch (e) {
+          speechAvailable = false;
+          applyMicVisibility();
+        }
+      }
+      
+      // Listen for availability changes
+      if (whysperAPI && whysperAPI.onSpeechAvailability) {
+        whysperAPI.onSpeechAvailability((event, data) => {
+          speechAvailable = !!(data && data.available);
+          applyMicVisibility();
+        });
+      }
+      
+      // Initialize availability
+      initSpeechAvailability();
 
       // Basic message function with markdown support for assistant messages
       function addMessage(text, type = 'user') {
@@ -906,6 +936,10 @@
             addMessage('Window is in non-interactive mode. Press Alt+A to enable interaction.', 'error');
             return;
           }
+          if (!speechAvailable) {
+            addMessage('Speech recognition is not configured.', 'system');
+            return;
+          }
 
           try {
             if (isRecording) {
@@ -977,7 +1011,8 @@
       document.addEventListener('keydown', (e) => {
         if (e.altKey && e.key === 'r') {
           e.preventDefault();
-          micButton.click();
+          if (!isInteractive || !speechAvailable) return;
+          micButton && micButton.click();
         }
       });
 

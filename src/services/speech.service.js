@@ -383,6 +383,7 @@ class SpeechService extends EventEmitter {
     this.maxRetries = 3;
     this.pushStream = null;
     this.recording = null;
+    this.available = false; // track availability
     
     this.initializeClient();
   }
@@ -394,9 +395,10 @@ class SpeechService extends EventEmitter {
       const region = process.env.AZURE_SPEECH_REGION;
       
       if (!subscriptionKey || !region) {
-        const error = 'Azure Speech credentials not found. Please set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION environment variables.';
-        logger.error('Speech service initialization failed', { reason: 'missing_credentials' });
-        this.emit('error', error);
+        const reason = 'Azure Speech credentials not found. Speech recognition disabled.';
+        logger.warn('Speech service disabled (missing credentials)');
+        this.available = false;
+        this.emit('status', reason);
         return;
       }
 
@@ -433,11 +435,13 @@ class SpeechService extends EventEmitter {
         language: azureConfig.language || 'en-US'
       });
       
+      this.available = true;
       this.emit('status', 'Azure Speech Services ready');
       
     } catch (error) {
       logger.error('Failed to initialize Azure Speech client', { error: error.message, stack: error.stack });
-      this.emit('error', `Speech recognition unavailable: ${error.message}`);
+      this.available = false;
+      this.emit('status', 'Speech recognition unavailable');
     }
   }
 
@@ -964,6 +968,11 @@ class SpeechService extends EventEmitter {
 
      tryNextProgram();
    }
+
+  // Expose availability to UI
+  isAvailable() {
+    return !!this.speechConfig && !!this.available;
+  }
 }
 
 module.exports = new SpeechService();

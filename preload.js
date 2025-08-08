@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Speech recognition
   startSpeechRecognition: () => ipcRenderer.invoke('start-speech-recognition'),
   stopSpeechRecognition: () => ipcRenderer.invoke('stop-speech-recognition'),
+  getSpeechAvailability: () => ipcRenderer.invoke('get-speech-availability'),
   
   // Window management
   showAllWindows: () => ipcRenderer.invoke('show-all-windows'),
@@ -64,6 +65,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onInterimTranscription: (callback) => ipcRenderer.on('interim-transcription', callback),
   onSpeechStatus: (callback) => ipcRenderer.on('speech-status', callback),
   onSpeechError: (callback) => ipcRenderer.on('speech-error', callback),
+  onSpeechAvailability: (callback) => ipcRenderer.on('speech-availability', callback),
   onSessionEvent: (callback) => ipcRenderer.on('session-event', callback),
   onSessionCleared: (callback) => ipcRenderer.on('session-cleared', callback),
   onOcrCompleted: (callback) => ipcRenderer.on('ocr-completed', callback),
@@ -117,4 +119,4 @@ contextBridge.exposeInMainWorld('api', {
             ipcRenderer.on(channel, (event, ...args) => func(...args));
         }
     }
-}); 
+});

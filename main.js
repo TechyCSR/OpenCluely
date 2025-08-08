@@ -17,6 +17,7 @@ class ApplicationController {
   constructor() {
     this.isReady = false;
     this.activeSkill = "dsa";
+    this.speechAvailable = false;
 
     // Window configurations for reference
     this.windowConfigs = {
@@ -183,20 +184,31 @@ class ApplicationController {
     });
 
     speechService.on("status", (status) => {
+      this.speechAvailable = speechService.isAvailable ? speechService.isAvailable() : false;
       BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("speech-status", { status });
+        window.webContents.send("speech-status", { status, available: this.speechAvailable });
+      });
+      // Also broadcast availability specifically
+      BrowserWindow.getAllWindows().forEach((window) => {
+        window.webContents.send("speech-availability", { available: this.speechAvailable });
       });
     });
 
     speechService.on("error", (error) => {
+      // In error, still compute availability
+      this.speechAvailable = speechService.isAvailable ? speechService.isAvailable() : false;
       BrowserWindow.getAllWindows().forEach((window) => {
-        window.webContents.send("speech-error", { error });
+        window.webContents.send("speech-error", { error, available: this.speechAvailable });
       });
     });
   }
 
   setupIPCHandlers() {
     ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
+    
+    ipcMain.handle("get-speech-availability", () => {
+      return speechService.isAvailable ? speechService.isAvailable() : false;
+    });
 
     ipcMain.handle("start-speech-recognition", () => {
       speechService.startRecording();
@@ -524,6 +536,15 @@ class ApplicationController {
   }
 
   toggleSpeechRecognition() {
+    const isAvailable = typeof speechService.isAvailable === 'function' ? speechService.isAvailable() : !!speechService.getStatus?.().isInitialized;
+    if (!isAvailable) {
+      logger.warn("Speech recognition unavailable; toggle ignored");
+      try {
+        windowManager.broadcastToAllWindows("speech-status", { status: 'Speech recognition unavailable', available: false });
+        windowManager.broadcastToAllWindows("speech-availability", { available: false });
+      } catch (e) {}
+      return;
+    }
     const currentStatus = speechService.getStatus();
     if (currentStatus.isRecording) {
       try {
@@ -942,9 +963,12 @@ class ApplicationController {
       activeSkill: this.activeSkill || "dsa",
       appIcon: this.appIcon || "terminal",
       selectedIcon: this.appIcon || "terminal",
+      // pass through env-derived settings for UI convenience (masked)
+      azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
+      speechAvailable: this.speechAvailable
     };
   }
-
+  
   saveSettings(settings) {
     try {
       // Update application settings
