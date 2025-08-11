@@ -686,6 +686,16 @@
         });
       }
       
+      // Also capture generic LLM responses (from OCR/screenshot flows)
+      if (whysperAPI && whysperAPI.onLlmResponse) {
+        whysperAPI.onLlmResponse((event, data) => {
+          try { hideThinkingIndicator(); } catch (_) {}
+          if (data && data.response) {
+            renderAssistantResponse(data.response);
+          }
+        });
+      }
+
       // Initialize availability
       initSpeechAvailability();
 
@@ -866,6 +876,57 @@
         }
       }
 
+      // Helpers to capture AI response into chat (text + snippets)
+      function extractCodeBlocks(text) {
+        const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+        const blocks = [];
+        let match;
+        while ((match = codeBlockRegex.exec(text)) !== null) {
+          blocks.push({ language: match[1] || 'text', code: match[2].trim(), fullMatch: match[0] });
+        }
+        return blocks;
+      }
+      function stripCodeBlocks(text, blocks) {
+        let result = text;
+        blocks.forEach(b => { result = result.replace(b.fullMatch, ''); });
+        // Collapse extra blank lines
+        return result.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
+      }
+      function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str ?? '';
+        return div.innerHTML;
+      }
+      function addCodeSnippet(language, code) {
+        if (!chatMessages) return;
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant';
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = new Date().toLocaleTimeString();
+        const textDiv = document.createElement('div');
+        textDiv.className = 'message-text';
+        textDiv.innerHTML = `
+          <div style="font-size:12px;color:rgba(255,255,255,0.8);margin-bottom:6px;">Snippet: ${escapeHtml(language.toUpperCase())}</div>
+          <pre><code>${escapeHtml(code)}</code></pre>
+        `;
+        messageDiv.appendChild(timeDiv);
+        messageDiv.appendChild(textDiv);
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+      function renderAssistantResponse(response) {
+        if (!response || typeof response !== 'string') return;
+        const blocks = extractCodeBlocks(response);
+        const textOnly = stripCodeBlocks(response, blocks);
+        // Add text response first (if any)
+        if (textOnly && textOnly.trim().length) {
+          addMessage(textOnly, 'assistant');
+        }
+        // Add each code snippet separately
+        blocks.forEach(b => addCodeSnippet(b.language, b.code));
+      }
+
       // Basic IPC Event Listeners - simplified
       
       // Listen for transcription events
@@ -918,13 +979,11 @@
           addMessage('Session memory has been cleared', 'system');
         });
 
+        // Replace transcription LLM handler to store text + snippets
         whysperAPI.onTranscriptionLlmResponse((event, data) => {
           if (data && data.response) {
-            // Hide thinking indicator
-            hideThinkingIndicator();
-            
-            // Add assistant response with formatting
-            addMessage(data.response, 'assistant');
+            try { hideThinkingIndicator(); } catch (_) {}
+            renderAssistantResponse(data.response);
           }
         });
       }

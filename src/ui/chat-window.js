@@ -134,7 +134,11 @@ class ChatWindowUI {
             });
             
             window.electronAPI.onLlmResponse((event, data) => {
-                this.addMessage(`🤖 LLM Response: ${data.response}`, 'system');
+                // Store AI response (text + snippets) in chat history
+                if (data && data.response) {
+                    this.hideThinkingIndicator?.();
+                    this.renderAssistantResponse(data.response);
+                }
             });
             
             window.electronAPI.onLlmError((event, data) => {
@@ -145,9 +149,8 @@ class ChatWindowUI {
                 if (data && data.response) {
                     // Hide thinking indicator
                     this.hideThinkingIndicator();
-                    
-                    // Add assistant response with formatting
-                    this.addMessage(data.response, 'assistant');
+                    // Add assistant response (text + snippets)
+                    this.renderAssistantResponse(data.response);
                 }
             });
         }
@@ -354,6 +357,60 @@ class ChatWindowUI {
         this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
     }
 
+    // Split AI response into plain text and code snippets and append to chat
+    renderAssistantResponse(response) {
+        if (!response || typeof response !== 'string') return;
+        const blocks = this.extractCodeBlocks(response);
+        const textOnly = this.stripCodeBlocks(response, blocks);
+        if (textOnly && textOnly.trim().length) {
+            this.addMessage(textOnly, 'assistant');
+        }
+        blocks.forEach(b => this.addCodeSnippet(b.language, b.code));
+    }
+
+    extractCodeBlocks(text) {
+        const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+        const blocks = [];
+        let match;
+        while ((match = codeBlockRegex.exec(text)) !== null) {
+            blocks.push({ language: match[1] || 'text', code: (match[2] || '').trim(), fullMatch: match[0] });
+        }
+        return blocks;
+    }
+
+    stripCodeBlocks(text, blocks) {
+        let result = text || '';
+        blocks.forEach(b => { result = result.replace(b.fullMatch, ''); });
+        return result.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
+    }
+
+    addCodeSnippet(language, code) {
+        if (!this.elements.chatMessages) return;
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant';
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = new Date().toLocaleTimeString();
+        const textDiv = document.createElement('div');
+        textDiv.className = 'message-text';
+        const escapedLang = (language || 'text').toUpperCase();
+        const escapedCode = this.escapeHtmlForSnippet(code || '');
+        textDiv.innerHTML = `
+            <div style="font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:6px;">Snippet: ${escapedLang}</div>
+            <pre><code>${escapedCode}</code></pre>
+        `;
+        messageDiv.appendChild(timeDiv);
+        messageDiv.appendChild(textDiv);
+        this.elements.chatMessages.appendChild(messageDiv);
+        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+    }
+
+    escapeHtmlForSnippet(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     formatMarkdown(text) {
         if (!text) return '';
         
@@ -533,4 +590,4 @@ class ChatWindowUI {
 } catch (error) {
     console.error('💥 CHAT-WINDOW.JS: Script execution failed!', error);
     console.error('💥 CHAT-WINDOW.JS: Error stack:', error.stack);
-} 
+}
