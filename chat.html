@@ -290,6 +290,7 @@
         border-radius: 4px;
         cursor: pointer;
         -webkit-app-region: no-drag;
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
       }
       .copy-btn:hover {
         background: rgba(0,0,0,0.7);
@@ -297,6 +298,7 @@
       .copy-btn.copied {
         background: rgba(76, 175, 80, 0.8);
         border-color: rgba(76, 175, 80, 0.9);
+        transform: scale(0.98);
       }
       
       /* Ensure lists are fully visible */
@@ -1009,18 +1011,20 @@
 
       // Helpers to capture AI response into chat (text + snippets)
       function extractCodeBlocks(text) {
-        const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+        if (!text) return [];
         const blocks = [];
+        const regex = /(```|~~~)([^\n]*)\n([\s\S]*?)\1/g; // supports ```lang and ~~~lang
         let match;
-        while ((match = codeBlockRegex.exec(text)) !== null) {
-          blocks.push({ language: match[1] || 'text', code: match[2].trim(), fullMatch: match[0] });
+        while ((match = regex.exec(text)) !== null) {
+          const info = (match[2] || '').trim();
+          const langToken = info.split(/\s+/)[0] || 'text';
+          blocks.push({ language: langToken, code: match[3], fullMatch: match[0] });
         }
         return blocks;
       }
       function stripCodeBlocks(text, blocks) {
-        let result = text;
+        let result = text || '';
         blocks.forEach(b => { result = result.replace(b.fullMatch, ''); });
-        // Collapse extra blank lines
         return result.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
       }
       function escapeHtml(str) {
@@ -1033,20 +1037,33 @@
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
           try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              await navigator.clipboard.writeText(codeText);
-            } else {
-              const ta = document.createElement('textarea');
-              ta.value = codeText;
-              document.body.appendChild(ta);
-              ta.select();
-              document.execCommand('copy');
-              ta.remove();
+            let ok = false;
+            if (window.electronAPI && typeof window.electronAPI.copyToClipboard === 'function') {
+              ok = await window.electronAPI.copyToClipboard(codeText);
             }
-            btn.classList.add('copied');
-            btn.textContent = 'Copied';
-            setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy'; }, 1200);
-          } catch (_) {}
+            if (!ok) {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(codeText);
+                ok = true;
+              } else {
+                const ta = document.createElement('textarea');
+                ta.value = codeText;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+                ok = true;
+              }
+            }
+            if (ok) {
+              btn.classList.add('copied');
+              const original = btn.textContent;
+              btn.textContent = 'Copied';
+              setTimeout(() => { btn.classList.remove('copied'); btn.textContent = original || 'Copy'; }, 1200);
+            }
+          } catch (err) {
+            console.warn('Copy failed', err);
+          }
         });
       }
       function addCodeSnippet(language, code, skipPersist = false) {
@@ -1060,11 +1077,10 @@
         textDiv.className = 'message-text';
 
         const lang = (language || 'text').toLowerCase();
-        const escapedCode = escapeHtml(code || '');
         const pre = document.createElement('pre');
         const codeEl = document.createElement('code');
         codeEl.className = `language-${lang}`;
-        codeEl.innerHTML = escapedCode;
+        codeEl.innerHTML = escapeHtml(code || '');
 
         const copyBtn = document.createElement('button');
         copyBtn.className = 'copy-btn';
@@ -1086,7 +1102,6 @@
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
-        // Highlight with Prism if available
         try { if (window.Prism && Prism.highlightElement) { Prism.highlightElement(codeEl); } } catch (_) {}
 
         if (!skipPersist) {

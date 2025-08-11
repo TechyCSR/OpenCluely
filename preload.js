@@ -59,6 +59,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // LLM window specific methods
   expandLlmWindow: (contentMetrics) => ipcRenderer.invoke('expand-llm-window', contentMetrics),
   resizeLlmWindowForContent: (contentMetrics) => ipcRenderer.invoke('resize-llm-window-for-content', contentMetrics),
+
+  // Clipboard helper for reliable copy actions
+  copyToClipboard: (text) => {
+    try {
+      return ipcRenderer.invoke('copy-to-clipboard', String(text ?? ''));
+    } catch (e) {
+      console.error('copyToClipboard failed:', e);
+      return false;
+    }
+  },
   
   // Event listeners
   onTranscriptionReceived: (callback) => ipcRenderer.on('transcription-received', callback),

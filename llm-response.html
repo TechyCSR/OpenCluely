@@ -383,6 +383,27 @@
         .has-header .loading {
             height: calc(100vh - 32px);
         }
+
+        .copy-btn { 
+            position: absolute; 
+            top: 6px; 
+            right: 6px; 
+            background: rgba(0,0,0,0.5); 
+            color: rgba(255,255,255,0.9); 
+            border: 1px solid rgba(255,255,255,0.2); 
+            padding: 4px 8px; 
+            font-size: 11px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            -webkit-app-region: no-drag; 
+            transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
+        }
+        .copy-btn:hover { background: rgba(0,0,0,0.7); }
+        .copy-btn.copied { 
+            background: rgba(76,175,80,0.85); 
+            border-color: rgba(76,175,80,0.95); 
+            transform: scale(0.98);
+        }
     </style>
 </head>
 <body class="text-white">
@@ -678,19 +699,65 @@
         }
 
         function extractCodeBlocks(text) {
-            const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
             const blocks = [];
+            if (!text) return blocks;
+            const regex = /(```|~~~)([^\n]*)\n([\s\S]*?)\1/g; // supports ```lang and ~~~lang
             let match;
-
-            while ((match = codeBlockRegex.exec(text)) !== null) {
-                blocks.push({
-                    language: match[1] || 'text',
-                    code: match[2].trim(),
-                    fullMatch: match[0]
-                });
+            while ((match = regex.exec(text)) !== null) {
+                const info = (match[2] || '').trim();
+                const langToken = info.split(/\s+/)[0] || 'text';
+                blocks.push({ language: langToken, code: match[3], fullMatch: match[0] });
             }
-
             return blocks;
+        }
+
+        function attachCopy(btn, text) {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                try {
+                    let ok = false;
+                    if (window.electronAPI && typeof window.electronAPI.copyToClipboard === 'function') {
+                        ok = await window.electronAPI.copyToClipboard(text);
+                    }
+                    if (!ok) {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(text);
+                            ok = true;
+                        } else {
+                            const ta = document.createElement('textarea');
+                            ta.value = text;
+                            document.body.appendChild(ta);
+                            ta.select();
+                            document.execCommand('copy');
+                            ta.remove();
+                            ok = true;
+                        }
+                    }
+                    if (ok) {
+                        btn.classList.add('copied');
+                        const original = btn.textContent;
+                        btn.textContent = 'Copied';
+                        setTimeout(() => { btn.classList.remove('copied'); btn.textContent = original || 'Copy'; }, 1200);
+                    }
+                } catch (err) { console.warn('Copy failed', err); }
+            })
+        }
+
+        function renderCopyButtonsInFullMarkdown(container) {
+            // Add copy buttons to all code blocks in full markdown view
+            const pres = container.querySelectorAll('pre');
+            pres.forEach(pre => {
+                // Avoid duplicate buttons
+                if (pre.querySelector('.copy-btn')) return;
+                const code = pre.querySelector('code');
+                const text = code ? code.textContent : pre.textContent;
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.textContent = 'Copy';
+                attachCopy(btn, text || '');
+                pre.style.position = 'relative';
+                pre.appendChild(btn);
+            });
         }
 
         function displaySplitLayout(response, codeBlocks) {
@@ -727,6 +794,14 @@
                             <pre><code class="language-${block.language}">${escapeHtml(block.code)}</code></pre>
                         </div>
                     `;
+                    const pre = codeBlock.querySelector('pre');
+                    pre.style.position = 'relative';
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-btn';
+                    btn.textContent = 'Copy';
+                    attachCopy(btn, block.code || '');
+                    pre.appendChild(btn);
+
                     codeContainer.appendChild(codeBlock);
                 });
             }
@@ -742,10 +817,25 @@
 
             // Render full markdown
             const html = marked.parse(response);
-            document.getElementById('full-markdown').innerHTML = html;
+            const full = document.getElementById('full-markdown');
+            full.innerHTML = html;
 
             // Highlight any code
             Prism.highlightAll();
+
+            // Add copy buttons to code blocks in full view
+            const pres = full.querySelectorAll('pre');
+            pres.forEach(pre => {
+                if (pre.querySelector('.copy-btn')) return;
+                const code = pre.querySelector('code');
+                const text = code ? code.textContent : pre.textContent;
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.textContent = 'Copy';
+                attachCopy(btn, text || '');
+                pre.style.position = 'relative';
+                pre.appendChild(btn);
+            });
         }
 
         function escapeHtml(text) {

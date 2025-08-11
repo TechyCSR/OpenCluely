@@ -206,6 +206,18 @@ class ApplicationController {
   setupIPCHandlers() {
     ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
     
+    // Provide reliable clipboard write via main process
+    ipcMain.handle("copy-to-clipboard", (event, text) => {
+      try {
+        const { clipboard } = require("electron");
+        clipboard.writeText(String(text ?? ""));
+        return true;
+      } catch (e) {
+        logger.error("Failed to write to clipboard", { error: e.message });
+        return false;
+      }
+    });
+    
     ipcMain.handle("get-speech-availability", () => {
       return speechService.isAvailable ? speechService.isAvailable() : false;
     });
