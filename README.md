@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧠 OpenCluely
+# 🧠 OpenCluely (UnderDevlpoment --> Will be Ready SOON !! )
 
 <p align="center">
   <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=35&duration=3000&pause=1000&color=2D9CDB&center=true&vCenter=true&width=600&lines=OpenCluely;Invisible+Interview+Assistant;AI-Powered+Real-Time+Help;Stealth+Technology+Expert" alt="OpenCluely Typing Animation" />
