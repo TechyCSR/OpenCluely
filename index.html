@@ -171,16 +171,50 @@
       }
 
       .command-item select {
-        background: transparent;
-        border: none;
-        color: rgba(255, 255, 255, 0.9);
-        font-size: 12px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 11px;
+        font-weight: 600;
         outline: none;
+        padding: 4px 8px;
+        min-width: 65px;
+        cursor: pointer;
+        transition: all 0.2s ease;
         -webkit-app-region: no-drag;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'><path fill='%23ffffff' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 6px center;
+        background-size: 8px 8px;
+        padding-right: 20px;
+      }
+
+      .command-item select:hover {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%);
+        border-color: rgba(255, 255, 255, 0.3);
+        color: rgba(255, 255, 255, 1);
+      }
+
+      .command-item select:focus {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+        border-color: rgba(76, 175, 80, 0.6);
+        box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
       }
 
       .command-item select option {
-        color: #000;
+        background: rgba(30, 30, 30, 0.95);
+        color: rgba(255, 255, 255, 0.9);
+        padding: 4px 8px;
+        font-weight: 500;
+      }
+
+      .command-item select option:checked {
+        background: rgba(76, 175, 80, 0.8);
+        color: white;
       }
 
       @keyframes pulse {

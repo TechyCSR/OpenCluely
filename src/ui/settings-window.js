@@ -66,7 +66,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (settings.azureRegion && azureRegionInput) azureRegionInput.value = settings.azureRegion;
         if (settings.geminiKey && geminiKeyInput) geminiKeyInput.value = settings.geminiKey;
         if (settings.windowGap && windowGapInput) windowGapInput.value = settings.windowGap;
-        if (settings.codingLanguage && codingLanguageSelect) codingLanguageSelect.value = settings.codingLanguage;
+        
+        // Set C++ as default if no coding language is specified
+        if (codingLanguageSelect) {
+            codingLanguageSelect.value = settings.codingLanguage || 'cpp';
+        }
+        
         if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
         
         // Handle icon selection
@@ -92,6 +97,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.electronAPI && window.electronAPI.receive) {
         window.electronAPI.receive('settings-window-shown', () => {
             requestCurrentSettings();
+        });
+
+        // Listen for coding language changes from other windows
+        window.electronAPI.receive('coding-language-changed', (data) => {
+            if (data && data.language && codingLanguageSelect) {
+                codingLanguageSelect.value = data.language;
+                console.log('Language updated from overlay window:', data.language);
+            }
         });
     }
 

@@ -303,13 +303,23 @@ class MainWindowUI {
         // Language dropdown
         this.languageSelect = document.getElementById('codingLanguage');
         if (this.languageSelect) {
+            // Set default to C++ if no value is set
+            this.languageSelect.value = 'cpp';
+            
             // Initialize with current setting
             if (window.electronAPI && window.electronAPI.getSettings) {
                 window.electronAPI.getSettings().then(settings => {
                     if (settings && settings.codingLanguage) {
                         this.languageSelect.value = settings.codingLanguage;
+                    } else {
+                        // Save C++ as default if no language is set
+                        this.languageSelect.value = 'cpp';
+                        window.electronAPI.saveSettings({ codingLanguage: 'cpp' });
                     }
-                }).catch(() => {});
+                }).catch(() => {
+                    // Fallback to C++ on error
+                    this.languageSelect.value = 'cpp';
+                });
             }
 
             this.languageSelect.addEventListener('change', (e) => {
@@ -358,6 +368,17 @@ class MainWindowUI {
             window.electronAPI.onSpeechAvailability((event, data) => {
                 this.speechAvailable = !!(data && data.available);
                 this.applyMicVisibility();
+            });
+
+            // Listen for coding language changes from other windows
+            window.electronAPI.receive('coding-language-changed', (data) => {
+                if (data && data.language && this.languageSelect) {
+                    this.languageSelect.value = data.language;
+                    logger.debug('Language updated from other window', {
+                        component: 'MainWindowUI',
+                        language: data.language
+                    });
+                }
             });
             
             // Global keyboard shortcuts

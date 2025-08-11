@@ -971,7 +971,7 @@ class ApplicationController {
 
   getSettings() {
     return {
-      codingLanguage: this.codingLanguage || "javascript",
+      codingLanguage: this.codingLanguage || "cpp", // Default to C++
       activeSkill: this.activeSkill || "dsa",
       appIcon: this.appIcon || "terminal",
       selectedIcon: this.appIcon || "terminal",
@@ -986,6 +986,10 @@ class ApplicationController {
       // Update application settings
       if (settings.codingLanguage) {
         this.codingLanguage = settings.codingLanguage;
+        // Broadcast language change to all windows for sync
+        windowManager.broadcastToAllWindows("coding-language-changed", {
+          language: settings.codingLanguage,
+        });
       }
       if (settings.activeSkill) {
         this.activeSkill = settings.activeSkill;
