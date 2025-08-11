@@ -62,7 +62,7 @@ class LLMService {
       const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage);
       
       // Try standard method first
-      let response;
+  let response;
       try {
         response = await this.executeRequest(geminiRequest);
       } catch (error) {
@@ -78,16 +78,21 @@ class LLMService {
         }
       }
       
+      // Enforce language in code fences if programmingLanguage specified
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(response, programmingLanguage)
+        : response;
+
       logger.logPerformance('LLM text processing', startTime, {
         activeSkill,
         textLength: text.length,
-        responseLength: response.length,
+        responseLength: finalResponse.length,
         programmingLanguage: programmingLanguage || 'not specified',
         requestId: this.requestCount
       });
 
       return {
-        response,
+        response: finalResponse,
         metadata: {
           skill: activeSkill,
           programmingLanguage,
@@ -133,7 +138,7 @@ class LLMService {
       const geminiRequest = this.buildIntelligentTranscriptionRequest(text, activeSkill, sessionMemory, programmingLanguage);
       
       // Try standard method first
-      let response;
+  let response;
       try {
         response = await this.executeRequest(geminiRequest);
       } catch (error) {
@@ -149,16 +154,21 @@ class LLMService {
         }
       }
       
+      // Enforce language in code fences if programmingLanguage specified
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(response, programmingLanguage)
+        : response;
+
       logger.logPerformance('LLM transcription processing', startTime, {
         activeSkill,
         textLength: text.length,
-        responseLength: response.length,
+        responseLength: finalResponse.length,
         programmingLanguage: programmingLanguage || 'not specified',
         requestId: this.requestCount
       });
 
       return {
-        response,
+        response: finalResponse,
         metadata: {
           skill: activeSkill,
           programmingLanguage,
@@ -182,6 +192,34 @@ class LLMService {
       }
       
       throw error;
+    }
+  }
+
+  /**
+   * Normalize all triple-backtick code fences to the selected programming language tag.
+   * Does not alter the inner code; only ensures fence language tags are correct.
+   */
+  enforceProgrammingLanguage(text, programmingLanguage) {
+    try {
+      if (!text || !programmingLanguage) return text;
+      const norm = String(programmingLanguage).toLowerCase();
+      const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
+      const fenceTag = fenceTagMap[norm] || norm || 'text';
+
+      // Replace all triple-backtick fences' language token with the selected tag
+      const replacedBackticks = text.replace(/```([^\n]*)\n/g, (match, info) => {
+        const current = (info || '').trim();
+        // If already the desired fenceTag as the first token, keep as is
+        if (current.split(/\s+/)[0].toLowerCase() === fenceTag) return match;
+        return '```' + fenceTag + '\n';
+      });
+
+      // Optionally normalize tildes fences to backticks with correct tag
+      const normalizedTildes = replacedBackticks.replace(/~~~([^\n]*)\n/g, () => '```' + fenceTag + '\n');
+
+      return normalizedTildes;
+    } catch (_) {
+      return text;
     }
   }
 
@@ -444,7 +482,12 @@ Always respond to the point, do not repeat the question or unnecessary informati
 
     // Add programming language context if provided
     if (programmingLanguage) {
-      prompt += `\n\nCODING CONTEXT: When providing code examples or technical solutions, use ${programmingLanguage.toUpperCase()} as the primary programming language.`;
+      const lang = String(programmingLanguage).toLowerCase();
+      const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
+      const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
+      const languageTitle = languageMap[lang] || (lang.charAt(0).toUpperCase() + lang.slice(1));
+      const fenceTag = fenceTagMap[lang] || lang || 'text';
+      prompt += `\n\nCODING CONTEXT: Respond ONLY in ${languageTitle}. All code blocks must use triple backticks with language tag \`\`\`${fenceTag}\`\`\`. Do not include other languages unless explicitly asked.`;
     }
 
     prompt += `
@@ -478,6 +521,8 @@ Always respond to the point, do not repeat the question or unnecessary informati
 - Use bullet points for structured answers
 - Be encouraging and helpful
 - Stay focused on ${activeSkill}
+
+If the user's input is a coding or DSA problem statement and contains no code, produce a complete, runnable solution in the selected programming language without asking for more details. Always include the final implementation in a properly tagged code block.
 
 Remember: Be intelligent about filtering - only provide detailed responses when the user actually needs help with ${activeSkill}.`;
 

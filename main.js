@@ -17,6 +17,8 @@ class ApplicationController {
   constructor() {
     this.isReady = false;
     this.activeSkill = "dsa";
+  // Default to C++ so language is enforced from first run
+  this.codingLanguage = "cpp";
     this.speechAvailable = false;
 
     // Window configurations for reference
