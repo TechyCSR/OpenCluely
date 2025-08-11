@@ -4,8 +4,12 @@
     <meta charset="UTF-8" />
     <title>Transcription</title>
     <link href="./src/styles/common.css" rel="stylesheet" />
+    <!-- Load Font Awesome via link instead of @import to avoid any raw CSS render issues -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <!-- PrismJS theme for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
     <style>
-      @import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css");
+      /* Font Awesome now loaded via <link> above */
 
       body {
         background: transparent !important;
@@ -53,6 +57,26 @@
         gap: 8px;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
       }
+      /* Header actions (e.g., Clear History) */
+      .header-actions {
+        -webkit-app-region: no-drag;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .icon-button {
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: rgba(255, 255, 255, 0.9);
+        border-radius: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .icon-button:hover {
+        background: rgba(255, 255, 255, 0.22);
+        color: #fff;
+      }
       .recording-indicator {
         width: 8px;
         height: 8px;
@@ -95,6 +119,7 @@
         word-wrap: break-word;
         word-break: break-word;
         /* Removed all height restrictions */
+        position: relative;
       }
       .message.transcription {
         background: rgba(76, 175, 80, 0.15);
@@ -242,12 +267,36 @@
         white-space: pre-wrap;
         word-wrap: break-word;
         margin: 8px 0;
+        position: relative;
       }
       
       .message.assistant pre code {
         background: transparent;
         padding: 0;
         border-radius: 0;
+        display: block;
+      }
+
+      /* Copy button in code blocks */
+      .copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, 0.5);
+        color: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 4px 8px;
+        font-size: 11px;
+        border-radius: 4px;
+        cursor: pointer;
+        -webkit-app-region: no-drag;
+      }
+      .copy-btn:hover {
+        background: rgba(0,0,0,0.7);
+      }
+      .copy-btn.copied {
+        background: rgba(76, 175, 80, 0.8);
+        border-color: rgba(76, 175, 80, 0.9);
       }
       
       /* Ensure lists are fully visible */
@@ -615,6 +664,11 @@
           Live Transcription & Chat
           <div class="recording-indicator" id="recordingIndicator"></div>
         </div>
+        <div class="header-actions">
+          <button class="icon-button" id="clearHistoryBtn" title="Clear chat history">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Interim Text Overlay -->
@@ -640,6 +694,13 @@
       </div>
     </div>
     <script src="lib/markdown.js"></script> 
+    <!-- PrismJS core and autoloader for language components -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script>
+      // Configure Prism autoloader
+      try { if (window.Prism && Prism.plugins && Prism.plugins.autoloader) { Prism.plugins.autoloader.languages_path = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/'; } } catch (_) {}
+    </script>
     <script>
       // Use electronAPI from preload script instead of direct require
       const whysperAPI = window.electronAPI;
@@ -653,13 +714,73 @@
       const listeningIndicator = document.getElementById('listeningIndicator');
       const listeningDuration = document.getElementById('listeningDuration');
       const interimOverlay = document.getElementById('interimOverlay');
+      const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 
       let isRecording = false;
       let isInteractive = true;
       let listeningStartTime = null;
       let listeningTimer = null;
       let speechAvailable = false;
-      
+
+      // Chat persistence and deduplication
+      const CHAT_HISTORY_KEY = 'opencluely_chat_history_v1';
+      let chatHistory = [];
+      const recentResponseHashes = new Set();
+      const RECENT_HASH_LIMIT = 50;
+
+      function hashString(str) {
+        try {
+          let h = 2166136261 >>> 0; // FNV-1a
+          for (let i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+          }
+          return (h >>> 0).toString(16);
+        } catch (_) {
+          return String(str?.length || 0);
+        }
+      }
+
+      function saveHistory() {
+        try {
+          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatHistory.slice(-500)));
+        } catch (e) {
+          console.warn('Failed to save history', e);
+        }
+      }
+
+      function loadHistory() {
+        try {
+          const raw = localStorage.getItem(CHAT_HISTORY_KEY);
+          if (!raw) return;
+          const items = JSON.parse(raw);
+          if (Array.isArray(items)) {
+            chatHistory = items;
+            // Render
+            items.forEach(item => {
+              if (item.kind === 'message') {
+                addMessage(item.text, item.type, true);
+              } else if (item.kind === 'snippet') {
+                addCodeSnippet(item.language, item.code, true);
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to load history', e);
+        }
+      }
+
+      function clearChatHistory(skipConfirm = false) {
+        if (!skipConfirm) {
+          const ok = confirm('Clear chat history?');
+          if (!ok) return;
+        }
+        chatHistory = [];
+        saveHistory();
+        // Clear DOM
+        if (chatMessages) chatMessages.innerHTML = '';
+      }
+
       function applyMicVisibility() {
         if (micButton) {
           micButton.style.display = speechAvailable ? '' : 'none';
@@ -696,11 +817,19 @@
         });
       }
 
-      // Initialize availability
+      // Clear on session-cleared from main
+      if (whysperAPI && whysperAPI.onSessionCleared) {
+        whysperAPI.onSessionCleared(() => {
+          clearChatHistory(true);
+        });
+      }
+
+      // Initialize availability and history
+      loadHistory();
       initSpeechAvailability();
 
       // Basic message function with markdown support for assistant messages
-      function addMessage(text, type = 'user') {
+      function addMessage(text, type = 'user', skipPersist = false) {
         if (!chatMessages) {
           console.error('Chat messages element not found!');
           return;
@@ -728,6 +857,11 @@
 
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (!skipPersist) {
+          chatHistory.push({ kind: 'message', type, text });
+          saveHistory();
+        }
       }
 
       // Markdown formatter using markdown.js library
@@ -735,12 +869,10 @@
         if (!text) return '';
         
         try {
-          // Use the markdown.js library for proper markdown parsing
           if (typeof markdown !== 'undefined' && markdown.toHTML) {
             return markdown.toHTML(text);
           } else {
             console.warn('Markdown library not loaded, falling back to basic formatting');
-            // Fallback to basic formatting if library fails to load
             return text
               .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
               .replace(/\*(.+?)\*/g, '<em>$1</em>')
@@ -749,7 +881,6 @@
           }
         } catch (error) {
           console.error('Markdown parsing failed:', error);
-          // Fallback to basic HTML escaping
           return text.replace(/\n/g, '<br>');
         }
       }
@@ -897,7 +1028,28 @@
         div.textContent = str ?? '';
         return div.innerHTML;
       }
-      function addCodeSnippet(language, code) {
+      function attachCopy(btn, codeText) {
+        if (!btn) return;
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(codeText);
+            } else {
+              const ta = document.createElement('textarea');
+              ta.value = codeText;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              ta.remove();
+            }
+            btn.classList.add('copied');
+            btn.textContent = 'Copied';
+            setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy'; }, 1200);
+          } catch (_) {}
+        });
+      }
+      function addCodeSnippet(language, code, skipPersist = false) {
         if (!chatMessages) return;
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message assistant';
@@ -906,17 +1058,54 @@
         timeDiv.textContent = new Date().toLocaleTimeString();
         const textDiv = document.createElement('div');
         textDiv.className = 'message-text';
-        textDiv.innerHTML = `
-          <div style="font-size:12px;color:rgba(255,255,255,0.8);margin-bottom:6px;">Snippet: ${escapeHtml(language.toUpperCase())}</div>
-          <pre><code>${escapeHtml(code)}</code></pre>
-        `;
+
+        const lang = (language || 'text').toLowerCase();
+        const escapedCode = escapeHtml(code || '');
+        const pre = document.createElement('pre');
+        const codeEl = document.createElement('code');
+        codeEl.className = `language-${lang}`;
+        codeEl.innerHTML = escapedCode;
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.textContent = 'Copy';
+        attachCopy(copyBtn, code || '');
+
+        pre.appendChild(copyBtn);
+        pre.appendChild(codeEl);
+        
+        const label = document.createElement('div');
+        label.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.8);margin-bottom:6px;';
+        label.textContent = `Snippet: ${lang.toUpperCase()}`;
+
+        textDiv.appendChild(label);
+        textDiv.appendChild(pre);
+
         messageDiv.appendChild(timeDiv);
         messageDiv.appendChild(textDiv);
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Highlight with Prism if available
+        try { if (window.Prism && Prism.highlightElement) { Prism.highlightElement(codeEl); } } catch (_) {}
+
+        if (!skipPersist) {
+          chatHistory.push({ kind: 'snippet', language: lang, code: code || '' });
+          saveHistory();
+        }
       }
       function renderAssistantResponse(response) {
         if (!response || typeof response !== 'string') return;
+        // Deduplication: avoid processing the same response twice
+        const normalized = response.trim();
+        const h = hashString(normalized);
+        if (recentResponseHashes.has(h)) return;
+        recentResponseHashes.add(h);
+        if (recentResponseHashes.size > RECENT_HASH_LIMIT) {
+          const first = recentResponseHashes.values().next().value;
+          recentResponseHashes.delete(first);
+        }
+
         const blocks = extractCodeBlocks(response);
         const textOnly = stripCodeBlocks(response, blocks);
         // Add text response first (if any)
@@ -989,6 +1178,10 @@
       }
 
       // UI Event Listeners
+      if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener('click', () => clearChatHistory());
+      }
+
       if (micButton) {
         micButton.addEventListener('click', async () => {
           if (!isInteractive) {
@@ -1076,7 +1269,9 @@
       });
 
       // Initialize
-      addMessage('Recording in Progress. press Alt+R to stop recording.', 'system');
+      if (!chatHistory || chatHistory.length === 0) {
+        addMessage('Recording in Progress. press Alt+R to stop recording.', 'system');
+      }
     </script>
   </body>
 </html>
