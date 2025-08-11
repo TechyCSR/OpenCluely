@@ -158,7 +158,7 @@ class SessionManager {
     return {
       id: this.generateEventId(),
       timestamp: new Date().toISOString(),
-      role: // 'user', 'model', or 'system'
+      role: role, // 'user', 'model', or 'system'
       content,
       skill: skill || this.currentSkill,
       action,
@@ -197,6 +197,23 @@ class SessionManager {
       .filter(event => event.role !== 'system' || !event.metadata?.isInitialization)
       .slice(-maxEntries);
     
+    return conversationEvents.map(event => ({
+      role: event.role,
+      content: event.content,
+      timestamp: event.timestamp,
+      skill: event.skill,
+      action: event.action
+    }));
+  }
+
+  /**
+   * Get the entire conversation history (excluding initialization system messages)
+   * This is useful when the model needs complete context for each new message.
+   */
+  getFullConversationHistory() {
+    const conversationEvents = this.sessionMemory
+      .filter(event => event.role !== 'system' || !event.metadata?.isInitialization);
+
     return conversationEvents.map(event => ({
       role: event.role,
       content: event.content,
@@ -273,7 +290,7 @@ class SessionManager {
   }
 
   categorizeAction(action) {
-    const actionLower = action.toLowerCase();
+    const actionLower = (action || '').toLowerCase();
     
     if (actionLower.includes('screenshot') || actionLower.includes('ocr')) {
       return 'capture';
