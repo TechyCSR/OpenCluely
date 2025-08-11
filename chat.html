@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Transcription</title>
+    <title>Chat</title>
     <link href="./src/styles/common.css" rel="stylesheet" />
     <!-- Load Font Awesome via link instead of @import to avoid any raw CSS render issues -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
@@ -431,6 +431,15 @@
         font-size: 13px;
         outline: none;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        /* make it work well as multiline */
+        resize: none;
+        line-height: 1.4;
+        min-height: 32px;
+        max-height: 140px;
+        overflow-y: auto;
+      }
+      .input-field:focus {
+        outline: none;
       }
       .input-field::placeholder {
         color: rgba(255, 255, 255, 0.5);
@@ -680,12 +689,12 @@
 
       <div class="chat-input">
         <div class="input-container">
-          <input
-            type="text"
+          <textarea
             class="input-field"
-            placeholder="Type a message or transcription..."
+            placeholder="Type a message… (Shift+Enter for newline)"
             id="messageInput"
-          />
+            rows="1"
+          ></textarea>
           <button class="mic-button" id="micButton">
             <i class="fas fa-microphone"></i>
           </button>
@@ -1248,20 +1257,29 @@
         });
       }
 
+      // Auto-resize for multiline textarea
+      function autoGrow(el) {
+        if (!el) return;
+        el.style.height = 'auto';
+        const max = 140; // keep within container limits
+        el.style.height = Math.min(el.scrollHeight, max) + 'px';
+      }
       if (messageInput) {
-        messageInput.addEventListener('keypress', async (e) => {
-          if (e.key === 'Enter') {
+        autoGrow(messageInput);
+        messageInput.addEventListener('input', () => autoGrow(messageInput));
+      }
+
+      // Replace keypress with keydown to support Shift+Enter for newline and Enter to send
+      if (messageInput) {
+        messageInput.addEventListener('keydown', async (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
             const text = messageInput.value.trim();
             if (text) {
               addMessage(text, 'user');
               messageInput.value = '';
-              
-              // Show thinking indicator after user message
-              setTimeout(() => {
-                showThinkingIndicator();
-              }, 300);
-              
-              // Send to main process for session memory storage and LLM processing
+              autoGrow(messageInput);
+              setTimeout(() => { showThinkingIndicator(); }, 300);
               try {
                 if (whysperAPI && whysperAPI.sendChatMessage) {
                   await whysperAPI.sendChatMessage(text);
@@ -1271,6 +1289,7 @@
               }
             }
           }
+          // If Shift+Enter, allow default to insert newline
         });
       }
 
