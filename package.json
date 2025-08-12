@@ -1,7 +1,7 @@
 {
   "name": "opencluely",
   "version": "1.0.0",
-  "description": "Professional Interview Assistant with Invisible Screen Overlay",
+  "description": "AI Problem Solving Assistant",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -19,7 +19,12 @@
     "release": "npm run clean && npm run build:all",
     "postinstall": "electron-builder install-app-deps"
   },
-  "author": "OpenCluely Team",
+  "author": "@TechyCSR",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TechyCSR/OpenCluely"
+  },
+  "email": "dev@techycsr.me",
   "license": "ISC",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
