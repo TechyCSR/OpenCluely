@@ -280,6 +280,40 @@ OpenCluely is provided for educational and research purposes. Users are responsi
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## 🧩 Troubleshooting
+
+- Node or npm not found
+  - Ensure Node 18+ and npm are installed and in PATH.
+  - Verify:
+    ```bash
+    node -v
+    npm -v
+    ```
+
+- Electron won’t start or shows a blank window (Linux)
+  - Try the dev script with flags:
+    ```bash
+    npm run dev
+    ```
+  - If running in headless/Wayland environments, ensure a display server (X11/XWayland) is available.
+
+- macOS screen capture doesn’t work
+  - Grant “Screen Recording” permission to the Electron app in System Settings → Privacy & Security → Screen Recording.
+  - After granting, quit and relaunch the app.
+
+- Windows SmartScreen blocks the app
+  - Click “More info” → “Run anyway” or launch via `npm start` during development.
+
+- Setup script stops with exit code 130
+  - Exit 130 indicates the process was interrupted (e.g., Ctrl+C). Re-run:
+    ```bash
+    ./setup.sh
+    ```
+
+- Microphone/voice not working
+  - Voice is optional. If you don’t need it, ignore related warnings.
+  - If you do need it, install `sox` (Linux/macOS) or via Chocolatey on Windows and set Azure keys in `.env`.
+
 ## 🙏 Acknowledgments
 
 - **Google Gemini**: Powering AI intelligence
