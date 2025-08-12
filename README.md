@@ -121,99 +121,86 @@
 </tr>
 </table>
 
-### ⚙️ **Configuration System**
+### ⚙️ **Configuration**
+
+The setup script automatically handles configuration. You only need:
 
 ```bash
-# Required: Google Gemini API
+# Required: Google Gemini API Key (setup script will ask for this)
 GEMINI_API_KEY=your_gemini_api_key_here
 
-# Optional: Azure Speech Recognition
+# Optional: Azure Speech Recognition (add later if you want voice features)
 AZURE_SPEECH_KEY=your_azure_speech_key
 AZURE_SPEECH_REGION=your_region
 ```
 
 **Note**: Speech recognition is completely optional. If Azure credentials are not provided, the microphone button will be automatically hidden from all interfaces.
 
-## 🚀 Quick Start
+## 🚀 Quick Start & Installation
 
-### ⚡ One-command setup (recommended)
+### ⚡ Three Simple Steps (All Operating Systems)
 
-Run everything with a single script (macOS, Linux, or Windows via Git Bash/MSYS/Cygwin):
-
-```bash
-./setup.sh
-```
-
-Common options:
-
-- Build a distributable for your OS and then run:
-  ```bash
-  ./setup.sh --build
-  ```
-- Use npm ci (if package-lock.json exists):
-  ```bash
-  ./setup.sh --ci
-  ```
-- Install system deps (sox) if needed for microphone capture:
-  ```bash
-  ./setup.sh --install-system-deps
-  ```
-- Skip launching the app (just set up):
-  ```bash
-  ./setup.sh --no-run
-  ```
-
-Environment variables recognized by the script:
-
-- Set the Gemini API key inline (will be written to .env if missing):
-  ```bash
-  GEMINI_API_KEY=your_key_here ./setup.sh
-  ```
-
-Windows notes:
-- Use Git Bash (bundled with Git for Windows) or another bash environment (MSYS/Cygwin/WSL) to run setup.sh.
-- To build a Windows installer/portable, the script maps to `npm run build:win`.
-
-### 📦 **Installation**
-
-1. **Clone the Repository**
+1. **Clone the repository**
    ```bash
    git clone https://github.com/TechyCSR/OpenCluely.git
    cd OpenCluely
    ```
 
-2. **Install Dependencies**
+2. **Get your Gemini API key** (Required)
+   - Visit [Google AI Studio](https://aistudio.google.com/)
+   - Click "Create API Key" 
+   - Copy the key (you'll need it in step 3)
+
+3. **Run the setup script** (One command does everything!)
    ```bash
-   npm install
+   # Option 1: Enter API key when prompted
+   ./setup.sh
+   
+   # Option 2: Provide API key directly
+   GEMINI_API_KEY=your_key_here ./setup.sh
    ```
 
-3. **Configure Environment**
-   ```bash
-   cp env.example .env
-   # Edit .env with your API keys
-   ```
+**That's it!** The setup script will:
+- Install all dependencies automatically
+- Create and configure your `.env` file
+- Build the app (if needed)
+- Launch OpenCluely ready to use
 
-4. **Run the Application**
-   ```bash
-   npm start
-   ```
+### 💻 Platform-Specific Notes
 
-### 🔧 **Environment Setup**
+- **Windows**: Use Git Bash (comes with Git for Windows), WSL, or any bash environment
+- **macOS/Linux**: Use your regular terminal
+- **All platforms**: No manual npm commands needed - the setup script handles everything
 
-Create a `.env` file in the root directory:
+### 🎛️ Setup Script Options
 
-```env
-# Required: Google Gemini API Key
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Optional: Azure Speech Recognition
-# AZURE_SPEECH_KEY=your_azure_speech_key
-# AZURE_SPEECH_REGION=your_region
+```bash
+./setup.sh --build          # Build distributable for your OS
+./setup.sh --ci             # Use npm ci instead of npm install
+./setup.sh --no-run         # Setup only, don't launch the app
+./setup.sh --install-system-deps  # Install sox for microphone (optional)
 ```
 
-**Getting API Keys:**
-- **Gemini API**: Visit [Google AI Studio](https://aistudio.google.com/) → Create API Key
-- **Azure Speech**: Visit [Azure Portal](https://portal.azure.com/) → Create Speech Service → Copy key and region
+### 🔧 **Optional: Azure Speech Setup** (For Voice Features)
+
+Voice recognition is completely optional. The setup script will create a `.env` file with just the required Gemini key. To add voice features:
+
+1. Get Azure Speech credentials:
+   - Visit [Azure Portal](https://portal.azure.com/)
+   - Create a Speech Service
+   - Copy your key and region
+
+2. Add to your `.env` file:
+   ```env
+   # Already configured by setup script
+   GEMINI_API_KEY=your_gemini_api_key_here
+
+   # Add these for voice features (optional)
+   AZURE_SPEECH_KEY=your_azure_speech_key
+   AZURE_SPEECH_REGION=your_region
+   ```
+
+3. Restart the app - microphone buttons will now appear automatically
 
 ## 🎮 How to Use
 
@@ -282,37 +269,36 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🧩 Troubleshooting
 
-- Node or npm not found
-  - Ensure Node 18+ and npm are installed and in PATH.
-  - Verify:
-    ```bash
-    node -v
-    npm -v
-    ```
+### Setup Issues
 
-- Electron won’t start or shows a blank window (Linux)
-  - Try the dev script with flags:
-    ```bash
-    npm run dev
-    ```
-  - If running in headless/Wayland environments, ensure a display server (X11/XWayland) is available.
+- **setup.sh not found or won't run**
+  - Make sure you're in the OpenCluely directory: `cd OpenCluely`
+  - Make the script executable: `chmod +x setup.sh`
+  - On Windows, use Git Bash (comes with Git for Windows)
 
-- macOS screen capture doesn’t work
-  - Grant “Screen Recording” permission to the Electron app in System Settings → Privacy & Security → Screen Recording.
-  - After granting, quit and relaunch the app.
+- **Setup script stops with exit code 130**
+  - This means you pressed Ctrl+C. Just run `./setup.sh` again
 
-- Windows SmartScreen blocks the app
-  - Click “More info” → “Run anyway” or launch via `npm start` during development.
+- **Node or npm not found**
+  - Install Node.js 18+ from [nodejs.org](https://nodejs.org/)
+  - Restart your terminal and try again
 
-- Setup script stops with exit code 130
-  - Exit 130 indicates the process was interrupted (e.g., Ctrl+C). Re-run:
-    ```bash
-    ./setup.sh
-    ```
+### App Issues
 
-- Microphone/voice not working
-  - Voice is optional. If you don’t need it, ignore related warnings.
-  - If you do need it, install `sox` (Linux/macOS) or via Chocolatey on Windows and set Azure keys in `.env`.
+- **Electron won't start or shows blank window (Linux)**
+  - Try: `npm run dev`
+  - Ensure X11/XWayland is available if running in headless environments
+
+- **macOS screen capture doesn't work**
+  - Grant "Screen Recording" permission in System Settings → Privacy & Security → Screen Recording
+  - Quit and relaunch the app after granting permission
+
+- **Windows SmartScreen blocks the app**
+  - Click "More info" → "Run anyway" or use `npm start` during development
+
+- **Microphone/voice not working**
+  - Voice is optional - ignore related warnings if you don't need it
+  - To enable: install `sox` (Linux/macOS) and add Azure keys to `.env`
 
 ## 🙏 Acknowledgments
 
