@@ -22,6 +22,13 @@ usage() {
   cat <<EOF
 Usage: ./setup.sh [options]
 
+This script will:
+1. Install dependencies
+2. Create .env file (if needed) 
+3. Guide you to add your Gemini API key
+4. Optionally build the app
+5. Start OpenCluely
+
 Options:
   --build                 Build a distributable for this OS (electron-builder)
   --no-run                Do not start the app after setup
@@ -30,8 +37,11 @@ Options:
   --install-system-deps   Attempt to install required system dependencies (sox) where possible
   -h, --help              Show this help
 
-Environment variables picked up:
-  GEMINI_API_KEY          If provided, will be written into .env if missing
+Environment variables:
+  GEMINI_API_KEY          If provided, will be written into .env (skips manual setup)
+
+Example with API key:
+  GEMINI_API_KEY=your_key_here ./setup.sh
 EOF
 }
 
@@ -125,10 +135,26 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Ensure .env exists
-if [[ ! -f .env && -f env.example ]]; then
-  echo "Creating .env from env.example"
-  cp env.example .env
+# Ensure .env exists and has API key
+ENV_NEEDS_CONFIG=0
+if [[ ! -f .env ]]; then
+  if [[ -f env.example ]]; then
+    echo "Creating .env from env.example"
+    cp env.example .env
+    ENV_NEEDS_CONFIG=1
+  else
+    echo "Creating new .env file"
+    cat > .env << 'EOF'
+# Google Gemini API Configuration
+# Get your API key from: https://aistudio.google.com/
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Optional: Azure Speech Services Configuration
+# AZURE_SPEECH_KEY=your_azure_speech_key_here
+# AZURE_SPEECH_REGION=your_azure_region_here
+EOF
+    ENV_NEEDS_CONFIG=1
+  fi
 fi
 
 # If GEMINI_API_KEY is provided via env and .env lacks it, append it
@@ -136,7 +162,35 @@ if [[ -n "${GEMINI_API_KEY:-}" ]]; then
   if ! grep -q '^GEMINI_API_KEY=' .env 2>/dev/null; then
     echo "GEMINI_API_KEY is set in the environment; writing to .env"
     printf "GEMINI_API_KEY=%s\n" "$GEMINI_API_KEY" >> .env
+    ENV_NEEDS_CONFIG=0
   fi
+fi
+
+# Check if API key is configured
+if [[ "$ENV_NEEDS_CONFIG" -eq 1 ]] || grep -q "your_gemini_api_key_here" .env 2>/dev/null; then
+  echo ""
+  echo "=========================================="
+  echo " ⚠️  API KEY REQUIRED"
+  echo "=========================================="
+  echo ""
+  echo "OpenCluely needs a Google Gemini API key to work."
+  echo ""
+  echo "Steps to get your API key:"
+  echo "1. Visit: https://aistudio.google.com/"
+  echo "2. Click 'Create API Key'"
+  echo "3. Copy the generated key"
+  echo ""
+  echo "Then edit your .env file and replace 'your_gemini_api_key_here' with your actual key:"
+  echo ""
+  echo "GEMINI_API_KEY=your_actual_api_key_here"
+  echo ""
+  echo "You can edit .env with any text editor:"
+  echo "  nano .env      (Linux/macOS)"
+  echo "  notepad .env   (Windows)"
+  echo "  code .env      (VS Code)"
+  echo ""
+  read -p "Press Enter after you've added your API key to continue..."
+  echo ""
 fi
 
 # Install node dependencies
@@ -156,6 +210,18 @@ fi
 
 # Run (default)
 if [[ "$DO_RUN" -eq 1 ]]; then
+  # Final validation before starting
+  if grep -q "your_gemini_api_key_here" .env 2>/dev/null; then
+    echo ""
+    echo "❌ Error: API key not configured!"
+    echo "Please edit .env and replace 'your_gemini_api_key_here' with your actual Gemini API key."
+    echo "Get your key from: https://aistudio.google.com/"
+    echo ""
+    echo "Then run the setup script again:"
+    echo "./setup.sh"
+    exit 1
+  fi
+  
   echo "Starting app (npm start)"
   npm start
 else
