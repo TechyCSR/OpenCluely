@@ -237,7 +237,7 @@ class MainWindowUI {
                 let height = Math.ceil(rect.height);
 
                 // If shortcuts popover is visible, extend height to fit it
-                if (this.shortcutsPopover && this.shortcutsPopover.style.display !== 'none') {
+                if (this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
                     const popRect = this.shortcutsPopover.getBoundingClientRect();
                     // popover is positioned below the bar (top:36px), add that plus its height and a small margin
                     height = Math.max(height, Math.ceil(36 + popRect.height + 8));
@@ -378,14 +378,14 @@ class MainWindowUI {
             document.addEventListener('click', (e) => {
                 if (!this.shortcutsPopover) return;
                 const isClickInside = this.shortcutsPopover.contains(e.target) || this.infoButton.contains(e.target);
-                if (!isClickInside && this.shortcutsPopover.style.display !== 'none') {
+                if (!isClickInside && this.shortcutsPopover.classList.contains('is-open')) {
                     this.hideShortcutsPopover();
                 }
             });
 
             // Close on Escape
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && this.shortcutsPopover && this.shortcutsPopover.style.display !== 'none') {
+                if (e.key === 'Escape' && this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
                     this.hideShortcutsPopover();
                 }
             });
@@ -1099,8 +1099,8 @@ class MainWindowUI {
 
     toggleShortcutsPopover() {
         if (!this.shortcutsPopover) return;
-        const isHidden = this.shortcutsPopover.style.display === 'none' || !this.shortcutsPopover.style.display;
-        if (isHidden) {
+    const isOpen = this.shortcutsPopover.classList.contains('is-open');
+    if (!isOpen) {
             this.showShortcutsPopover();
         } else {
             this.hideShortcutsPopover();
@@ -1113,25 +1113,16 @@ class MainWindowUI {
             clearTimeout(this._popoverHideTimeout);
             this._popoverHideTimeout = null;
         }
-        this.shortcutsPopover.style.display = 'block';
-        // animate subtle fade-in
-        this.shortcutsPopover.style.opacity = '0';
-        requestAnimationFrame(() => {
-            this.shortcutsPopover.style.transition = 'opacity 120ms ease';
-            this.shortcutsPopover.style.opacity = '1';
-        });
+    this.shortcutsPopover.classList.add('is-open');
         // Resize main window to fit popover
         setTimeout(() => this.resizeWindowToContent(), 50);
     }
 
     hideShortcutsPopover() {
         if (!this.shortcutsPopover) return;
-        this.shortcutsPopover.style.opacity = '0';
-        setTimeout(() => {
-            this.shortcutsPopover.style.display = 'none';
-            // resize back to compact
-            this.resizeWindowToContent();
-        }, 120);
+    this.shortcutsPopover.classList.remove('is-open');
+    // resize back to compact after transition
+    setTimeout(() => this.resizeWindowToContent(), 130);
     }
 
     queueHideShortcutsPopover() {

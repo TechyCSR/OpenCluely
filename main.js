@@ -294,8 +294,14 @@ class ApplicationController {
     ipcMain.handle("resize-window", (event, { width, height }) => {
       const mainWindow = windowManager.getWindow("main");
       if (mainWindow) {
-        mainWindow.setSize(width, height);
-        logger.debug("Main window resized", { width, height });
+        try {
+          // Match content size to the DOM so no extra transparent area remains
+          mainWindow.setContentSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
+        } catch (e) {
+          // Fallback in case setContentSize isn’t available on some platform
+          mainWindow.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
+        }
+        logger.debug("Main window resized (content)", { width, height });
       }
       return { success: true };
     });

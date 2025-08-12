@@ -268,6 +268,18 @@
         min-width: 340px;
         z-index: 1000;
         -webkit-app-region: no-drag;
+        /* Hidden by default: do not intercept clicks */
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 120ms ease, visibility 120ms ease;
+      }
+
+      /* Open state: visible and interactive */
+      .shortcuts-popover.is-open {
+        pointer-events: auto;
+        opacity: 1;
+        visibility: visible;
       }
 
       .shortcuts-title {
@@ -369,8 +381,8 @@
       <div class="status-dot non-interactive" id="statusDot"></div>
     </div>
 
-    <!-- Shortcuts Popover (hidden by default) -->
-    <div id="shortcutsPopover" class="shortcuts-popover" style="display: none;">
+  <!-- Shortcuts Popover (hidden by default via CSS) -->
+  <div id="shortcutsPopover" class="shortcuts-popover">
       <div class="shortcuts-title">
         <i class="fas fa-bolt"></i> Global Shortcuts
       </div>
