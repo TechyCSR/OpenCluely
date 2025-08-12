@@ -246,28 +246,9 @@ Voice recognition is completely optional. The setup script will create a `.env` 
 - **Interim Results**: See transcription as you speak
 - **Auto-processing**: Instant AI responses to voice input
 
-## ⚖️ Legal & Ethics
 
-### 📋 **Disclaimer**
-
-OpenCluely is provided for educational and research purposes. Users are responsible for:
-- Complying with interview guidelines
-- Respecting company policies
-- Understanding legal implications
-- Using ethically and responsibly
-
-### 🔒 **Privacy**
-
-- No data collection or telemetry
-- All processing happens locally
-- API communications are encrypted
-- Session data stays on your device
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🧩 Troubleshooting
+<details markdown="1">
+<summary>🧩 Troubleshooting</summary>
 
 ### Setup Issues
 
@@ -300,6 +281,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
   - Voice is optional - ignore related warnings if you don't need it
   - To enable: install `sox` (Linux/macOS) and add Azure keys to `.env`
 
+</details>
+
 ## 🙏 Acknowledgments
 
 - **Google Gemini**: Powering AI intelligence
@@ -307,7 +290,36 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Electron**: Cross-platform desktop framework
 - **Community**: Amazing contributors and feedback
 
+- **Vysper**: UI and code structure inspiration — see [Vysper by varun-singhh](https://github.com/varun-singhh/Vysper)
+
 ---
+
+
+
+
+<details markdown="1">
+<summary>⚖️ Legal & Ethics</summary>
+
+### 📋 **Disclaimer**
+
+OpenCluely is provided for educational and research purposes. Users are responsible for:
+- Complying with interview guidelines
+- Respecting company policies
+- Understanding legal implications
+- Using ethically and responsibly
+
+### 🔒 **Privacy**
+
+- No data collection or telemetry
+- All processing happens locally
+- API communications are encrypted
+- Session data stays on your device
+
+</details>
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 <div align="center">
 

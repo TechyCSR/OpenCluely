@@ -99,13 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
             requestCurrentSettings();
         });
 
-        // Listen for coding language changes from other windows
-        window.electronAPI.receive('coding-language-changed', (data) => {
+    // Listen for coding language changes from other windows via helper
+    window.electronAPI.onCodingLanguageChanged((event, data) => {
             if (data && data.language && codingLanguageSelect) {
                 codingLanguageSelect.value = data.language;
                 console.log('Language updated from overlay window:', data.language);
             }
-        });
+    });
     }
 
     // Save settings helper function
@@ -139,7 +139,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Language selection handler
     if (codingLanguageSelect) {
         codingLanguageSelect.addEventListener('change', (e) => {
-            saveSettings();
+            const lang = e.target.value;
+            // use electronAPI so main broadcast is consistent
+            if (window.electronAPI && window.electronAPI.saveSettings) {
+                window.electronAPI.saveSettings({ codingLanguage: lang });
+            } else {
+                // fallback
+                saveSettings();
+            }
         });
     }
 

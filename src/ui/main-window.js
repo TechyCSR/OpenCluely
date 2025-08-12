@@ -16,6 +16,7 @@ class MainWindowUI {
         this.micButton = null;
         this.isRecording = false;
         this.speechAvailable = false; // track availability
+    this._popoverHideTimeout = null;
         
         // Define available skills for navigation
         this.availableSkills = [
@@ -233,7 +234,14 @@ class MainWindowUI {
             if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
                 const rect = commandTab.getBoundingClientRect();
                 const width = Math.ceil(rect.width);
-                const height = Math.ceil(rect.height);
+                let height = Math.ceil(rect.height);
+
+                // If shortcuts popover is visible, extend height to fit it
+                if (this.shortcutsPopover && this.shortcutsPopover.style.display !== 'none') {
+                    const popRect = this.shortcutsPopover.getBoundingClientRect();
+                    // popover is positioned below the bar (top:36px), add that plus its height and a small margin
+                    height = Math.max(height, Math.ceil(36 + popRect.height + 8));
+                }
                 
                 logger.debug('Resizing window to content', {
                     width,
@@ -251,12 +259,14 @@ class MainWindowUI {
         this.skillIndicator = document.getElementById('skillIndicator');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
+    this.infoButton = document.getElementById('infoButton');
+    this.shortcutsPopover = document.getElementById('shortcutsPopover');
 
         // NEW: Screenshot button is the first .command-item without id
         const commandItems = document.querySelectorAll('.command-item');
         this.screenshotButton = commandItems && commandItems[0];
 
-        if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
+    if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
             throw new Error('Required UI elements not found');
         }
 
@@ -327,10 +337,6 @@ class MainWindowUI {
                 if (window.electronAPI && window.electronAPI.saveSettings) {
                     window.electronAPI.saveSettings({ codingLanguage: lang });
                 }
-                // Optional notify
-                if (window.api && window.api.send) {
-                    window.api.send('save-settings', { codingLanguage: lang });
-                }
                 // Resize for any width change
                 setTimeout(() => {
                     const commandTab = document.querySelector('.command-tab');
@@ -339,6 +345,49 @@ class MainWindowUI {
                         window.electronAPI.resizeWindow(Math.ceil(rect.width), Math.ceil(rect.height));
                     }
                 }, 50);
+            });
+        }
+
+        // Info button / shortcuts popover
+        if (this.infoButton && this.shortcutsPopover) {
+            this.infoButton.addEventListener('click', (e) => {
+                if (!this.isInteractive) return;
+                e.stopPropagation();
+                this.toggleShortcutsPopover();
+            });
+
+            // Hover to show
+            this.infoButton.addEventListener('mouseenter', () => {
+                if (!this.isInteractive) return;
+                this.showShortcutsPopover();
+            });
+            // Queue hide when leaving the button
+            this.infoButton.addEventListener('mouseleave', () => this.queueHideShortcutsPopover());
+
+            // Keep open when hovering popover
+            this.shortcutsPopover.addEventListener('mouseenter', () => {
+                if (this._popoverHideTimeout) {
+                    clearTimeout(this._popoverHideTimeout);
+                    this._popoverHideTimeout = null;
+                }
+            });
+            // Hide after a small delay when leaving popover
+            this.shortcutsPopover.addEventListener('mouseleave', () => this.queueHideShortcutsPopover());
+
+            // Close on outside click
+            document.addEventListener('click', (e) => {
+                if (!this.shortcutsPopover) return;
+                const isClickInside = this.shortcutsPopover.contains(e.target) || this.infoButton.contains(e.target);
+                if (!isClickInside && this.shortcutsPopover.style.display !== 'none') {
+                    this.hideShortcutsPopover();
+                }
+            });
+
+            // Close on Escape
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && this.shortcutsPopover && this.shortcutsPopover.style.display !== 'none') {
+                    this.hideShortcutsPopover();
+                }
             });
         }
     }
@@ -371,9 +420,12 @@ class MainWindowUI {
             });
 
             // Listen for coding language changes from other windows
-            window.electronAPI.receive('coding-language-changed', (data) => {
+            window.electronAPI.onCodingLanguageChanged((event, data) => {
                 if (data && data.language && this.languageSelect) {
-                    this.languageSelect.value = data.language;
+                    // avoid clobbering if same value
+                    if (this.languageSelect.value !== data.language) {
+                        this.languageSelect.value = data.language;
+                    }
                     logger.debug('Language updated from other window', {
                         component: 'MainWindowUI',
                         language: data.language
@@ -506,6 +558,11 @@ class MainWindowUI {
         
         // Update all UI elements to reflect the new state
         this.updateAllElementStates();
+
+        // Auto-hide popover when leaving interactive mode
+        if (!this.isInteractive && this.shortcutsPopover && this.shortcutsPopover.style.display !== 'none') {
+            this.hideShortcutsPopover();
+        }
         
         // Update skill indicator tooltip
         this.updateSkillIndicator();
@@ -1038,6 +1095,49 @@ class MainWindowUI {
             margin: 8px 0;
         `;
         return separator;
+    }
+
+    toggleShortcutsPopover() {
+        if (!this.shortcutsPopover) return;
+        const isHidden = this.shortcutsPopover.style.display === 'none' || !this.shortcutsPopover.style.display;
+        if (isHidden) {
+            this.showShortcutsPopover();
+        } else {
+            this.hideShortcutsPopover();
+        }
+    }
+
+    showShortcutsPopover() {
+        if (!this.shortcutsPopover) return;
+        if (this._popoverHideTimeout) {
+            clearTimeout(this._popoverHideTimeout);
+            this._popoverHideTimeout = null;
+        }
+        this.shortcutsPopover.style.display = 'block';
+        // animate subtle fade-in
+        this.shortcutsPopover.style.opacity = '0';
+        requestAnimationFrame(() => {
+            this.shortcutsPopover.style.transition = 'opacity 120ms ease';
+            this.shortcutsPopover.style.opacity = '1';
+        });
+        // Resize main window to fit popover
+        setTimeout(() => this.resizeWindowToContent(), 50);
+    }
+
+    hideShortcutsPopover() {
+        if (!this.shortcutsPopover) return;
+        this.shortcutsPopover.style.opacity = '0';
+        setTimeout(() => {
+            this.shortcutsPopover.style.display = 'none';
+            // resize back to compact
+            this.resizeWindowToContent();
+        }, 120);
+    }
+
+    queueHideShortcutsPopover() {
+        if (!this.shortcutsPopover) return;
+        if (this._popoverHideTimeout) clearTimeout(this._popoverHideTimeout);
+        this._popoverHideTimeout = setTimeout(() => this.hideShortcutsPopover(), 180);
     }
 }
 

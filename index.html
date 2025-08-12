@@ -83,6 +83,23 @@
         color: #4caf50;
       }
 
+      /* Small round info button */
+      #infoButton {
+        width: 26px;
+        height: 26px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+      }
+      #infoButton i { font-size: 14px; }
+      #infoButton:hover {
+        background: rgba(96, 165, 250, 0.18);
+        color: #93c5fd;
+        box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.25) inset;
+      }
+
       .command-separator {
         width: 1px;
         height: 16px;
@@ -231,6 +248,91 @@
           transform: scale(1);
         }
       }
+
+      /* Info popover styles */
+      .shortcuts-popover {
+        position: absolute;
+        top: 36px; /* below command bar */
+        right: 8px;
+        background: linear-gradient(
+          135deg,
+          rgba(20, 20, 20, 0.7) 0%,
+          rgba(10, 10, 10, 0.6) 100%
+        );
+        backdrop-filter: blur(18px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        color: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+        padding: 12px;
+        min-width: 340px;
+        z-index: 1000;
+        -webkit-app-region: no-drag;
+      }
+
+      .shortcuts-title {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        margin: 2px 0 8px 0;
+        color: #e6e6e6;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .shortcuts-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      .shortcuts-table th,
+      .shortcuts-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        vertical-align: middle;
+      }
+
+      .shortcuts-table th {
+        text-align: left;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .kbd {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-weight: 600;
+        color: #fff;
+        box-shadow: inset 0 -1px 0 rgba(0,0,0,0.25);
+        white-space: nowrap;
+      }
+
+      .shortcuts-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        padding-top: 10px;
+        margin-top: 8px;
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .shortcuts-footer a {
+        color: #60a5fa; /* tailwind blue-400 */
+        text-decoration: none;
+      }
+
+      .shortcuts-footer a:hover {
+        text-decoration: underline;
+      }
     </style>
   </head>
   <body>
@@ -260,7 +362,81 @@
         </select>
       </div>
       <div class="command-separator"></div>
+      <div class="command-item" id="infoButton" title="Shortcuts">
+        <i class="fas fa-circle-info"></i>
+      </div>
+      <div class="command-separator"></div>
       <div class="status-dot non-interactive" id="statusDot"></div>
+    </div>
+
+    <!-- Shortcuts Popover (hidden by default) -->
+    <div id="shortcutsPopover" class="shortcuts-popover" style="display: none;">
+      <div class="shortcuts-title">
+        <i class="fas fa-bolt"></i> Global Shortcuts
+      </div>
+      <table class="shortcuts-table">
+        <thead>
+          <tr>
+            <th style="width: 45%">Shortcut</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <span class="kbd">Ctrl/Cmd</span>
+              + <span class="kbd">Shift</span>
+              + <span class="kbd">S</span>
+            </td>
+            <td>Capture screenshot and analyze</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Ctrl/Cmd</span>
+              + <span class="kbd">Shift</span>
+              + <span class="kbd">V</span>
+            </td>
+            <td>Toggle visibility</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Ctrl/Cmd</span>
+              + <span class="kbd">Shift</span>
+              + <span class="kbd">I</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">A</span>
+            </td>
+            <td>Toggle interaction (click-through)</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Ctrl/Cmd</span>
+              + <span class="kbd">Shift</span>
+              + <span class="kbd">C</span>
+            </td>
+            <td>Open chat</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">R</span>
+            </td>
+            <td>Toggle speech</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Ctrl/Cmd</span>
+              + <span class="kbd">,</span>
+            </td>
+            <td>Open settings</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="shortcuts-footer">
+        <span>Tip: Alt+A also toggles interaction from anywhere.</span>
+        <a href="https://techycsr.me" target="_blank" rel="noreferrer noopener">Made by @TechyCSR</a>
+      </div>
     </div>
 
     <script src="./src/ui/main-window.js"></script>
