@@ -136,6 +136,44 @@ AZURE_SPEECH_REGION=your_region
 
 ## 🚀 Quick Start
 
+### ⚡ One-command setup (recommended)
+
+Run everything with a single script (macOS, Linux, or Windows via Git Bash/MSYS/Cygwin):
+
+```bash
+./setup.sh
+```
+
+Common options:
+
+- Build a distributable for your OS and then run:
+  ```bash
+  ./setup.sh --build
+  ```
+- Use npm ci (if package-lock.json exists):
+  ```bash
+  ./setup.sh --ci
+  ```
+- Install system deps (sox) if needed for microphone capture:
+  ```bash
+  ./setup.sh --install-system-deps
+  ```
+- Skip launching the app (just set up):
+  ```bash
+  ./setup.sh --no-run
+  ```
+
+Environment variables recognized by the script:
+
+- Set the Gemini API key inline (will be written to .env if missing):
+  ```bash
+  GEMINI_API_KEY=your_key_here ./setup.sh
+  ```
+
+Windows notes:
+- Use Git Bash (bundled with Git for Windows) or another bash environment (MSYS/Cygwin/WSL) to run setup.sh.
+- To build a Windows installer/portable, the script maps to `npm run build:win`.
+
 ### 📦 **Installation**
 
 1. **Clone the Repository**
