@@ -118,6 +118,34 @@
 </tr>
 </table>
 
+
+---
+## ✅ To-Do List & Development Status
+
+### 🎯 **Core Features** *(Completed)*
+
+- [x] **Stealth overlay** with draggable command bar and click‑through toggle
+- [x] **Screenshot capture** with direct Gemini analysis (no OCR step)
+- [x] **AI response window** with markdown and code highlighting
+- [x] **Global shortcuts** (capture, visibility, interaction, chat, settings)
+- [x] **Session memory** and chat UI
+- [x] **Language picker** and DSA skill prompt
+- [x] **Optional Azure Speech** integration with auto‑hide mic
+- [x] **Multi‑monitor** and area capture APIs
+- [x] **Window binding** and positioning system
+- [x] **Settings management** with app icon/stealth modes
+
+### 🚧 **Planned Features** *(In Development)*
+
+- [ ] **Hidden during screen share** (auto‑hide all windows while screen is being shared)
+- [ ] **Multi‑model support** (OpenAI/Anthropic/Local backends alongside Gemini)
+- [ ] **Auto‑typer for code snippets** (paste or simulate typing into editors/IDEs)
+- [ ] **Export conversation history** (save sessions as markdown/PDF)
+- [ ] **Performance optimizations** (faster startup, reduced memory usage)
+- [ ] **Enhanced stealth modes** (process name randomization, deeper OS integration)
+
+---
+
 ### ⚙️ **Configuration**
 
 The setup script automatically handles configuration. You only need:
