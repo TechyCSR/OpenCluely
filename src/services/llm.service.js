@@ -42,6 +42,116 @@ class LLMService {
     }
   }
 
+  /**
+   * Process an image directly with Gemini using the active skill prompt.
+   * The image buffer is sent as inlineData alongside a concise instruction.
+   * For image-based queries, we include the skill prompt (e.g., DSA) as systemInstruction.
+   * @param {Buffer} imageBuffer - PNG/JPEG image bytes
+   * @param {string} mimeType - e.g., 'image/png' or 'image/jpeg'
+   * @param {string} activeSkill - current skill (e.g. 'dsa')
+   * @param {Array} sessionMemory - optional (not required for image)
+   * @param {string|null} programmingLanguage - optional language context for skills that need it
+   * @returns {Promise<{response: string, metadata: object}>}
+   */
+  async processImageWithSkill(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null) {
+    if (!this.isInitialized) {
+      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+    }
+
+    if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
+      throw new Error('Invalid image buffer provided to processImageWithSkill');
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      // Build system instruction using the skill prompt (with optional language injection)
+      const { promptLoader } = require('../../prompt-loader');
+      const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+
+      // Build request with text + image parts
+      const base64 = imageBuffer.toString('base64');
+
+      const request = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: this.formatImageInstruction(activeSkill, programmingLanguage) },
+              { inlineData: { data: base64, mimeType } }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+          topK: 40,
+          topP: 0.95
+        }
+      };
+
+      if (skillPrompt && skillPrompt.trim().length > 0) {
+        request.systemInstruction = { parts: [{ text: skillPrompt }] };
+      }
+
+      // Execute with retries/timeout
+      let responseText;
+      try {
+        responseText = await this.executeRequest(request);
+      } catch (error) {
+        if (error.message.includes('fetch failed') && config.get('llm.gemini.enableFallbackMethod')) {
+          responseText = await this.executeAlternativeRequest(request);
+        } else {
+          throw error;
+        }
+      }
+
+      // Enforce language in code fences if provided
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
+        : responseText;
+
+      logger.logPerformance('LLM image processing', startTime, {
+        activeSkill,
+        imageSize: imageBuffer.length,
+        responseLength: finalResponse.length,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: {
+          skill: activeSkill,
+          programmingLanguage,
+          processingTime: Date.now() - startTime,
+          requestId: this.requestCount,
+          usedFallback: false,
+          isImageAnalysis: true,
+          mimeType
+        }
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('LLM image processing failed', {
+        error: error.message,
+        activeSkill,
+        requestId: this.requestCount
+      });
+
+      if (config.get('llm.gemini.fallbackEnabled')) {
+        return this.generateFallbackResponse('[image]', activeSkill);
+      }
+      throw error;
+    }
+  }
+
+  formatImageInstruction(activeSkill, programmingLanguage) {
+    const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
+    return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
+  }
+
   async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
@@ -405,18 +515,9 @@ class LLMService {
       }
     };
 
-    // Build intelligent system instruction combining skill prompt and filtering rules
-    const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
-    let combinedInstruction = intelligentPrompt;
-    
-    // Use the skill prompt from context (which may already include programming language)
-    if (skillContext.skillPrompt) {
-      combinedInstruction = `${skillContext.skillPrompt}\n\n${intelligentPrompt}`;
-    }
-
-    request.systemInstruction = {
-      parts: [{ text: combinedInstruction }]
-    };
+  // For chat/transcription messages, DO NOT include the full skill prompt; use only the intelligent filter prompt
+  const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
+  request.systemInstruction = { parts: [{ text: intelligentPrompt }] };
 
     // Add recent conversation history (excluding system messages) with validation
     const conversationContents = conversationHistory

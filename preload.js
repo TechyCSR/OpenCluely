@@ -70,6 +70,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   
+  // Display management
+  listDisplays: () => ipcRenderer.invoke('list-displays'),
+  captureArea: (options) => ipcRenderer.invoke('capture-area', options),
+  
   // Event listeners
   onTranscriptionReceived: (callback) => ipcRenderer.on('transcription-received', callback),
   onInterimTranscription: (callback) => ipcRenderer.on('interim-transcription', callback),

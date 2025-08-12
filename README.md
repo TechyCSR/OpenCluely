@@ -19,7 +19,6 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Status-Production%20Ready-00C851?style=flat-square" alt="Status" />
   <img src="https://img.shields.io/badge/Platform-Cross%20Platform-blue?style=flat-square" alt="Platform" />
   <img src="https://img.shields.io/badge/Stealth-100%25%20Invisible-red?style=flat-square" alt="Stealth" />
   <img src="https://img.shields.io/badge/AI-Gemini%20Powered-orange?style=flat-square" alt="AI" />
@@ -30,7 +29,7 @@
 
 **🎯 The Ultimate Stealth Interview Assistant**
 
-**OpenCluely** is a revolutionary AI-powered desktop application that provides **invisible, real-time assistance** during technical interviews. Completely undetectable by screen sharing software, it helps you excel in coding challenges, system design questions, and behavioral interviews with modern draggable UI and optional voice recognition.
+**OpenCluely** is a revolutionary AI-powered desktop application that provides **invisible, real-time assistance** during technical interviews. Completely undetectable by screen sharing software, it helps you excel in coding challenges, system design questions, and behavioral interviews with modern draggable UI and optional voice recognition. Screenshots are sent directly to Gemini for multimodal understanding—no local OCR required.
 
 </div>
 
@@ -51,7 +50,7 @@
 <td width="50%">
 
 ### 🚀 **AI-Powered Intelligence**
-- **Screenshot OCR**: Instant text extraction and analysis
+- **Direct Image Analysis**: Screenshots are analyzed by Gemini (no Tesseract OCR)
 - **Voice Commands**: Optional Azure Speech (Whisper questions, get instant answers)
 - **Context Memory**: Remembers entire interview conversation
 - **Multi-Language Support**: C++, Python, Java, JavaScript, C
@@ -184,7 +183,7 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 | Action | Shortcut | Description |
 |--------|----------|-------------|
-| **Screenshot OCR** | `⌘⇧S` | Capture and analyze screen content |
+| **Screenshot Capture** | `⌘⇧S` | Capture screen and analyze via Gemini (image understanding) |
 | **Toggle Speech** | `Alt+R` | Start/stop voice recognition (if configured) |
 | **Toggle Visibility** | `⌘⇧V` | Show/hide all windows |
 | **Toggle Interaction** | `⌘⇧I` or `Alt+A` | Enable/disable window interaction |
@@ -213,6 +212,8 @@ GEMINI_API_KEY=your_gemini_api_key_here
 - **Code Detection**: Automatically formats code blocks
 - **Language Specific**: Tailored responses for selected programming language
 - **Session Memory**: Maintains context across multiple questions
+ - **Image Understanding**: DSA prompt is applied only for new image-based queries; chat messages don’t include the full prompt
+ - **Multi-monitor & Area Capture**: Programmatic APIs allow targeting a display and optional rectangular crop for focused analysis
 
 #### 🔊 **Optional Voice Features** (Azure Speech)
 - **Real-time Transcription**: Speak questions naturally

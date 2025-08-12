@@ -5,7 +5,8 @@ const logger = require("./src/core/logger").createServiceLogger("MAIN");
 const config = require("./src/core/config");
 
 // Services
-const ocrService = require("./src/services/ocr.service");
+// Screen capture (image-based)
+const captureService = require("./src/services/capture.service");
 const speechService = require("./src/services/speech.service");
 const llmService = require("./src/services/llm.service");
 
@@ -206,7 +207,9 @@ class ApplicationController {
   }
 
   setupIPCHandlers() {
-    ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
+  ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
+  ipcMain.handle("list-displays", () => captureService.listDisplays());
+  ipcMain.handle("capture-area", (event, options) => captureService.captureAndProcess(options));
     
     // Provide reliable clipboard write via main process
     ipcMain.handle("copy-to-clipboard", (event, text) => {
@@ -682,24 +685,44 @@ class ApplicationController {
     try {
       windowManager.showLLMLoading();
 
-      const ocrResult = await ocrService.captureAndProcess();
+  const capture = await captureService.captureAndProcess();
 
-      if (!ocrResult.text || ocrResult.text.trim().length === 0) {
+      if (!capture.imageBuffer || !capture.imageBuffer.length) {
         windowManager.hideLLMResponse();
-        this.broadcastOCRError("No text found in screenshot");
+        this.broadcastOCRError("Failed to capture screenshot image");
         return;
       }
 
-      // Add OCR extracted text to session memory
-      sessionManager.addOCREvent(ocrResult.text, {
-        processingTime: ocrResult.metadata?.processingTime,
-        source: 'screenshot'
+      // Use image directly with LLM and active skill; do not send chat messages here
+      const sessionHistory = sessionManager.getOptimizedHistory();
+
+      const skillsRequiringProgrammingLanguage = ['dsa'];
+      const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
+
+      const llmResult = await llmService.processImageWithSkill(
+        capture.imageBuffer,
+        capture.mimeType || 'image/png',
+        this.activeSkill,
+        sessionHistory.recent,
+        needsProgrammingLanguage ? this.codingLanguage : null
+      );
+
+      // Record model response in session
+      sessionManager.addModelResponse(llmResult.response, {
+        skill: this.activeSkill,
+        processingTime: llmResult.metadata.processingTime,
+        usedFallback: llmResult.metadata.usedFallback,
+        isImageAnalysis: true
       });
 
-      this.broadcastOCRSuccess(ocrResult);
+      windowManager.showLLMResponse(llmResult.response, {
+        skill: this.activeSkill,
+        processingTime: llmResult.metadata.processingTime,
+        usedFallback: llmResult.metadata.usedFallback,
+        isImageAnalysis: true
+      });
 
-      const sessionHistory = sessionManager.getOptimizedHistory();
-      await this.processWithLLM(ocrResult.text, sessionHistory);
+      this.broadcastLLMSuccess(llmResult);
     } catch (error) {
       logger.error("Screenshot OCR process failed", {
         error: error.message,
