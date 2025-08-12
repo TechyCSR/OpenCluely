@@ -27,9 +27,8 @@
 
 ---
 
-**🎯 The Ultimate Stealth Interview Assistant**
 
-**OpenCluely** is a revolutionary AI-powered desktop application that provides **invisible, real-time assistance** during technical interviews. Completely undetectable by screen sharing software, it helps you excel in coding challenges, system design questions, and behavioral interviews with modern draggable UI and optional voice recognition. Screenshots are sent directly to Gemini for multimodal understanding—no local OCR required.
+**OpenCluely** is a revolutionary AI-powered desktop application that provides **invisible, real-time assistance** during technical rounds.
 
 </div>
 
@@ -76,8 +75,6 @@
 - **Professional Look**: Mimics system applications for perfect stealth
 
 ---
-
-⭐ **Star this repo** if OpenCluely helped you ace your interviews or you vibed with it!
 
 ## 🎯 Functional Overview
 
@@ -245,10 +242,11 @@ Voice recognition is completely optional. The setup script will create a `.env` 
 - **Listening Animation**: Visual feedback during recording
 - **Interim Results**: See transcription as you speak
 - **Auto-processing**: Instant AI responses to voice input
-
+]
+---
 
 <details markdown="1">
-<summary>🧩 Troubleshooting</summary>
+<summary>🧩 <b> Troubleshooting</summary>
 
 ### Setup Issues
 
@@ -283,21 +281,7 @@ Voice recognition is completely optional. The setup script will create a `.env` 
 
 </details>
 
-## 🙏 Acknowledgments
-
-- **Google Gemini**: Powering AI intelligence
-- **Azure Speech**: Optional voice recognition
-- **Electron**: Cross-platform desktop framework
-- **Community**: Amazing contributors and feedback
-
-- **Vysper**: UI and code structure inspiration — see [Vysper by varun-singhh](https://github.com/varun-singhh/Vysper)
-
----
-
-
-
-
-<details markdown="1">
+<details markdown="2">
 <summary>⚖️ Legal & Ethics</summary>
 
 ### 📋 **Disclaimer**
@@ -315,17 +299,34 @@ OpenCluely is provided for educational and research purposes. Users are responsi
 - API communications are encrypted
 - Session data stays on your device
 
-</details>
 
-## 📄 License
+### 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+
+</details>
+
+
+</b>
+
+## 🙏 Acknowledgments
+
+- **Google Gemini**: Powering AI intelligence
+- **Azure Speech**: Optional voice recognition
+- **Electron**: Cross-platform desktop framework
+- **Community**: Amazing contributors and feedback
+
+- **Vysper**: UI and code structure inspiration — see [Vysper by varun-singhh](https://github.com/varun-singhh/Vysper)
+
+---
 <div align="center">
 
 
-**Made with ❤️ by [TechyCSR](https://github.com/TechyCSR)**
 
-*"Success is where preparation meets opportunity"*
+⭐ **Star this repo** if OpenCluely helped you ace your interviews or you vibed with it!
+
+**Made with ❤️ by [TechyCSR](https://techycsr.me)**
+
 
 </div>
