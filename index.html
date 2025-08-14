@@ -15,7 +15,7 @@
         -webkit-app-region: no-drag;
       }
 
-      .command-tab {
+  .command-tab {
         height: 28px;
         background: linear-gradient(
           135deg,
@@ -36,8 +36,9 @@
         flex-wrap: nowrap;
         overflow: visible;
         border: 1px solid rgba(255, 255, 255, 0.15);
-        width: 100%;
-        min-width: 400px;
+  width: 100%;
+  /* Allow horizontal collapse to approximately one icon's width */
+  min-width: 60px;
       }
 
       .command-item {
@@ -51,6 +52,8 @@
         cursor: pointer;
         transition: all 0.2s ease;
         -webkit-app-region: no-drag;
+  /* Allow items to shrink so the bar can collapse to one icon width */
+  flex-shrink: 1;
       }
 
       .command-item:hover {
@@ -118,6 +121,7 @@
         border-radius: 50%;
         transition: all 0.3s ease;
         position: relative;
+  flex-shrink: 0;
       }
 
       .status-dot.interactive {

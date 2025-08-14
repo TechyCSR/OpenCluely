@@ -178,18 +178,15 @@ AZURE_SPEECH_REGION=your_region
 
 3. **Run the setup script** (One command does everything!)
    ```bash
-   # Option 1: Enter API key when prompted
    ./setup.sh
-   
-   # Option 2: Provide API key directly
-   GEMINI_API_KEY=your_key_here ./setup.sh
    ```
+  
 
 **That's it!** The setup script will:
 - Install all dependencies automatically
 - Create and configure your `.env` file
 - Build the app (if needed)
-- Launch OpenCluely ready to use
+- Launch OpenCluely ready to use (if not works use npm install & then npm start)
 
 ### 💻 Platform-Specific Notes
 

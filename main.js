@@ -294,14 +294,18 @@ class ApplicationController {
     ipcMain.handle("resize-window", (event, { width, height }) => {
       const mainWindow = windowManager.getWindow("main");
       if (mainWindow) {
+        // Enforce horizontal constraints: min ~one icon, max original width
+        const minW = 60;
+        const maxW = windowManager.windowConfigs?.main?.width || 520;
+        const clampedWidth = Math.max(minW, Math.min(maxW, Math.round(width || minW)));
         try {
           // Match content size to the DOM so no extra transparent area remains
-          mainWindow.setContentSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
+          mainWindow.setContentSize(Math.max(1, clampedWidth), Math.max(1, Math.round(height)));
         } catch (e) {
           // Fallback in case setContentSize isn’t available on some platform
-          mainWindow.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
+          mainWindow.setSize(Math.max(1, clampedWidth), Math.max(1, Math.round(height)));
         }
-        logger.debug("Main window resized (content)", { width, height });
+        logger.debug("Main window resized (content)", { width: clampedWidth, height });
       }
       return { success: true };
     });

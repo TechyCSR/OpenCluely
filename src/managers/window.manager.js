@@ -237,7 +237,7 @@ class WindowManager {
           disableAutoHideCursor: true
         })
       };
-    } else if (type === 'main') {
+  } else if (type === 'main') {
       // Main window configuration - fit to content, completely frameless
       browserWindowOptions = {
         ...baseOptions,
@@ -246,7 +246,11 @@ class WindowManager {
         titleBarOverlay: false,
         transparent: true,
         backgroundColor: '#00000000',
-        resizable: false,
+  // Allow resizing so users can adjust width; we will lock height in handlers
+  resizable: true,
+    // Keep the original max width as cap; allow small min width so it can collapse to one icon
+    minWidth: 60,
+    maxWidth: this.windowConfigs.main.width,
         minimizable: false,
         maximizable: false,
         closable: false,
@@ -342,22 +346,65 @@ class WindowManager {
     browserWindowOptions.kiosk = false;
     browserWindowOptions.simpleFullscreen = false;
 
-    const window = new BrowserWindow(browserWindowOptions);
+  const window = new BrowserWindow(browserWindowOptions);
     
-    // Load the HTML file
+  // Load the HTML file
     await window.loadFile(windowConfig.file);
     
-    // Position the window
+  // Position the window
     this.positionWindow(window, type);
     
-    // Apply simplified stealth measures
+  // Apply simplified stealth measures
     this.applyStealthMeasures(window, type);
     
-    // Initialize interaction mode based on current state for ALL windows
+  // Initialize interaction mode based on current state for ALL windows
     if (this.isInteractive) {
       window.setIgnoreMouseEvents(false);
     } else {
       window.setIgnoreMouseEvents(true, { forward: true });
+    }
+
+    // Horizontal-only resize behavior for main overlay window
+    if (type === 'main') {
+      try {
+        // Small practical minimum width so it can collapse to roughly one icon width
+        // Height is managed dynamically; don't lock here to allow programmatic changes
+        if (typeof window.setMinimumSize === 'function') {
+          // Set a conservative minimum width; height will be adjusted via IPC as needed
+          window.setMinimumSize(60, windowConfig.height);
+        }
+
+        // Intercept user-initiated resizes to lock height and allow width changes only
+        window.on('will-resize', (event, newBounds) => {
+          try {
+            // Keep current content height; only apply the new width
+            const [_, currentContentHeight] = window.getContentSize();
+            event.preventDefault();
+            // Enforce width within min/max bounds
+            const minW = 60;
+            const maxW = this.windowConfigs.main.width;
+            const desiredW = Math.max(minW, Math.min(maxW, Math.round(newBounds.width || minW)));
+            window.setContentSize(desiredW, Math.max(1, currentContentHeight));
+          } catch (e) {
+            // Fallback: lock window height using window size
+            try {
+              const [__w, currentWindowHeight] = window.getSize();
+              event.preventDefault();
+              const minW = 60;
+              const maxW = this.windowConfigs.main.width;
+              const desiredW = Math.max(minW, Math.min(maxW, Math.round(newBounds.width || minW)));
+              window.setSize(desiredW, Math.max(1, currentWindowHeight));
+            } catch { /* noop */ }
+          }
+        });
+
+        // When resized (by user or programmatically), keep bound windows aligned at top
+        window.on('resize', () => {
+          if (this.bindWindows) {
+            this.positionBoundWindows();
+          }
+        });
+      } catch { /* ignore */ }
     }
     
     // Show window on current desktop if requested
