@@ -30,6 +30,10 @@
 
 **OpenCluely** is a revolutionary AI-powered desktop application that provides **invisible, real-time assistance** during technical rounds.
 
+## 🎬 Demo Video
+
+https://github.com/user-attachments/assets/c5616482-3652-4686-b87b-e04d06572d2f
+
 </div>
 
 ## 🌟 Why OpenCluely?
