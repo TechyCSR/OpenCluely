@@ -32,8 +32,7 @@
 
 ## 🎬 Demo Video
 
-https://github.com/user-attachments/assets/c5616482-3652-4686-b87b-e04d06572d2f
-
+https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 </div>
 
 ## 🌟 Why OpenCluely?
