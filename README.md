@@ -354,7 +354,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ⭐ **Star this repo** if OpenCluely helped you ace your interviews or you vibed with it!
 
-**Made with ❤️ by [TechyCSR](https://techycsr.me)**
+**Made with ❤️ by [TechyCSR](https://techycsr.dev)**
 
 
 </div>
