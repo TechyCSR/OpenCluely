@@ -32,12 +32,7 @@ class LLMService {
       const modelName = config.get('llm.gemini.model');
       this.model = this.client.getGenerativeModel({ 
         model: modelName,
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 8192,
-        }
+        generationConfig: this.getGenerationConfig()
       });
       this.isInitialized = true;
       
@@ -49,6 +44,64 @@ class LLMService {
         error: error.message 
       });
     }
+  }
+
+  getGenerationConfig(overrides = {}) {
+    const defaults = config.get('llm.gemini.generation') || {};
+    const fallback = {
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 4096
+    };
+
+    const merged = { ...fallback, ...defaults, ...overrides };
+    return Object.fromEntries(
+      Object.entries(merged).filter(([, value]) => value !== undefined && value !== null)
+    );
+  }
+
+  applyGenerationDefaults(request, overrides = {}) {
+    request.generationConfig = this.getGenerationConfig({ ...(request.generationConfig || {}), ...overrides });
+    return request;
+  }
+
+  extractTextFromCandidates(response) {
+    const candidates = Array.isArray(response?.candidates)
+      ? response.candidates
+      : Array.isArray(response)
+        ? response
+        : [];
+
+    if (!candidates.length) {
+      throw new Error('No candidates in Gemini response');
+    }
+
+    const candidateWithText = candidates.find(candidate => {
+      const parts = candidate?.content?.parts;
+      return Array.isArray(parts) && parts.some(part => typeof part.text === 'string' && part.text.trim().length > 0);
+    });
+
+    if (!candidateWithText) {
+      const finishReasons = candidates.map(c => c.finishReason || 'unknown').join(', ');
+      throw new Error(`No text parts in candidates. Finish reasons: ${finishReasons}`);
+    }
+
+    const textParts = candidateWithText.content.parts
+      .filter(part => typeof part.text === 'string' && part.text.trim().length > 0)
+      .map(part => part.text.trim());
+
+    if (!textParts.length) {
+      throw new Error(`Candidate parts missing text after filtering: ${JSON.stringify(candidateWithText)}`);
+    }
+
+    const text = textParts.join('\n');
+
+    return {
+      text,
+      candidate: candidateWithText,
+      finishReason: candidateWithText.finishReason || null
+    };
   }
 
   /**
@@ -91,14 +144,10 @@ class LLMService {
               { inlineData: { data: base64, mimeType } }
             ]
           }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048,
-          topK: 40,
-          topP: 0.95
-        }
+        ]
       };
+
+      this.applyGenerationDefaults(request);
 
       if (skillPrompt && skillPrompt.trim().length > 0) {
         request.systemInstruction = { parts: [{ text: skillPrompt }] };
@@ -106,28 +155,27 @@ class LLMService {
 
       // Execute with retries/timeout - try alternative method first for network reliability
       let responseText;
+      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
       try {
-        // Try alternative HTTPS method first if enabled
-        if (config.get('llm.gemini.enableFallbackMethod')) {
+        if (preferAlternative) {
           logger.debug('Attempting alternative HTTPS method first for reliability');
           responseText = await this.executeAlternativeRequest(request);
         } else {
           responseText = await this.executeRequest(request);
         }
       } catch (error) {
-        logger.warn('Primary method failed, trying fallback', { error: error.message });
-        if (error.message.includes('fetch failed') || error.message.includes('network') || error.message.includes('timeout')) {
-          try {
-            responseText = await this.executeAlternativeRequest(request);
-          } catch (altError) {
-            logger.error('Both primary and alternative methods failed', {
-              primaryError: error.message,
-              alternativeError: altError.message
-            });
-            throw error; // Throw original error
-          }
-        } else {
-          throw error;
+        const secondaryLabel = preferAlternative ? 'primary SDK method' : 'alternative HTTPS method';
+        logger.warn(`${preferAlternative ? 'Alternative' : 'Primary'} method failed, trying ${secondaryLabel}`, { error: error.message });
+        const secondaryFn = preferAlternative ? this.executeRequest.bind(this) : this.executeAlternativeRequest.bind(this);
+
+        try {
+          responseText = await secondaryFn(request);
+        } catch (secondaryError) {
+          logger.error('Both Gemini request methods failed', {
+            firstError: error.message,
+            secondError: secondaryError.message
+          });
+          throw secondaryError;
         }
       }
 
@@ -194,21 +242,32 @@ class LLMService {
       });
 
       const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage);
-      
-      // Try standard method first
-  let response;
+
+      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
+      let response;
       try {
-        response = await this.executeRequest(geminiRequest);
-      } catch (error) {
-        // If fetch failed, try alternative method
-        if (error.message.includes('fetch failed') && config.get('llm.gemini.enableFallbackMethod')) {
-          logger.warn('Standard request failed, trying alternative method', {
-            error: error.message,
-            requestId: this.requestCount
-          });
+        if (preferAlternative) {
+          logger.debug('Attempting alternative HTTPS method first for text processing');
           response = await this.executeAlternativeRequest(geminiRequest);
         } else {
-          throw error;
+          response = await this.executeRequest(geminiRequest);
+        }
+      } catch (error) {
+        const secondaryLabel = preferAlternative ? 'primary SDK method' : 'alternative HTTPS method';
+        logger.warn(`${preferAlternative ? 'Alternative' : 'Primary'} method failed, trying ${secondaryLabel}`, {
+          error: error.message,
+          requestId: this.requestCount
+        });
+        const secondaryFn = preferAlternative ? this.executeRequest.bind(this) : this.executeAlternativeRequest.bind(this);
+        try {
+          response = await secondaryFn(geminiRequest);
+        } catch (secondaryError) {
+          logger.error('Both Gemini request methods failed for text processing', {
+            firstError: error.message,
+            secondError: secondaryError.message,
+            requestId: this.requestCount
+          });
+          throw secondaryError;
         }
       }
       
@@ -270,21 +329,32 @@ class LLMService {
       });
 
       const geminiRequest = this.buildIntelligentTranscriptionRequest(text, activeSkill, sessionMemory, programmingLanguage);
-      
-      // Try standard method first
-  let response;
+
+      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
+      let response;
       try {
-        response = await this.executeRequest(geminiRequest);
-      } catch (error) {
-        // If fetch failed, try alternative method
-        if (error.message.includes('fetch failed') && config.get('llm.gemini.enableFallbackMethod')) {
-          logger.warn('Standard request failed, trying alternative method', {
-            error: error.message,
-            requestId: this.requestCount
-          });
+        if (preferAlternative) {
+          logger.debug('Attempting alternative HTTPS method first for transcription processing');
           response = await this.executeAlternativeRequest(geminiRequest);
         } else {
-          throw error;
+          response = await this.executeRequest(geminiRequest);
+        }
+      } catch (error) {
+        const secondaryLabel = preferAlternative ? 'primary SDK method' : 'alternative HTTPS method';
+        logger.warn(`${preferAlternative ? 'Alternative' : 'Primary'} method failed, trying ${secondaryLabel}`, {
+          error: error.message,
+          requestId: this.requestCount
+        });
+        const secondaryFn = preferAlternative ? this.executeRequest.bind(this) : this.executeAlternativeRequest.bind(this);
+        try {
+          response = await secondaryFn(geminiRequest);
+        } catch (secondaryError) {
+          logger.error('Both Gemini request methods failed for transcription processing', {
+            firstError: error.message,
+            secondError: secondaryError.message,
+            requestId: this.requestCount
+          });
+          throw secondaryError;
         }
       }
       
@@ -376,14 +446,10 @@ class LLMService {
     );
 
     const request = {
-      contents: [],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-        topK: 40,
-        topP: 0.95
-      }
+      contents: []
     };
+
+    this.applyGenerationDefaults(request);
 
     // Use the skill prompt that already has programming language injected
     if (requestComponents.shouldUseModelMemory && requestComponents.skillPrompt) {
@@ -409,14 +475,10 @@ class LLMService {
 
   buildGeminiRequestWithHistory(text, activeSkill, conversationHistory, skillContext, programmingLanguage) {
     const request = {
-      contents: [],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-        topK: 40,
-        topP: 0.95
-      }
+      contents: []
     };
+
+    this.applyGenerationDefaults(request);
 
     // Use the skill prompt from context (which may already include programming language)
     if (skillContext.skillPrompt) {
@@ -494,14 +556,10 @@ class LLMService {
 
     // Fallback to basic intelligent request
     const request = {
-      contents: [],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048, // Full responses for transcriptions (same as regular processing)
-        topK: 40,
-        topP: 0.95
-      }
+      contents: []
     };
+
+    this.applyGenerationDefaults(request);
 
     // Add intelligent filtering system instruction
     const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
@@ -530,14 +588,10 @@ class LLMService {
 
   buildIntelligentTranscriptionRequestWithHistory(text, activeSkill, conversationHistory, skillContext, programmingLanguage) {
     const request = {
-      contents: [],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048, // Full responses for transcriptions (same as regular processing)
-        topK: 40,
-        topP: 0.95
-      }
+      contents: []
     };
+
+    this.applyGenerationDefaults(request);
 
   // For chat/transcription messages, DO NOT include the full skill prompt; use only the intelligent filter prompt
   const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
@@ -694,18 +748,22 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
           throw new Error('Empty response from Gemini API');
         }
 
-        const responseText = result.response.text();
-        
-        if (!responseText || responseText.trim().length === 0) {
-          throw new Error('Empty text content in Gemini response');
+        const { text, finishReason } = this.extractTextFromCandidates(result.response);
+
+        if (finishReason === 'MAX_TOKENS') {
+          logger.warn('Gemini primary response reached max tokens limit', {
+            attempt,
+            finishReason
+          });
         }
 
         logger.debug('Gemini API request successful', {
           attempt,
-          responseLength: responseText.length
+          responseLength: text.length,
+          finishReason
         });
 
-        return responseText.trim();
+        return text;
       } catch (error) {
         const errorInfo = this.analyzeError(error);
         
@@ -972,27 +1030,25 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
         contents: [{
           role: 'user',
           parts: [{ text: 'Test connection. Please respond with "OK".' }]
-        }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 10
-        }
+        }]
       };
+
+      this.applyGenerationDefaults(testRequest, { temperature: 0, maxOutputTokens: 10 });
 
       const startTime = Date.now();
       const result = await this.model.generateContent(testRequest);
       const latency = Date.now() - startTime;
-      const response = result.response.text();
+      const { text } = this.extractTextFromCandidates(result.response);
       
       logger.info('Connection test successful', { 
-        response, 
+        response: text, 
         latency,
         networkCheck: hasNetworkIssues ? 'issues_detected' : 'healthy'
       });
       
       return { 
         success: true, 
-        response: response.trim(),
+        response: text,
         latency,
         networkConnectivity: networkCheck
       };
@@ -1079,29 +1135,19 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
               responseKeys: Object.keys(response || {}),
               firstCandidateKeys: response.candidates?.[0] ? Object.keys(response.candidates[0]) : []
             });
-            
-            // More robust response parsing
-            if (!response.candidates || response.candidates.length === 0) {
-              reject(new Error(`No candidates in response: ${JSON.stringify(response)}`));
-              return;
-            }
-            
-            const candidate = response.candidates[0];
-            if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-              reject(new Error(`Invalid candidate structure: ${JSON.stringify(candidate)}`));
-              return;
-            }
-            
-            const text = candidate.content.parts[0].text;
-            
-            if (!text || text.trim().length === 0) {
-              reject(new Error('Empty text content in Gemini response'));
-              return;
+
+            const { text, finishReason } = this.extractTextFromCandidates(response);
+
+            if (finishReason === 'MAX_TOKENS') {
+              logger.warn('Gemini alternative response reached max tokens limit', {
+                finishReason
+              });
             }
             
             logger.info('Alternative request successful', {
               responseLength: text.length,
-              statusCode: res.statusCode
+              statusCode: res.statusCode,
+              finishReason
             });
             
             resolve(text.trim());

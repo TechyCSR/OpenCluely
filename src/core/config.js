@@ -44,7 +44,13 @@ class ConfigManager {
           maxRetries: 3,
           timeout: 30000,
           fallbackEnabled: true,
-          enableFallbackMethod: true
+          enableFallbackMethod: true,
+          generation: {
+            temperature: 0.7,
+            topK: 32,
+            topP: 0.9,
+            maxOutputTokens: 4096
+          }
         }
       },
 
