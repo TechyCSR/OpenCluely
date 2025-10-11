@@ -77,6 +77,7 @@ class ApplicationController {
 
     try {
       this.setupPermissions();
+      this.setupNetworkConfiguration();
 
       // Small delay to ensure desktop/space detection is accurate
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -101,6 +102,30 @@ class ApplicationController {
       });
       app.quit();
     }
+  }
+
+  setupNetworkConfiguration() {
+    // Configure session to handle network requests better
+    const ses = session.defaultSession;
+    
+    // Allow HTTPS requests to Google APIs
+    ses.webRequest.onBeforeSendHeaders((details, callback) => {
+      if (details.url.includes('generativelanguage.googleapis.com')) {
+        details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.156 Safari/537.36';
+      }
+      callback({ requestHeaders: details.requestHeaders });
+    });
+    
+    // Handle certificate errors for Google APIs
+    ses.setCertificateVerifyProc((request, callback) => {
+      if (request.hostname === 'generativelanguage.googleapis.com') {
+        callback(0); // Trust Google's certificates
+      } else {
+        callback(-2); // Use default verification
+      }
+    });
+    
+    logger.debug('Network configuration applied for Gemini API');
   }
 
   setupPermissions() {

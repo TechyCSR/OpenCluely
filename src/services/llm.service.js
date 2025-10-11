@@ -27,13 +27,22 @@ class LLMService {
 
     try {
       this.client = new GoogleGenerativeAI(apiKey);
+      
+      // Use the correct model name for v1 API
+      const modelName = config.get('llm.gemini.model');
       this.model = this.client.getGenerativeModel({ 
-        model: config.get('llm.gemini.model') 
+        model: modelName,
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 8192,
+        }
       });
       this.isInitialized = true;
       
       logger.info('Gemini AI client initialized successfully', {
-        model: config.get('llm.gemini.model')
+        model: modelName
       });
     } catch (error) {
       logger.error('Failed to initialize Gemini client', { 
@@ -95,13 +104,28 @@ class LLMService {
         request.systemInstruction = { parts: [{ text: skillPrompt }] };
       }
 
-      // Execute with retries/timeout
+      // Execute with retries/timeout - try alternative method first for network reliability
       let responseText;
       try {
-        responseText = await this.executeRequest(request);
-      } catch (error) {
-        if (error.message.includes('fetch failed') && config.get('llm.gemini.enableFallbackMethod')) {
+        // Try alternative HTTPS method first if enabled
+        if (config.get('llm.gemini.enableFallbackMethod')) {
+          logger.debug('Attempting alternative HTTPS method first for reliability');
           responseText = await this.executeAlternativeRequest(request);
+        } else {
+          responseText = await this.executeRequest(request);
+        }
+      } catch (error) {
+        logger.warn('Primary method failed, trying fallback', { error: error.message });
+        if (error.message.includes('fetch failed') || error.message.includes('network') || error.message.includes('timeout')) {
+          try {
+            responseText = await this.executeAlternativeRequest(request);
+          } catch (altError) {
+            logger.error('Both primary and alternative methods failed', {
+              primaryError: error.message,
+              alternativeError: altError.message
+            });
+            throw error; // Throw original error
+          }
         } else {
           throw error;
         }
@@ -1048,12 +1072,27 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
             
             const response = JSON.parse(data);
             
-            if (!response.candidates || !response.candidates[0] || !response.candidates[0].content) {
-              reject(new Error('Invalid response structure from Gemini API'));
+            logger.debug('Alternative request response structure', {
+              hasResponse: !!response,
+              hasCandidates: !!response.candidates,
+              candidatesLength: response.candidates?.length,
+              responseKeys: Object.keys(response || {}),
+              firstCandidateKeys: response.candidates?.[0] ? Object.keys(response.candidates[0]) : []
+            });
+            
+            // More robust response parsing
+            if (!response.candidates || response.candidates.length === 0) {
+              reject(new Error(`No candidates in response: ${JSON.stringify(response)}`));
               return;
             }
             
-            const text = response.candidates[0].content.parts[0].text;
+            const candidate = response.candidates[0];
+            if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+              reject(new Error(`Invalid candidate structure: ${JSON.stringify(candidate)}`));
+              return;
+            }
+            
+            const text = candidate.content.parts[0].text;
             
             if (!text || text.trim().length === 0) {
               reject(new Error('Empty text content in Gemini response'));
@@ -1067,6 +1106,11 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
             
             resolve(text.trim());
           } catch (parseError) {
+            logger.error('Failed to parse alternative response', {
+              error: parseError.message,
+              rawResponse: data.substring(0, 500),
+              statusCode: res.statusCode
+            });
             reject(new Error(`Failed to parse response: ${parseError.message}`));
           }
         });
