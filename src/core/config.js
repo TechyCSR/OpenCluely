@@ -42,7 +42,7 @@ class ConfigManager {
         gemini: {
           model: 'gemini-2.5-flash',
           maxRetries: 3,
-          timeout: 30000,
+          timeout: 60000,
           fallbackEnabled: true,
           enableFallbackMethod: true,
           generation: {

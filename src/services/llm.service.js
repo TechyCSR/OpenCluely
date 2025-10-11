@@ -798,7 +798,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
         }
 
         // Use exponential backoff with jitter for network errors
-        const baseDelay = errorInfo.isNetworkError ? 2000 : 1000;
+        const baseDelay = errorInfo.isNetworkError ? 2500 : 1500;
         const delay = baseDelay * attempt + Math.random() * 1000;
         
         logger.debug(`Waiting ${delay}ms before retry ${attempt + 1}`, {
@@ -883,7 +883,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     }
     
     // Timeout errors
-    if (errorMessage.includes('request timeout')) {
+    if (errorMessage.includes('request timeout') || errorMessage.includes('etimedout')) {
       return {
         type: 'TIMEOUT_ERROR',
         isNetworkError: true,
@@ -1097,18 +1097,22 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     
     logger.info('Using alternative HTTPS request method');
     
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     
     const postData = JSON.stringify(geminiRequest);
     
+    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+
     const options = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
         'Content-Length': Buffer.byteLength(postData),
         'User-Agent': this.getUserAgent()
       },
-      timeout: config.get('llm.gemini.timeout')
+      timeout: config.get('llm.gemini.timeout'),
+      agent
     };
 
     return new Promise((resolve, reject) => {
