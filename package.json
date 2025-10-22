@@ -19,12 +19,15 @@
     "release": "npm run clean && npm run build:all",
     "postinstall": "electron-builder install-app-deps"
   },
-  "author": "@TechyCSR",
+  "author": {
+    "name": "TechyCSR",
+    "email": "info@techycsr.dev",
+    "url": "https://techycsr.dev"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/TechyCSR/OpenCluely"
   },
-  "email": "dev@techycsr.dev",
   "license": "ISC",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
