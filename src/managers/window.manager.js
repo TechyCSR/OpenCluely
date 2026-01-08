@@ -730,8 +730,9 @@ class WindowManager {
 
       setTimeout(() => {
         if (win.isDestroyed()) return;
-        win.show();
-        win.focus();
+        // Use showInactive() to avoid stealing focus from browser/other apps
+        // This prevents detection by "Browser Active Tab Checkers"
+        win.showInactive();
         setMacOSAlwaysOnTop();
         setTimeout(() => { if (!win.isDestroyed()) setMacOSAlwaysOnTop(); }, 100);
         // Keep LLM window visible across workspaces; others revert
@@ -747,8 +748,9 @@ class WindowManager {
       // Linux/Windows
       win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
       win.setAlwaysOnTop(true);
-      win.show();
-      win.focus();
+      // Use showInactive() to avoid stealing focus from browser/other apps
+      // This prevents detection by "Browser Active Tab Checkers"
+      win.showInactive();
       setTimeout(() => {
         if (win.isDestroyed()) return;
         if (!isLLM) {
@@ -915,10 +917,9 @@ class WindowManager {
     });
     
     this.isVisible = true;
-    const activeWindow = this.windows.get(this.activeWindow);
-    if (activeWindow) {
-      activeWindow.focus();
-    }
+    // Note: We intentionally do NOT call focus() here to avoid stealing
+    // focus from the browser/other apps. This prevents detection by
+    // "Browser Active Tab Checkers". Windows are shown with showInactive().
     
     logger.info('All windows shown on current desktop', { 
       activeWindow: this.activeWindow,
