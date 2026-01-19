@@ -170,6 +170,14 @@ class WindowManager {
     }
     const window = await this.createWindow('llmResponse');
     this.windows.set('llmResponse', window);
+    
+    // Add console message listener to see renderer logs in main process
+    window.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      if (message.includes('LLM-RESPONSE')) {
+        logger.info(`[RENDERER] ${message}`);
+      }
+    });
+    
     window.hide();
     return window;
   }

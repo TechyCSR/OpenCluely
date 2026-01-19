@@ -457,77 +457,110 @@
     </div>
 
     <script>
+        // Global variables
         let currentLayout = 'split';
         let hasCode = false;
         let currentSkill = 'dsa';
         let isInteractive = false;
         let scrollableElements = [];
-
-        // Configure marked for better rendering
-        marked.setOptions({
-            highlight: function(code, lang) {
-                if (Prism.languages[lang]) {
-                    return Prism.highlight(code, Prism.languages[lang], lang);
-                }
-                return code;
-            },
-            breaks: true,
-            gfm: true
+        let initialized = false;
+        
+        // Immediate logging to verify script execution
+        console.log('[LLM-RESPONSE] Script tag executed');
+        
+        window.onerror = function(msg, url, line, col, error) {
+            console.error('[LLM-RESPONSE] Window error:', msg, 'at line', line);
+            return false;
+        };
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[LLM-RESPONSE] DOMContentLoaded fired');
+            initLLMResponseWindow();
         });
-
-        // Set up event listeners using electronAPI from preload script
-        if (window.electronAPI) {
-            // Set up show-loading event listener
-            window.electronAPI.onShowLoading(() => {
-                showLoadingState();
-            });
-            
-            window.electronAPI.onDisplayLlmResponse((event, data) => {
-                const response = data.content || data.response;
-            
-            // Check if window is still small (compact size) and request expansion
-            if (window.innerWidth < 500 || window.innerHeight < 300) {
-                // Pre-calculate content metrics for initial sizing
-                if (response) {
-                    const codeBlocks = extractCodeBlocks(response);
-                    const contentMetrics = calculateContentMetrics(response, codeBlocks);
-                    
-                    window.electronAPI.expandLlmWindow(contentMetrics)
-                        .then(() => {
-                            setTimeout(() => {
-                                hideLoadingState();
-                                displayResponse(data);
-                                setupScrolling();
-                                setTimeout(verifyDisplayState, 300);
-                            }, 200);
-                        })
-                        .catch(error => {
-                            console.error('Failed to expand window:', error);
-                            hideLoadingState();
-                            displayResponse(data);
-                            setupScrolling();
-                            setTimeout(verifyDisplayState, 300);
-                        });
-                } else {
-                    // Fallback for missing response data
-                    hideLoadingState();
-                    displayResponse(data);
-                    setupScrolling();
-                    // Verify display state after fallback
-                    setTimeout(verifyDisplayState, 400);
-                }
-            } else {
-                hideLoadingState();
-                displayResponse(data);
-                setupScrolling();
-                
-                // Verify display state after a short delay
-                setTimeout(verifyDisplayState, 500);
-            }
-            });
-        } else {
-            console.error('electronAPI not available! Cannot set up event listeners.');
+        
+        // Also try immediate init in case DOMContentLoaded already fired
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            console.log('[LLM-RESPONSE] Document already ready, initializing now');
+            setTimeout(initLLMResponseWindow, 0);
         }
+        
+        function initLLMResponseWindow() {
+            if (initialized) return;
+            initialized = true;
+            
+            console.log('[LLM-RESPONSE] Initializing window...');
+
+            // Configure marked for better rendering
+            if (typeof marked !== 'undefined') {
+                marked.setOptions({
+                    highlight: function(code, lang) {
+                        if (typeof Prism !== 'undefined' && Prism.languages[lang]) {
+                            return Prism.highlight(code, Prism.languages[lang], lang);
+                        }
+                        return code;
+                    },
+                    breaks: true,
+                    gfm: true
+                });
+                console.log('[LLM-RESPONSE] marked configured');
+            } else {
+                console.error('[LLM-RESPONSE] marked library not loaded!');
+            }
+
+            console.log('[LLM-RESPONSE] electronAPI exists:', !!window.electronAPI);
+            console.log('[LLM-RESPONSE] onDisplayLlmResponse method:', typeof window.electronAPI?.onDisplayLlmResponse);
+            
+            // Set up event listeners using electronAPI from preload script
+            if (window.electronAPI) {
+                console.log('[LLM-RESPONSE] Setting up IPC listeners...');
+                
+                // Set up show-loading event listener
+                window.electronAPI.onShowLoading(() => {
+                    console.log('[LLM-RESPONSE] show-loading received');
+                    showLoadingState();
+                });
+                
+                // Listen for LLM response
+                window.electronAPI.onDisplayLlmResponse(function() {
+                    console.log('[LLM-RESPONSE] ===== display-llm-response received! =====');
+                    console.log('[LLM-RESPONSE] arguments count:', arguments.length);
+                    
+                    try {
+                        // Get the data - could be first or second argument
+                        let actualData = null;
+                        if (arguments.length >= 2 && arguments[1] && typeof arguments[1] === 'object') {
+                            actualData = arguments[1];
+                        } else if (arguments.length >= 1 && arguments[0] && typeof arguments[0] === 'object') {
+                            actualData = arguments[0];
+                        }
+                        
+                        console.log('[LLM-RESPONSE] actualData keys:', actualData ? Object.keys(actualData) : 'null');
+                        
+                        const response = actualData?.content || actualData?.response;
+                        console.log('[LLM-RESPONSE] response found:', !!response, 'length:', response?.length);
+                        
+                        if (!response) {
+                            console.error('[LLM-RESPONSE] No response content found!');
+                            hideLoadingState();
+                            return;
+                        }
+                        
+                        hideLoadingState();
+                        displayResponse(actualData);
+                        setupScrolling();
+                        setTimeout(verifyDisplayState, 500);
+                        console.log('[LLM-RESPONSE] Handler completed successfully');
+                    } catch (err) {
+                        console.error('[LLM-RESPONSE] Error in handler:', err.message, err.stack);
+                        hideLoadingState();
+                    }
+                });
+                
+                console.log('[LLM-RESPONSE] IPC listeners set up successfully');
+            } else {
+                console.error('[LLM-RESPONSE] electronAPI not available!');
+            }
+        } // end initLLMResponseWindow
 
         function showLoadingState() {
             const loadingElement = document.getElementById('loading');
@@ -695,7 +728,7 @@
         function handleWheelScroll(e) {
             // Allow natural scrolling behavior
             // Don't prevent default to maintain smooth native scrolling
-            logger.info('Wheel scroll detected on element');
+            console.log('Wheel scroll detected on element');
         }
 
         function extractCodeBlocks(text) {
@@ -775,7 +808,7 @@
             textContent = textContent.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
 
             // Render text content
-            const textHtml = marked.parse(textContent);
+            const textHtml = (typeof marked !== 'undefined') ? (marked.parse ? marked.parse(textContent) : marked(textContent)) : textContent;
             document.getElementById('text-content').innerHTML = textHtml;
 
             // Render code blocks
@@ -816,7 +849,7 @@
             document.getElementById('full-content').classList.remove('hidden');
 
             // Render full markdown
-            const html = marked.parse(response);
+            const html = (typeof marked !== 'undefined') ? (marked.parse ? marked.parse(response) : marked(response)) : response;
             const full = document.getElementById('full-markdown');
             full.innerHTML = html;
 
@@ -846,12 +879,12 @@
 
         // Handle window focus
         window.addEventListener('focus', () => {
-            logger.info('LLM Response window focused');
+            console.log('LLM Response window focused');
         });
 
         // Handle window close
         window.addEventListener('beforeunload', () => {
-            logger.info('LLM Response window closing');
+            console.log('LLM Response window closing');
         });
 
         // Add keyboard scrolling support for when interactive
@@ -942,11 +975,11 @@
 
         // Add global debugging function
         window.debugLLMWindow = function() {
-            logger.debug('=== LLM Window Debug Info ===');
-            logger.debug('Current layout:', currentLayout);
-            logger.debug('Has code:', hasCode);
-            logger.debug('Is interactive:', isInteractive);
-            logger.debug('Scrollable elements:', scrollableElements.length);
+            console.log('=== LLM Window Debug Info ===');
+            console.log('Current layout:', currentLayout);
+            console.log('Has code:', hasCode);
+            console.log('Is interactive:', isInteractive);
+            console.log('Scrollable elements:', scrollableElements.length);
             
             const loadingElement = document.getElementById('loading');
             const responseElement = document.getElementById('response-content');
