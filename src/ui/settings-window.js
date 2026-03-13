@@ -1,4 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {    
+    const logger = {
+        info: (...args) => console.log('[SettingsWindowUI]', ...args)
+    };
+
     // Get DOM elements
     const closeButton = document.getElementById('closeButton');
     const quitButton = document.getElementById('quitButton');
