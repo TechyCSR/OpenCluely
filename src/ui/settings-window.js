@@ -6,8 +6,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Get DOM elements
     const closeButton = document.getElementById('closeButton');
     const quitButton = document.getElementById('quitButton');
+    const speechProviderSelect = document.getElementById('speechProvider');
     const azureKeyInput = document.getElementById('azureKey');
     const azureRegionInput = document.getElementById('azureRegion');
+    const whisperCommandInput = document.getElementById('whisperCommand');
+    const whisperModelInput = document.getElementById('whisperModel');
+    const whisperLanguageInput = document.getElementById('whisperLanguage');
+    const whisperSegmentMsInput = document.getElementById('whisperSegmentMs');
     const geminiKeyInput = document.getElementById('geminiKey');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
@@ -66,8 +71,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to load settings into UI
     const loadSettingsIntoUI = (settings) => {
+        if (settings.speechProvider && speechProviderSelect) speechProviderSelect.value = settings.speechProvider;
         if (settings.azureKey && azureKeyInput) azureKeyInput.value = settings.azureKey;
         if (settings.azureRegion && azureRegionInput) azureRegionInput.value = settings.azureRegion;
+        if (settings.whisperCommand && whisperCommandInput) whisperCommandInput.value = settings.whisperCommand;
+        if (settings.whisperModel && whisperModelInput) whisperModelInput.value = settings.whisperModel;
+        if (settings.whisperLanguage && whisperLanguageInput) whisperLanguageInput.value = settings.whisperLanguage;
+        if (settings.whisperSegmentMs && whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs;
         if (settings.geminiKey && geminiKeyInput) geminiKeyInput.value = settings.geminiKey;
         if (settings.windowGap && windowGapInput) windowGapInput.value = settings.windowGap;
         
@@ -90,6 +100,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
+
+        updateSpeechFieldStates();
     };
 
     // Load settings when window opens
@@ -115,8 +127,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Save settings helper function
     const saveSettings = () => {
         const settings = {};
+        if (speechProviderSelect) settings.speechProvider = speechProviderSelect.value;
         if (azureKeyInput) settings.azureKey = azureKeyInput.value;
         if (azureRegionInput) settings.azureRegion = azureRegionInput.value;
+        if (whisperCommandInput) settings.whisperCommand = whisperCommandInput.value;
+        if (whisperModelInput) settings.whisperModel = whisperModelInput.value;
+        if (whisperLanguageInput) settings.whisperLanguage = whisperLanguageInput.value;
+        if (whisperSegmentMsInput) settings.whisperSegmentMs = whisperSegmentMsInput.value;
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
@@ -125,10 +142,29 @@ document.addEventListener('DOMContentLoaded', () => {
         window.api.send('save-settings', settings);
     };
 
+    const updateSpeechFieldStates = () => {
+        const provider = speechProviderSelect ? speechProviderSelect.value : 'azure';
+        const azureDisabled = provider !== 'azure';
+        const whisperDisabled = provider !== 'whisper';
+
+        [azureKeyInput, azureRegionInput].forEach(input => {
+            if (input) input.disabled = azureDisabled;
+        });
+
+        [whisperCommandInput, whisperModelInput, whisperLanguageInput, whisperSegmentMsInput].forEach(input => {
+            if (input) input.disabled = whisperDisabled;
+        });
+    };
+
     // Add event listeners for all inputs
     const inputs = [
+        speechProviderSelect,
         azureKeyInput,
         azureRegionInput,
+        whisperCommandInput,
+        whisperModelInput,
+        whisperLanguageInput,
+        whisperSegmentMsInput,
         geminiKeyInput,
         windowGapInput
     ];
@@ -139,6 +175,13 @@ document.addEventListener('DOMContentLoaded', () => {
             input.addEventListener('blur', saveSettings);
         }
     });
+
+    if (speechProviderSelect) {
+        speechProviderSelect.addEventListener('change', () => {
+            updateSpeechFieldStates();
+            saveSettings();
+        });
+    }
 
     // Language selection handler
     if (codingLanguageSelect) {
@@ -162,6 +205,8 @@ document.addEventListener('DOMContentLoaded', () => {
             window.api.send('update-skill', e.target.value);
         });
     }
+
+    updateSpeechFieldStates();
 
     // Initialize icon grid with correct paths
     const initializeIconGrid = () => {

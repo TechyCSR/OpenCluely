@@ -4,6 +4,13 @@ const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electr
 const logger = require("./src/core/logger").createServiceLogger("MAIN");
 const config = require("./src/core/config");
 
+// Keep Chromium network noise out of the terminal; app-level logs still go through Winston.
+app.commandLine.appendSwitch("log-level", "3");
+app.commandLine.appendSwitch("disable-background-networking");
+app.commandLine.appendSwitch("disable-component-update");
+app.commandLine.appendSwitch("disable-domain-reliability");
+app.commandLine.appendSwitch("no-pings");
+
 // Services
 // Screen capture (image-based)
 const captureService = require("./src/services/capture.service");
@@ -60,6 +67,39 @@ class ApplicationController {
 
     this.setupIPCHandlers();
     this.setupServiceEventHandlers();
+  }
+
+  handleSecondInstance() {
+    logger.info("Second instance launch detected; focusing existing windows");
+
+    const focusExistingWindows = () => {
+      try {
+        const mainWindow = windowManager.getWindow("main");
+        if (mainWindow) {
+          if (mainWindow.isMinimized && mainWindow.isMinimized()) {
+            mainWindow.restore();
+          }
+          windowManager.showAllWindows();
+          windowManager.showOnCurrentDesktop(mainWindow);
+          mainWindow.focus();
+          return;
+        }
+
+        if (this.isReady) {
+          windowManager.showAllWindows();
+        }
+      } catch (error) {
+        logger.error("Failed to focus existing instance", {
+          error: error.message,
+        });
+      }
+    };
+
+    if (app.isReady()) {
+      focusExistingWindows();
+    } else {
+      app.whenReady().then(focusExistingWindows);
+    }
   }
 
   async onAppReady() {
@@ -1246,4 +1286,11 @@ class ApplicationController {
   }
 }
 
-new ApplicationController();
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  const controller = new ApplicationController();
+  app.on("second-instance", () => controller.handleSecondInstance());
+}

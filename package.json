@@ -4,9 +4,9 @@
   "description": "AI Problem Solving Assistant",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --no-sandbox --disable-gpu",
-    "test-speech": "node test-azure-speech.js",
+    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
+    "dev": "env -u ELECTRON_RUN_AS_NODE electron . --no-sandbox --disable-gpu",
+    "test-speech": "node scripts/test-speech.js",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
@@ -30,12 +30,14 @@
   },
   "license": "ISC",
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.2.0",
     "@google/generative-ai": "^0.24.1",
     "dotenv": "^16.3.1",
     "markdown": "^0.5.0",
     "marked": "^15.0.12",
     "microsoft-cognitiveservices-speech-sdk": "^1.40.0",
     "node-record-lpcm16": "^1.0.1",
+    "prismjs": "^1.30.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^4.7.1"
   },
