@@ -40,7 +40,9 @@ class ApplicationController {
     }
 
     // Set default stealth app name early
-    app.setName("Terminal "); // Default to Terminal stealth mode
+    if (app && typeof app.setName === 'function') {
+      app.setName("Terminal ");
+    }
     process.title = "Terminal ";
 
     if (
