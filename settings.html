@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings</title>
     <link href="./src/styles/common.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         * {
             margin: 0;
@@ -254,6 +253,23 @@
             color: #ffffff;
             padding: 8px;
         }
+
+        .settings-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .settings-note {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.65);
+            line-height: 1.4;
+        }
+
+        .settings-note code {
+            color: rgba(255, 255, 255, 0.9);
+        }
     </style>
 </head>
 <body>
@@ -338,6 +354,16 @@
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
+                            <div class="settings-item-label">Speech Provider</div>
+                            <div class="settings-item-description">Choose Azure Speech or a local OpenAI Whisper CLI</div>
+                        </div>
+                        <select class="input-field" id="speechProvider">
+                            <option value="azure">Azure Speech</option>
+                            <option value="whisper">Local Whisper</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div>
                             <div class="settings-item-label">Azure Speech Key</div>
                             <div class="settings-item-description">Your Azure Cognitive Services API key</div>
                         </div>
@@ -349,6 +375,39 @@
                             <div class="settings-item-description">Your Azure service region</div>
                         </div>
                         <input type="text" class="input-field" id="azureRegion" placeholder="e.g. eastus">
+                    </div>
+                    <div class="settings-item">
+                        <div class="settings-stack">
+                            <div>
+                                <div class="settings-item-label">Whisper Command</div>
+                                <div class="settings-item-description">CLI command for local Whisper, such as <code>whisper</code> or <code>python3 -m whisper</code></div>
+                            </div>
+                            <input type="text" class="input-field" id="whisperCommand" placeholder="whisper" style="max-width: 100%;">
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Whisper Model</div>
+                            <div class="settings-item-description">Local model name used by the Whisper CLI</div>
+                        </div>
+                        <input type="text" class="input-field" id="whisperModel" placeholder="base">
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Whisper Language</div>
+                            <div class="settings-item-description">Language code for local transcription</div>
+                        </div>
+                        <input type="text" class="input-field" id="whisperLanguage" placeholder="en">
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Whisper Segment Length</div>
+                            <div class="settings-item-description">Chunk size in milliseconds for local transcription</div>
+                        </div>
+                        <input type="number" class="input-field" id="whisperSegmentMs" placeholder="4000" min="2000" step="500">
+                    </div>
+                    <div class="settings-note">
+                        Local Whisper runs on this machine and needs a Whisper CLI installed. These settings apply immediately for the current app session; use <code>.env</code> for startup defaults.
                     </div>
                 </div>
             </div>

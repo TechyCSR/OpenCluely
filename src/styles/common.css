@@ -1,7 +1,7 @@
 /* Common Styles for OpenCluely UI Components */
 
 /* Font imports */
-@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
+@import url('../../node_modules/@fortawesome/fontawesome-free/css/all.min.css');
 
 /* Base styles */
 body {

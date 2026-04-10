@@ -4,10 +4,8 @@
     <meta charset="UTF-8" />
     <title>Chat</title>
     <link href="./src/styles/common.css" rel="stylesheet" />
-    <!-- Load Font Awesome via link instead of @import to avoid any raw CSS render issues -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <!-- PrismJS theme for syntax highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+    <link rel="stylesheet" href="./node_modules/prismjs/themes/prism-tomorrow.min.css" />
     <style>
       /* Font Awesome now loaded via <link> above */
 
@@ -706,11 +704,11 @@
     </div>
     <script src="lib/markdown.js"></script> 
     <!-- PrismJS core and autoloader for language components -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script src="./node_modules/prismjs/prism.min.js"></script>
+    <script src="./node_modules/prismjs/plugins/autoloader/prism-autoloader.min.js"></script>
     <script>
       // Configure Prism autoloader
-      try { if (window.Prism && Prism.plugins && Prism.plugins.autoloader) { Prism.plugins.autoloader.languages_path = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/'; } } catch (_) {}
+      try { if (window.Prism && Prism.plugins && Prism.plugins.autoloader) { Prism.plugins.autoloader.languages_path = './node_modules/prismjs/components/'; } } catch (_) {}
     </script>
     <script>
       // Use electronAPI from preload script instead of direct require

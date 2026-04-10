@@ -55,11 +55,17 @@ class ConfigManager {
       },
 
       speech: {
+        provider: 'azure',
         azure: {
           language: 'en-US',
           enableDictation: true,
           enableAudioLogging: false,
           outputFormat: 'detailed'
+        },
+        whisper: {
+          model: 'base',
+          language: 'en',
+          segmentMs: 4000
         }
       },
 

@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Platform-Cross%20Platform-blue?style=flat-square" alt="Platform" />
   <img src="https://img.shields.io/badge/Stealth-100%25%20Invisible-red?style=flat-square" alt="Stealth" />
   <img src="https://img.shields.io/badge/AI-Gemini%20Powered-orange?style=flat-square" alt="AI" />
-  <img src="https://img.shields.io/badge/Speech-Azure%20Optional-blueviolet?style=flat-square" alt="Speech" />
+  <img src="https://img.shields.io/badge/Speech-Azure%20or%20Local%20Whisper-blueviolet?style=flat-square" alt="Speech" />
 </p>
 
 ---
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 
 ### 🚀 **AI-Powered Intelligence**
 - **Direct Image Analysis**: Screenshots are analyzed by Gemini (no Tesseract OCR)
-- **Voice Commands**: Optional Azure Speech (Whisper questions, get instant answers)
+- **Voice Commands**: Optional Azure Speech or local OpenAI Whisper
 - **Context Memory**: Remembers entire interview conversation
 - **Multi-Language Support**: C++, Python, Java, JavaScript, C
 - **Smart Response Window**: Draggable with close button
@@ -68,7 +68,7 @@ https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 - **Floating Overlay Bar**: Compact command center with camera, mic, and skill selector
 - **Draggable Answer Window**: Move and resize AI response window anywhere
 - **Close Button**: Clean × button to close answer window when needed
-- **Auto-Hide Mic**: Microphone button appears only when Azure Speech is configured
+- **Auto-Hide Mic**: Microphone button appears only when a speech provider is available
 - **Interactive Chat**: Full conversation window with markdown support
 
 ### 🎨 **Visual Design**
@@ -133,7 +133,7 @@ https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 - [x] **Global shortcuts** (capture, visibility, interaction, chat, settings)
 - [x] **Session memory** and chat UI
 - [x] **Language picker** and DSA skill prompt
-- [x] **Optional Azure Speech** integration with auto‑hide mic
+- [x] **Optional Azure Speech / local Whisper** integration with auto‑hide mic
 - [x] **Multi‑monitor** and area capture APIs
 - [x] **Window binding** and positioning system
 - [x] **Settings management** with app icon/stealth modes
@@ -157,12 +157,22 @@ The setup script automatically handles configuration. You only need:
 # Required: Google Gemini API Key (setup script will ask for this)
 GEMINI_API_KEY=your_gemini_api_key_here
 
-# Optional: Azure Speech Recognition (add later if you want voice features)
+# Optional: Speech Recognition (pick one provider)
+SPEECH_PROVIDER=whisper
+
+# Azure option
 AZURE_SPEECH_KEY=your_azure_speech_key
 AZURE_SPEECH_REGION=your_region
+
+# Local Whisper option
+WHISPER_COMMAND=whisper
+WHISPER_MODEL_DIR=.whisper-models
+WHISPER_MODEL=base
+WHISPER_LANGUAGE=en
+WHISPER_SEGMENT_MS=4000
 ```
 
-**Note**: Speech recognition is completely optional. If Azure credentials are not provided, the microphone button will be automatically hidden from all interfaces.
+**Note**: Speech recognition is completely optional. If no configured provider is available, the microphone button will be automatically hidden from all interfaces.
 
 ## 🚀 Quick Start & Installation
 
@@ -187,7 +197,9 @@ AZURE_SPEECH_REGION=your_region
 
 **That's it!** The setup script will:
 - Install all dependencies automatically
-- Create and configure your `.env` file
+- Create your `.env` file from `env.example` if needed
+- Set up a local Whisper virtualenv in `.venv-whisper`
+- Configure `.env` to use local Whisper by default
 - Build the app (if needed)
 - Launch OpenCluely ready to use (if not works use npm install & then npm start)
 
@@ -196,6 +208,8 @@ AZURE_SPEECH_REGION=your_region
 - **Windows**: Use Git Bash (comes with Git for Windows), WSL, or any bash environment
 - **macOS/Linux**: Use your regular terminal
 - **All platforms**: No manual npm commands needed - the setup script handles everything
+- **Windows Whisper path**: `setup.sh` now writes `WHISPER_COMMAND=.venv-whisper/Scripts/whisper.exe`
+- **macOS/Linux Whisper path**: `setup.sh` writes `WHISPER_COMMAND=.venv-whisper/bin/whisper`
 
 ### 🎛️ Setup Script Options
 
@@ -204,28 +218,50 @@ AZURE_SPEECH_REGION=your_region
 ./setup.sh --ci             # Use npm ci instead of npm install
 ./setup.sh --no-run         # Setup only, don't launch the app
 ./setup.sh --install-system-deps  # Install sox for microphone (optional)
+./setup.sh --skip-whisper  # Skip the local Whisper bootstrap
 ```
 
-### 🔧 **Optional: Azure Speech Setup** (For Voice Features)
+### 🔧 **Optional: Speech Setup** (For Voice Features)
 
-Voice recognition is completely optional. The setup script will create a `.env` file with just the required Gemini key. To add voice features:
+Voice recognition is optional. You can use either Azure Speech or local OpenAI Whisper.
 
-1. Get Azure Speech credentials:
+For the local Whisper path, `./setup.sh` now handles the full repo-local setup:
+
+1. Creates `.venv-whisper`
+2. Installs `openai-whisper`
+3. Points `.env` at `.venv-whisper/bin/whisper`
+4. Creates `.whisper-models`
+5. Runs `npm run test-speech`
+
+1. For Azure Speech:
    - Visit [Azure Portal](https://portal.azure.com/)
    - Create a Speech Service
    - Copy your key and region
 
-2. Add to your `.env` file:
-   ```env
-   # Already configured by setup script
-   GEMINI_API_KEY=your_gemini_api_key_here
+2. For local Whisper:
+   - Run `./setup.sh --install-system-deps`
+   - Or install required audio tools such as `ffmpeg` and `sox` yourself
+   - On Windows, install audio tooling separately and prefer Git Bash or WSL for `setup.sh`
 
-   # Add these for voice features (optional)
+3. Add one provider to your `.env` file:
+   ```env
+   GEMINI_API_KEY=your_gemini_api_key_here
+   SPEECH_PROVIDER=azure
    AZURE_SPEECH_KEY=your_azure_speech_key
    AZURE_SPEECH_REGION=your_region
    ```
 
-3. Restart the app - microphone buttons will now appear automatically
+   ```env
+   GEMINI_API_KEY=your_gemini_api_key_here
+   SPEECH_PROVIDER=whisper
+   WHISPER_COMMAND=whisper
+   WHISPER_MODEL_DIR=.whisper-models
+   WHISPER_MODEL=base
+   WHISPER_LANGUAGE=en
+   WHISPER_SEGMENT_MS=4000
+   ```
+
+4. Restart the app - microphone buttons will now appear automatically
 
 ## 🎮 How to Use
 
@@ -265,10 +301,11 @@ Voice recognition is completely optional. The setup script will create a `.env` 
  - **Image Understanding**: DSA prompt is applied only for new image-based queries; chat messages don’t include the full prompt
  - **Multi-monitor & Area Capture**: Programmatic APIs allow targeting a display and optional rectangular crop for focused analysis
 
-#### 🔊 **Optional Voice Features** (Azure Speech)
-- **Real-time Transcription**: Speak questions naturally
+#### 🔊 **Optional Voice Features** (Azure Speech / Local Whisper)
+- **Chunked Local Transcription**: Local Whisper transcribes short recorded segments on your machine
+- **Real-time Transcription**: Azure Speech supports live interim recognition
 - **Listening Animation**: Visual feedback during recording
-- **Interim Results**: See transcription as you speak
+- **Interim Results**: Available with Azure Speech
 - **Auto-processing**: Instant AI responses to voice input
 ]
 ---
@@ -305,7 +342,8 @@ Voice recognition is completely optional. The setup script will create a `.env` 
 
 - **Microphone/voice not working**
   - Voice is optional - ignore related warnings if you don't need it
-  - To enable: install `sox` (Linux/macOS) and add Azure keys to `.env`
+  - Azure mode: add valid Azure keys to `.env`
+  - Whisper mode: install `openai-whisper`, `ffmpeg`, and `sox`, then set `SPEECH_PROVIDER=whisper`
 
 </details>
 
@@ -341,7 +379,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - **Google Gemini**: Powering AI intelligence
-- **Azure Speech**: Optional voice recognition
+- **Azure Speech / Whisper**: Optional voice recognition
 - **Electron**: Cross-platform desktop framework
 - **Community**: Amazing contributors and feedback
 
