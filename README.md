@@ -25,6 +25,13 @@
   <img src="https://img.shields.io/badge/Speech-Azure%20or%20Local%20Whisper-blueviolet?style=flat-square" alt="Speech" />
 </p>
 
+<p align="center">
+  <a href="https://pump.fun/coin/278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump">
+    <img src="https://img.shields.io/badge/Support%20Dev-Trade%20My%20Coin%20on%20pump.fun-00c853?style=for-the-badge&logo=bitcoin&logoColor=white" alt="Support Dev - pump.fun" />
+  </a>
+</p>
+<p align="center"><code>278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump</code></p>
+
 ---
 
 
@@ -376,7 +383,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 </b>
 
-## 🙏 Acknowledgments
+##  Support the Developer
+
+If you've ever used my tech through open-source projects and found it valuable, now's a great time to show some support!
+
+I've launched a coin — go hit it and trade:
+
+**Coin Address:** `278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump`
+
+🔗 **[Trade on pump.fun](https://pump.fun/coin/278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump)**
+
+---
+
+## �� Acknowledgments
 
 - **Google Gemini**: Powering AI intelligence
 - **Azure Speech / Whisper**: Optional voice recognition
