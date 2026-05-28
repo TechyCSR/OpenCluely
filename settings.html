@@ -414,6 +414,25 @@
             
             <div class="settings-section">
                 <div class="settings-section-title">
+                    <i class="fas fa-brain"></i>
+                    AI Provider
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">AI Backend</div>
+                            <div class="settings-item-description">Gemini uses the cloud; Ollama runs models locally</div>
+                        </div>
+                        <select class="input-field" id="llmProvider">
+                            <option value="gemini">Google Gemini (cloud)</option>
+                            <option value="ollama">Ollama (local)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section" id="geminiSection">
+                <div class="settings-section-title">
                     <i class="fas fa-robot"></i>
                     Gemini Settings
                 </div>
@@ -424,6 +443,40 @@
                             <div class="settings-item-description">Your Google API key for Gemini models</div>
                         </div>
                         <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section" id="ollamaSection">
+                <div class="settings-section-title">
+                    <i class="fas fa-server"></i>
+                    Ollama Settings
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Ollama Base URL</div>
+                            <div class="settings-item-description">URL where Ollama is running</div>
+                        </div>
+                        <input type="text" class="input-field" id="ollamaBaseUrl" placeholder="http://localhost:11434">
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Text Model</div>
+                            <div class="settings-item-description">Model for text / chat (e.g. llama3.2, mistral, phi4)</div>
+                        </div>
+                        <input type="text" class="input-field" id="ollamaModel" placeholder="llama3.2">
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Vision Model</div>
+                            <div class="settings-item-description">Model for screenshot analysis (e.g. llava, llava-phi3)</div>
+                        </div>
+                        <input type="text" class="input-field" id="ollamaVisionModel" placeholder="llava">
+                    </div>
+                    <div class="settings-note">
+                        Ollama must be running locally. Install from <code>ollama.ai</code> and pull models first:<br>
+                        <code>ollama pull llama3.2 &amp;&amp; ollama pull llava</code>
                     </div>
                 </div>
             </div>

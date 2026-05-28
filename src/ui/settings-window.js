@@ -14,6 +14,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const whisperLanguageInput = document.getElementById('whisperLanguage');
     const whisperSegmentMsInput = document.getElementById('whisperSegmentMs');
     const geminiKeyInput = document.getElementById('geminiKey');
+    const llmProviderSelect = document.getElementById('llmProvider');
+    const geminiSection = document.getElementById('geminiSection');
+    const ollamaSection = document.getElementById('ollamaSection');
+    const ollamaBaseUrlInput = document.getElementById('ollamaBaseUrl');
+    const ollamaModelInput = document.getElementById('ollamaModel');
+    const ollamaVisionModelInput = document.getElementById('ollamaVisionModel');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
@@ -79,7 +85,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (settings.whisperLanguage && whisperLanguageInput) whisperLanguageInput.value = settings.whisperLanguage;
         if (settings.whisperSegmentMs && whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs;
         if (settings.geminiKey && geminiKeyInput) geminiKeyInput.value = settings.geminiKey;
+        if (settings.llmProvider && llmProviderSelect) llmProviderSelect.value = settings.llmProvider;
+        if (settings.ollamaBaseUrl && ollamaBaseUrlInput) ollamaBaseUrlInput.value = settings.ollamaBaseUrl;
+        if (settings.ollamaModel && ollamaModelInput) ollamaModelInput.value = settings.ollamaModel;
+        if (settings.ollamaVisionModel && ollamaVisionModelInput) ollamaVisionModelInput.value = settings.ollamaVisionModel;
         if (settings.windowGap && windowGapInput) windowGapInput.value = settings.windowGap;
+
+        updateLlmProviderVisibility();
         
         // Set C++ as default if no coding language is specified
         if (codingLanguageSelect) {
@@ -135,12 +147,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperLanguageInput) settings.whisperLanguage = whisperLanguageInput.value;
         if (whisperSegmentMsInput) settings.whisperSegmentMs = whisperSegmentMsInput.value;
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
+        if (llmProviderSelect) settings.llmProvider = llmProviderSelect.value;
+        if (ollamaBaseUrlInput) settings.ollamaBaseUrl = ollamaBaseUrlInput.value;
+        if (ollamaModelInput) settings.ollamaModel = ollamaModelInput.value;
+        if (ollamaVisionModelInput) settings.ollamaVisionModel = ollamaVisionModelInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
         
         window.api.send('save-settings', settings);
     };
+
+    const updateLlmProviderVisibility = () => {
+        const provider = llmProviderSelect ? llmProviderSelect.value : 'gemini';
+        if (geminiSection) geminiSection.style.display = provider === 'gemini' ? '' : 'none';
+        if (ollamaSection) ollamaSection.style.display = provider === 'ollama' ? '' : 'none';
+    };
+
+    if (llmProviderSelect) {
+        llmProviderSelect.addEventListener('change', () => {
+            updateLlmProviderVisibility();
+            saveSettings();
+        });
+    }
+
+    updateLlmProviderVisibility();
 
     const updateSpeechFieldStates = () => {
         const provider = speechProviderSelect ? speechProviderSelect.value : 'azure';
@@ -166,6 +197,9 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperLanguageInput,
         whisperSegmentMsInput,
         geminiKeyInput,
+        ollamaBaseUrlInput,
+        ollamaModelInput,
+        ollamaVisionModelInput,
         windowGapInput
     ];
 

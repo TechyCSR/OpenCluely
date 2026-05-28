@@ -446,6 +446,19 @@ class ApplicationController {
       }
     });
 
+    ipcMain.handle("get-llm-provider", () => {
+      return { provider: llmService._getProviderName() };
+    });
+
+    ipcMain.handle("set-llm-provider", (event, provider) => {
+      const p = String(provider).toLowerCase();
+      process.env.LLM_PROVIDER = p;
+      const config = require('./src/core/config');
+      config.set('llm.provider', p);
+      logger.info('LLM provider switched', { provider: p });
+      return { provider: p };
+    });
+
     ipcMain.handle("set-gemini-api-key", (event, apiKey) => {
       llmService.updateApiKey(apiKey);
       return llmService.getStats();
@@ -453,6 +466,16 @@ class ApplicationController {
 
     ipcMain.handle("get-gemini-status", () => {
       return llmService.getStats();
+    });
+
+    ipcMain.handle("get-ollama-status", () => {
+      const ollamaService = require('./src/services/ollama.service');
+      return ollamaService.getStats();
+    });
+
+    ipcMain.handle("test-ollama-connection", async () => {
+      const ollamaService = require('./src/services/ollama.service');
+      return await ollamaService.testConnection();
     });
 
     // Window binding IPC handlers
@@ -1073,13 +1096,19 @@ class ApplicationController {
 
   getSettings() {
     return {
-      codingLanguage: this.codingLanguage || "cpp", // Default to C++
+      codingLanguage: this.codingLanguage || "cpp",
       activeSkill: this.activeSkill || "dsa",
       appIcon: this.appIcon || "terminal",
       selectedIcon: this.appIcon || "terminal",
       // pass through env-derived settings for UI convenience (masked)
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
-      speechAvailable: this.speechAvailable
+      speechAvailable: this.speechAvailable,
+      // LLM provider
+      llmProvider: process.env.LLM_PROVIDER || "gemini",
+      // Ollama settings (safe to expose — no credentials)
+      ollamaBaseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
+      ollamaModel: process.env.OLLAMA_MODEL || "llama3.2",
+      ollamaVisionModel: process.env.OLLAMA_VISION_MODEL || "llava"
     };
   }
   
@@ -1103,6 +1132,20 @@ class ApplicationController {
       if (settings.appIcon) {
         this.appIcon = settings.appIcon;
       }
+
+      // LLM provider switch
+      if (settings.llmProvider) {
+        const p = String(settings.llmProvider).toLowerCase();
+        process.env.LLM_PROVIDER = p;
+        const config = require('./src/core/config');
+        config.set('llm.provider', p);
+        logger.info('LLM provider updated via settings', { provider: p });
+      }
+
+      // Ollama settings
+      if (settings.ollamaBaseUrl) process.env.OLLAMA_BASE_URL = settings.ollamaBaseUrl;
+      if (settings.ollamaModel) process.env.OLLAMA_MODEL = settings.ollamaModel;
+      if (settings.ollamaVisionModel) process.env.OLLAMA_VISION_MODEL = settings.ollamaVisionModel;
 
       // Handle icon change specifically
       if (settings.selectedIcon) {

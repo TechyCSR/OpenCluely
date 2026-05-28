@@ -39,6 +39,7 @@ class ConfigManager {
       },
 
       llm: {
+        provider: process.env.LLM_PROVIDER || 'gemini', // 'gemini' | 'ollama'
         gemini: {
           model: 'gemini-2.5-flash',
           maxRetries: 3,
@@ -49,6 +50,17 @@ class ConfigManager {
             temperature: 0.7,
             topK: 32,
             topP: 0.9,
+            maxOutputTokens: 4096
+          }
+        },
+        ollama: {
+          baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+          model: process.env.OLLAMA_MODEL || 'llama3.2',
+          visionModel: process.env.OLLAMA_VISION_MODEL || 'llava',
+          timeout: 120000,
+          fallbackEnabled: true,
+          generation: {
+            temperature: 0.7,
             maxOutputTokens: 4096
           }
         }

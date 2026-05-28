@@ -30,10 +30,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendChatMessage: (text) => ipcRenderer.invoke('send-chat-message', text),
   getSkillPrompt: (skillName) => ipcRenderer.invoke('get-skill-prompt', skillName),
   
+  // LLM provider selection
+  getLlmProvider: () => ipcRenderer.invoke('get-llm-provider'),
+  setLlmProvider: (provider) => ipcRenderer.invoke('set-llm-provider', provider),
+
   // Gemini LLM configuration
   setGeminiApiKey: (apiKey) => ipcRenderer.invoke('set-gemini-api-key', apiKey),
   getGeminiStatus: () => ipcRenderer.invoke('get-gemini-status'),
   testGeminiConnection: () => ipcRenderer.invoke('test-gemini-connection'),
+
+  // Ollama configuration
+  getOllamaStatus: () => ipcRenderer.invoke('get-ollama-status'),
+  testOllamaConnection: () => ipcRenderer.invoke('test-ollama-connection'),
   
   // Settings
   showSettings: () => ipcRenderer.invoke('show-settings'),
