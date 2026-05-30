@@ -1,0 +1,248 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCluely — Invisible AI Interview Copilot</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome for sharp minimal icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Grid Background Decoration -->
+    <div class="grid-bg"></div>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="#" class="logo">
+                <span class="logo-icon"><i class="fas fa-brain"></i></span> OpenCluely
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#demo">Demo</a>
+                <a href="#install">Install</a>
+                <a href="#coin" class="nav-highlight">Coin Card</a>
+            </div>
+            <div class="nav-socials">
+                <a href="https://github.com/TechyCSR/OpenCluely" target="_blank" title="GitHub" class="nav-icon-link">
+                    <i class="fab fa-github"></i>
+                </a>
+                <a href="https://pump.fun/coin/278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump" target="_blank" title="Trade Token" class="nav-icon-link">
+                    <i class="fas fa-coins"></i>
+                </a>
+                <a href="https://techycsr.dev" target="_blank" title="Developer" class="nav-icon-link">
+                    <i class="fas fa-globe"></i>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section with 3D Mockup -->
+    <section class="hero">
+        <div class="hero-container">
+            <div class="hero-text">
+                <div class="status-tag">
+                    <span class="pulse-dot"></span> Under Active Development
+                </div>
+                <h1>Invisible AI Interview Copilot</h1>
+                <p class="hero-subtitle">
+                    A revolutionary desktop application providing real-time, completely stealth assistance during technical rounds. 
+                    100% free and open-source.
+                </p>
+                <div class="hero-actions">
+                    <a href="https://github.com/TechyCSR/OpenCluely" target="_blank" class="btn btn-white">
+                        <i class="fab fa-github"></i> Clone & Star Repo
+                    </a>
+                    <a href="#install" class="btn btn-outline">Quick Setup</a>
+                </div>
+                <div class="hero-badges">
+                    <span><i class="fas fa-shield-halved"></i> 100% Invisible</span>
+                    <span><i class="fas fa-microchip"></i> Gemini Powered</span>
+                    <span><i class="fas fa-desktop"></i> Cross-Platform</span>
+                </div>
+            </div>
+
+            <!-- 3D Web App Mockup -->
+            <div class="hero-3d-scene">
+                <div class="interactive-card-3d" id="tilt-card">
+                    <!-- Glassmorphic Desktop Container Mock -->
+                    <div class="mock-desktop">
+                        <div class="mock-header">
+                            <span class="dot red"></span>
+                            <span class="dot yellow"></span>
+                            <span class="dot green"></span>
+                            <span class="mock-title">System Console</span>
+                        </div>
+                        <div class="mock-body">
+                            <!-- Overlay Bar mockup -->
+                            <div class="mock-overlay-bar">
+                                <span class="overlay-item"><i class="fas fa-camera"></i></span>
+                                <span class="overlay-item active"><i class="fas fa-microphone"></i> Rec</span>
+                                <span class="overlay-item">DSA <i class="fas fa-chevron-down"></i></span>
+                                <span class="overlay-item">C++ <i class="fas fa-chevron-down"></i></span>
+                            </div>
+
+                            <!-- Answer window mockup -->
+                            <div class="mock-answer-window">
+                                <div class="answer-header">
+                                    <span><i class="fas fa-brain"></i> OpenCluely Response</span>
+                                    <span class="close-btn">&times;</span>
+                                </div>
+                                <div class="answer-content">
+                                    <p class="code-comment">// Finding the optimal solution...</p>
+                                    <pre><code><span class="keyword">int</span> <span class="function">findDuplicate</span>(<span class="type">vector</span>&lt;<span class="keyword">int</span>&gt;&amp; nums) {
+    <span class="keyword">int</span> tortoise = nums[<span class="number">0</span>];
+    <span class="keyword">int</span>   hare = nums[<span class="number">0</span>];
+    ...
+}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section id="demo" class="section">
+        <div class="container">
+            <h2 class="section-title"><i class="fas fa-clapperboard"></i> Witness Stealth in Action</h2>
+            <p class="section-subtitle">See how OpenCluely operates fully transparently in real-time desktop capture.</p>
+            <div class="video-wrapper">
+                <div class="video-container">
+                    <video controls muted autoplay loop>
+                        <source src="https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="section section-border">
+        <div class="container">
+            <h2 class="section-title"><i class="fas fa-shield-halved"></i> Built For Unmatched Stealth</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-ghost"></i></div>
+                    <h3>100% Invisible Mode</h3>
+                    <p>Completely invisible to video conferencing apps like Zoom, Teams, Meet, and Discord. Bypasses recording and streaming software with programmatic transparent screen overlays.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-bolt"></i></div>
+                    <h3>Direct Image Analysis</h3>
+                    <p>Skip slow OCR models. OpenCluely passes desktop viewport crops and screenshots directly to Google Gemini for real-time visual reasoning and problem-solving.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-microphone-lines"></i></div>
+                    <h3>Seamless Voice Commands</h3>
+                    <p>Integrate with Azure Speech services or local OpenAI Whisper models to automatically record, transcribe, and respond to verbal interviewer questions on the fly.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-brain"></i></div>
+                    <h3>Smart Context Memory</h3>
+                    <p>Maintains complete conversational history so you can ask follow-up questions, debug edge cases, or ask for complexity optimizations mid-session.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-window-restore"></i></div>
+                    <h3>Glass UI & Custom Binding</h3>
+                    <p>A beautiful, minimalistic glassmorphic interface that acts as a click-through or draggable widget. Easily adapt, resize, or close windows instantly.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-user-secret"></i></div>
+                    <h3>Process Disguise</h3>
+                    <p>Renders under typical safe system names (like Terminal, Settings, or System Tasks) to maintain optimal security against human inspection of background processes.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3D Credit Card Styled Coin Box (Support) -->
+    <section id="coin" class="section coin-section">
+        <div class="container">
+            <div class="coin-container">
+                <div class="coin-text">
+                    <h2 class="align-left"><i class="fas fa-coins"></i> Support the Developer</h2>
+                    <p>If OpenCluely or my other open-source projects have added value to your life, consider supporting my work by acquiring and trading our project coin.</p>
+                    <p class="secondary-p">Simply copy the wallet address or trade directly on pump.fun using the sleek terminal card on the right.</p>
+                </div>
+
+                <!-- 3D Credit Card UI Mock -->
+                <div class="coin-3d-wrap">
+                    <div class="cc-card" id="cc-card">
+                        <div class="cc-glow"></div>
+                        <div class="cc-front">
+                            <div class="cc-header">
+                                <span class="cc-chip"></span>
+                                <span class="cc-brand">PUMP.FUN ORIGINAL</span>
+                            </div>
+                            <div class="cc-number">278s cw3B MBdK ... SuQn pump</div>
+                            <div class="cc-footer">
+                                <div class="cc-holder">
+                                    <span class="cc-label">OPENCLUELY TOKEN</span>
+                                    <span class="cc-value">SUPPORT COIN</span>
+                                </div>
+                                <div class="cc-action-btns">
+                                    <button class="cc-btn copy-btn" id="btn-copy-address" data-address="278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump">
+                                        <i class="fas fa-copy"></i> <span class="copy-text">Copy Address</span>
+                                    </button>
+                                    <a href="https://pump.fun/coin/278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump" target="_blank" class="cc-btn trade-btn">
+                                        <i class="fas fa-chart-line"></i> Trade Now
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Installation / Quick Start -->
+    <section id="install" class="section section-border">
+        <div class="container">
+            <h2 class="section-title"><i class="fas fa-rocket"></i> Fast Installation</h2>
+            <p class="section-subtitle">Get up and running in less than 2 minutes using our singlesetup command pipeline.</p>
+            <div class="steps-container">
+                <div class="step-card">
+                    <div class="step-num">01</div>
+                    <h3>Clone & Enter</h3>
+                    <div class="terminal-block">
+                        <code>git clone https://github.com/TechyCSR/OpenCluely.git<br>cd OpenCluely</code>
+                    </div>
+                </div>
+                <div class="step-card">
+                    <div class="step-num">02</div>
+                    <h3>Gemini Credentials</h3>
+                    <p>Grab a free API Key from <a href="https://aistudio.google.com/" target="_blank" class="text-link">Google AI Studio</a> to power the intelligence.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-num">03</div>
+                    <h3>Bootstrap Script</h3>
+                    <div class="terminal-block">
+                        <code>./setup.sh</code>
+                    </div>
+                    <p class="step-tip">This installs node modules, setups whisper environment, auto-configures settings & launches the application!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container footer-content">
+            <div class="footer-logo"><i class="fas fa-brain"></i> OpenCluely</div>
+            <p>Designed for absolute privacy. All operations execute directly on your local device.</p>
+            <div class="footer-bottom">
+                <span>&copy; 2026 OpenCluely. MIT License.</span>
+                <span>Created with <i class="fas fa-heart" style="color: #ef4444;"></i> by <a href="https://techycsr.dev" target="_blank">TechyCSR</a></span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
