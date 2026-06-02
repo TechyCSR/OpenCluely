@@ -39,17 +39,16 @@ class ConfigManager {
       },
 
       llm: {
-        gemini: {
-          model: 'gemini-2.5-flash',
-          maxRetries: 3,
+        groq: {
+          model: 'llama-3.1-8b-instant',
+          visionModel: 'llama-3.2-11b-vision-preview',
+          maxRetries: 5,
           timeout: 60000,
           fallbackEnabled: true,
-          enableFallbackMethod: true,
           generation: {
             temperature: 0.7,
-            topK: 32,
-            topP: 0.9,
-            maxOutputTokens: 4096
+            max_tokens: 150,
+            top_p: 0.95
           }
         }
       },

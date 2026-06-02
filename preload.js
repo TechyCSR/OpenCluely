@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopSpeechRecognition: () => ipcRenderer.invoke('stop-speech-recognition'),
   getSpeechAvailability: () => ipcRenderer.invoke('get-speech-availability'),
   
+  // Document context
+  uploadDocument: () => ipcRenderer.invoke('upload-document'),
+  
   // Window management
   showAllWindows: () => ipcRenderer.invoke('show-all-windows'),
   hideAllWindows: () => ipcRenderer.invoke('hide-all-windows'),

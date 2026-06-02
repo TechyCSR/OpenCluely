@@ -1,6 +1,22 @@
 require("dotenv").config();
 
-const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
+const { app, BrowserWindow, globalShortcut, session, ipcMain, dialog } = require("electron");
+const fs = require('fs');
+
+// Polyfills for pdf-parse in Electron's Main process
+if (typeof global.DOMMatrix === 'undefined') {
+  global.DOMMatrix = class DOMMatrix {};
+  global.ImageData = class ImageData {};
+  global.Path2D = class Path2D {};
+}
+const pdfParse = require('pdf-parse');
+const mammoth = require('mammoth');
+// Prefer system certificate store for TLS to avoid Chromium-only cert issues
+try {
+  app.commandLine.appendSwitch('enable-features', 'UseSystemTrustStore');
+} catch (e) {
+  // If appendSwitch is not available yet, ignore — this is best-effort
+}
 const logger = require("./src/core/logger").createServiceLogger("MAIN");
 const config = require("./src/core/config");
 
@@ -113,16 +129,25 @@ class ApplicationController {
       if (details.url.includes('generativelanguage.googleapis.com')) {
         details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.156 Safari/537.36';
       }
+      // Ensure Azure Speech requests use a friendly User-Agent where needed
+      if (details.url.includes('.speech.microsoft.com') || details.url.includes('cognitiveservices.azure.com')) {
+        details.requestHeaders['User-Agent'] = details.requestHeaders['User-Agent'] || 'OpenCluely/1.0 (Electron)';
+      }
       callback({ requestHeaders: details.requestHeaders });
     });
     
-    // Handle certificate errors for Google APIs
+    // Handle certificate verification for known trusted endpoints (best-effort)
+    // NOTE: Azure Speech endpoints no longer need Chromium-level trust bypass
+    // because the SDK now runs in a pure Node.js child process (speech-worker.js).
     ses.setCertificateVerifyProc((request, callback) => {
+      // Trust Google's generative language API (used for Gemini)
       if (request.hostname === 'generativelanguage.googleapis.com') {
-        callback(0); // Trust Google's certificates
-      } else {
-        callback(-2); // Use default verification
+        callback(0); // Trust
+        return;
       }
+
+      // Otherwise, use default verification
+      callback(-2);
     });
     
     logger.debug('Network configuration applied for Gemini API');
@@ -191,18 +216,33 @@ class ApplicationController {
         window.webContents.send("transcription-received", { text });
       });
       
-      // Automatically process transcription with LLM for intelligent response
-      setTimeout(async () => {
-        try {
-          const sessionHistory = sessionManager.getOptimizedHistory();
-          await this.processTranscriptionWithLLM(text, sessionHistory);
-        } catch (error) {
-          logger.error("Failed to process transcription with LLM", {
-            error: error.message,
-            text: text.substring(0, 100)
-          });
+      // Accumulate text for LLM processing to avoid rate limits
+      if (!this.accumulatedTranscription) {
+        this.accumulatedTranscription = "";
+      }
+      this.accumulatedTranscription += " " + text;
+
+      if (this.transcriptionDebounceTimeout) {
+        clearTimeout(this.transcriptionDebounceTimeout);
+      }
+
+      // Process transcription with LLM only after 600ms of silence
+      this.transcriptionDebounceTimeout = setTimeout(async () => {
+        const fullText = this.accumulatedTranscription.trim();
+        this.accumulatedTranscription = ""; // reset for next batch
+        
+        if (fullText.length > 0) {
+          try {
+            const sessionHistory = sessionManager.getOptimizedHistory();
+            await this.processTranscriptionWithLLM(fullText, sessionHistory);
+          } catch (error) {
+            logger.error("Failed to process transcription with LLM", {
+              error: error.message,
+              text: fullText.substring(0, 100)
+            });
+          }
         }
-      }, 500);
+      }, 600);
     });
 
     speechService.on("interim-transcription", (text) => {
@@ -235,6 +275,44 @@ class ApplicationController {
   ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
   ipcMain.handle("list-displays", () => captureService.listDisplays());
   ipcMain.handle("capture-area", (event, options) => captureService.captureAndProcess(options));
+  
+  ipcMain.handle("upload-document", async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [
+          { name: 'Documents', extensions: ['pdf', 'docx'] }
+        ]
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { canceled: true };
+      }
+
+      const filePath = result.filePaths[0];
+      const extension = filePath.split('.').pop().toLowerCase();
+      let textContent = '';
+
+      if (extension === 'pdf') {
+        const dataBuffer = fs.readFileSync(filePath);
+        const data = await pdfParse(dataBuffer);
+        textContent = data.text;
+      } else if (extension === 'docx') {
+        const docResult = await mammoth.extractRawText({ path: filePath });
+        textContent = docResult.value;
+      } else {
+        throw new Error('Unsupported file format');
+      }
+
+      // Add the extracted text to the session context
+      sessionManager.setDocumentContext(textContent);
+      
+      return { success: true, length: textContent.length };
+    } catch (error) {
+      logger.error('Failed to parse document', { error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
     
     // Provide reliable clipboard write via main process
     ipcMain.handle("copy-to-clipboard", (event, text) => {
@@ -588,32 +666,40 @@ class ApplicationController {
   }
 
   toggleSpeechRecognition() {
-    const isAvailable = typeof speechService.isAvailable === 'function' ? speechService.isAvailable() : !!speechService.getStatus?.().isInitialized;
-    if (!isAvailable) {
-      logger.warn("Speech recognition unavailable; toggle ignored");
-      try {
-        windowManager.broadcastToAllWindows("speech-status", { status: 'Speech recognition unavailable', available: false });
-        windowManager.broadcastToAllWindows("speech-availability", { available: false });
-      } catch (e) {}
-      return;
-    }
-    const currentStatus = speechService.getStatus();
-    if (currentStatus.isRecording) {
-      try {
-        speechService.stopRecording();
-        windowManager.hideChatWindow();
-        logger.info("Speech recognition stopped via global shortcut");
-      } catch (error) {
-        logger.error("Error stopping speech recognition:", error);
+    try {
+      const isAvailable = typeof speechService.isAvailable === 'function' ? speechService.isAvailable() : !!speechService.getStatus?.().isInitialized;
+      if (!isAvailable) {
+        logger.warn("Speech recognition unavailable; toggle ignored");
+        try {
+          windowManager.broadcastToAllWindows("speech-status", { status: 'Speech recognition unavailable', available: false });
+          windowManager.broadcastToAllWindows("speech-availability", { available: false });
+        } catch (e) {}
+        return;
       }
-    } else {
-      try {
-        speechService.startRecording();
-        windowManager.showChatWindow();
-        logger.info("Speech recognition started via global shortcut");
-      } catch (error) {
-        logger.error("Error starting speech recognition:", error);
+      const currentStatus = speechService.getStatus();
+      if (currentStatus.isRecording) {
+        try {
+          speechService.stopRecording();
+          if (typeof windowManager.hideChatWindow === 'function') {
+            windowManager.hideChatWindow();
+          }
+          logger.info("Speech recognition stopped via global shortcut");
+        } catch (error) {
+          logger.error("Error stopping speech recognition:", error);
+        }
+      } else {
+        try {
+          speechService.startRecording();
+          if (typeof windowManager.showChatWindow === 'function') {
+            windowManager.showChatWindow();
+          }
+          logger.info("Speech recognition started via global shortcut");
+        } catch (error) {
+          logger.error("Error starting speech recognition:", error);
+        }
       }
+    } catch (outerError) {
+      logger.error("Critical error in toggleSpeechRecognition", { error: outerError.message, stack: outerError.stack });
     }
   }
 
@@ -1020,6 +1106,16 @@ class ApplicationController {
 
   onWillQuit() {
     globalShortcut.unregisterAll();
+
+    // Cleanly shut down the speech worker process
+    try {
+      if (typeof speechService.shutdown === 'function') {
+        speechService.shutdown();
+      }
+    } catch (e) {
+      logger.error('Error shutting down speech worker', { error: e.message });
+    }
+
     windowManager.destroyAllWindows();
 
     const sessionStats = sessionManager.getMemoryUsage();

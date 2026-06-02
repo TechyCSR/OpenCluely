@@ -596,6 +596,24 @@ class SessionManager {
       utilizationPercent: Math.round((this.sessionMemory.length / this.maxSize) * 100)
     };
   }
+
+  setDocumentContext(text) {
+    this.documentContext = text;
+    logger.info('Document context set', { length: text?.length || 0 });
+    
+    if (text) {
+      this.addConversationEvent({
+        role: 'system',
+        content: `User uploaded a reference document (${text.length} characters).`,
+        action: 'document_upload',
+        metadata: { documentLength: text.length }
+      });
+    }
+  }
+
+  getDocumentContext() {
+    return this.documentContext || null;
+  }
 }
 
 module.exports = new SessionManager();

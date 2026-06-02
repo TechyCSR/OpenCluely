@@ -259,14 +259,15 @@ class MainWindowUI {
         this.skillIndicator = document.getElementById('skillIndicator');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
-    this.infoButton = document.getElementById('infoButton');
-    this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.uploadButton = document.getElementById('uploadButton');
+        this.infoButton = document.getElementById('infoButton');
+        this.shortcutsPopover = document.getElementById('shortcutsPopover');
 
         // NEW: Screenshot button is the first .command-item without id
         const commandItems = document.querySelectorAll('.command-item');
         this.screenshotButton = commandItems && commandItems[0];
 
-    if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
+        if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
             throw new Error('Required UI elements not found');
         }
 
@@ -309,6 +310,46 @@ class MainWindowUI {
                 }
             }
         });
+        
+        // Add click handler for document upload
+        if (this.uploadButton) {
+            this.uploadButton.addEventListener('click', async () => {
+                if (!this.isInteractive) return;
+                
+                // Show a loading/processing visual indicator
+                this.uploadButton.style.opacity = '0.5';
+                
+                if (window.electronAPI && window.electronAPI.uploadDocument) {
+                    try {
+                        const result = await window.electronAPI.uploadDocument();
+                        if (result && result.success) {
+                            // Turn green briefly to show success
+                            this.uploadButton.style.color = '#4caf50';
+                            setTimeout(() => {
+                                this.uploadButton.style.color = '';
+                            }, 2000);
+                        } else if (result && result.canceled) {
+                            // Do nothing if canceled
+                        } else {
+                            // Turn red briefly to show error
+                            this.uploadButton.style.color = '#ff4757';
+                            setTimeout(() => {
+                                this.uploadButton.style.color = '';
+                            }, 2000);
+                        }
+                    } catch (error) {
+                        logger.error('Upload failed', error);
+                        this.uploadButton.style.color = '#ff4757';
+                        setTimeout(() => {
+                            this.uploadButton.style.color = '';
+                        }, 2000);
+                    }
+                }
+                
+                // Restore opacity
+                this.uploadButton.style.opacity = '1';
+            });
+        }
 
         // Language dropdown
         this.languageSelect = document.getElementById('codingLanguage');
