@@ -26,11 +26,11 @@
 </p>
 
 <p align="center">
-  <a href="https://pump.fun/coin/278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump">
+  <a href="https://bankr.bot/launches/0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3">
     <img src="https://img.shields.io/badge/Support%20Dev-Trade%20My%20Coin%20on%20pump.fun-00c853?style=for-the-badge&logo=bitcoin&logoColor=white" alt="Support Dev - pump.fun" />
   </a>
 </p>
-<p align="center"><code>278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump</code></p>
+<p align="center"><code>0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3</code></p>
 
 ---
 
@@ -389,9 +389,9 @@ If you've ever used my tech through open-source projects and found it valuable, 
 
 I've launched a coin — go hit it and trade:
 
-**Coin Address:** `278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump`
+**Coin Address:** `0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3`
 
-🔗 **[Trade on pump.fun](https://pump.fun/coin/278scw3BMBdKUD5u3X6sZK1cAz1sLvgPRS3ySuQnpump)**
+🔗 **[Trade on pump.fun](https://bankr.bot/launches/0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3)**
 
 ---
 
