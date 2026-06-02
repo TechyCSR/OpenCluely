@@ -27,7 +27,7 @@
 
 <p align="center">
   <a href="https://bankr.bot/launches/0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3">
-    <img src="https://img.shields.io/badge/Support%20Dev-Trade%20My%20Coin%20on%20pump.fun-00c853?style=for-the-badge&logo=bitcoin&logoColor=white" alt="Support Dev - Bankr.bot" />
+    <img src="https://img.shields.io/badge/Support%20Dev-Trade%20My%20Coin%20on%20bankr.bot-00c853?style=for-the-badge&logo=bitcoin&logoColor=white" alt="Support Dev - Bankr.bot" />
   </a>
 </p>
 <p align="center"><code>0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3</code></p>
@@ -86,7 +86,7 @@ https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 
 ---
 
-## 🎯 Functional Overview
+## 🎯 ctional Overview
 
 ### 📋 **Core Components**
 
