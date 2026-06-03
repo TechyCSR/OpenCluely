@@ -427,13 +427,20 @@ You MUST keep your answers extremely concise. Respond with exactly 1 to 3 short 
 
     let lastError = null;
 
+    // Round-robin: grab the next key instantly for this specific request.
+    // This ensures concurrent requests process in parallel using completely different API keys, preventing bottlenecks.
+    const requestStartingKeyIndex = this.currentClientIndex;
+    if (this.clients.length > 0) {
+      this.currentClientIndex = (this.currentClientIndex + 1) % this.clients.length;
+    }
+
     // Try each model instantly on rate limit — zero delay rotation
     for (let i = 0; i < modelPool.length; i++) {
       payload.model = modelPool[i];
       
       // Try each API key for the current model
       for (let j = 0; j < this.clients.length; j++) {
-        const clientIndex = (this.currentClientIndex + j) % this.clients.length;
+        const clientIndex = (requestStartingKeyIndex + j) % this.clients.length;
         const currentClient = this.clients[clientIndex];
         
         try {
@@ -442,9 +449,6 @@ You MUST keep your answers extremely concise. Respond with exactly 1 to 3 short 
           if (!response.choices || response.choices.length === 0) {
             throw new Error('Empty response from Groq API');
           }
-
-          // Advance the starting index for the next global request to distribute load, or stay. We'll stay to maximize usage till rate limit.
-          this.currentClientIndex = clientIndex;
           
           return response.choices[0].message.content;
         } catch (error) {
