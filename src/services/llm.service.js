@@ -5,7 +5,8 @@ const { promptLoader } = require('../../prompt-loader');
 
 class LLMService {
   constructor() {
-    this.client = null;
+    this.clients = [];
+    this.currentClientIndex = 0;
     this.isInitialized = false;
     this.requestCount = 0;
     this.errorCount = 0;
@@ -14,24 +15,27 @@ class LLMService {
   }
 
   initializeClient() {
-    const apiKey = config.getApiKey('GROQ');
+    const apiKeyString = config.getApiKey('GROQ') || '';
+    const apiKeys = apiKeyString.split(',').map(k => k.trim()).filter(k => k && k !== 'your-api-key-here' && k !== 'your_groq_api_key_here');
     
-    if (!apiKey || apiKey === 'your-api-key-here') {
+    if (apiKeys.length === 0) {
       logger.warn('Groq API key not configured', { 
-        keyExists: !!apiKey
+        keyExists: false
       });
       return;
     }
 
     try {
-      this.client = new Groq({ apiKey });
+      this.clients = apiKeys.map(apiKey => new Groq({ apiKey }));
+      this.currentClientIndex = 0;
       this.isInitialized = true;
       
-      logger.info('Groq AI client initialized successfully', {
+      logger.info('Groq AI clients initialized successfully', {
+        keyCount: apiKeys.length,
         model: config.get('llm.groq.model')
       });
     } catch (error) {
-      logger.error('Failed to initialize Groq client', { 
+      logger.error('Failed to initialize Groq clients', { 
         error: error.message 
       });
     }
@@ -420,45 +424,78 @@ You MUST keep your answers extremely concise. Respond with exactly 1 to 3 short 
       ...this.getGenerationConfig()
     };
 
+    let lastError = null;
+
     // Try each model instantly on rate limit — zero delay rotation
     for (let i = 0; i < modelPool.length; i++) {
       payload.model = modelPool[i];
-      try {
-        const response = await this.client.chat.completions.create(payload);
+      
+      // Try each API key for the current model
+      for (let j = 0; j < this.clients.length; j++) {
+        const clientIndex = (this.currentClientIndex + j) % this.clients.length;
+        const currentClient = this.clients[clientIndex];
         
-        if (!response.choices || response.choices.length === 0) {
-          throw new Error('Empty response from Groq API');
+        try {
+          const response = await currentClient.chat.completions.create(payload);
+          
+          if (!response.choices || response.choices.length === 0) {
+            throw new Error('Empty response from Groq API');
+          }
+
+          // Advance the starting index for the next global request to distribute load, or stay. We'll stay to maximize usage till rate limit.
+          this.currentClientIndex = clientIndex;
+          
+          return response.choices[0].message.content;
+        } catch (error) {
+          lastError = error;
+          const errorInfo = this.analyzeError(error);
+          
+          logger.warn(`Groq model ${payload.model} failed on API key index ${clientIndex}`, {
+            error: error.message,
+            errorType: errorInfo.type,
+            model: payload.model,
+            keyIndex: clientIndex
+          });
+
+          // If rate limited, instantly try next key for the SAME model
+          if (errorInfo.type === 'RATE_LIMIT_ERROR') {
+            continue; 
+          }
+          
+          // If auth error (e.g. invalid key), instantly try next key
+          if (errorInfo.type === 'AUTH_ERROR') {
+            continue;
+          }
+          
+          // For other errors (like model decommissioned), break inner loop to move to next model
+          break; 
         }
-
-        return response.choices[0].message.content;
-      } catch (error) {
-        const errorInfo = this.analyzeError(error);
+      }
+      
+      // If we got here, all keys for this model failed. 
+      if (lastError) {
+        const errorInfo = this.analyzeError(lastError);
         
-        logger.warn(`Groq model ${payload.model} failed`, {
-          error: error.message,
-          errorType: errorInfo.type,
-          model: payload.model,
-          remainingModels: modelPool.length - i - 1
-        });
-
-        // If rate limited, immediately try next model (no delay!)
+        // If rate limited across all keys, switch model instantly
         if (errorInfo.type === 'RATE_LIMIT_ERROR' && i < modelPool.length - 1) {
-          logger.info(`Rate limited on ${payload.model}, instantly switching to ${modelPool[i + 1]}`);
-          continue; // no delay, just try next model
+          logger.info(`Rate limited across all keys for ${payload.model}, instantly switching to ${modelPool[i + 1]}`);
+          continue;
         }
 
-        // For non-rate-limit errors, or if we've exhausted all models, throw
+        // If it's the last model, we throw
         if (i === modelPool.length - 1) {
-          throw new Error(`All Groq models exhausted: ${error.message}`);
+          throw new Error(`All Groq models and keys exhausted: ${lastError.message}`);
         }
 
-        // Small delay only for non-rate-limit errors (network issues etc.)
+        // Small delay for network errors etc
         if (errorInfo.type !== 'RATE_LIMIT_ERROR') {
           const delay = 1000 + Math.random() * 500;
           await this.delay(delay);
         }
       }
     }
+    
+    throw new Error(`All Groq models and keys exhausted. Last error: ${lastError ? lastError.message : 'Unknown'}`);
   }
 
   async performPreflightCheck() {
@@ -574,13 +611,14 @@ You MUST keep your answers extremely concise. Respond with exactly 1 to 3 short 
   }
 
   async testConnection() {
-    if (!this.isInitialized) {
+    if (!this.isInitialized || !this.clients || this.clients.length === 0) {
       return { success: false, error: 'Service not initialized' };
     }
 
     try {
       const startTime = Date.now();
-      const response = await this.client.chat.completions.create({
+      const currentClient = this.clients[this.currentClientIndex];
+      const response = await currentClient.chat.completions.create({
         messages: [{ role: 'user', content: 'Test connection. Please respond with "OK".' }],
         model: config.get('llm.groq.model') || 'llama-3.3-70b-versatile',
         max_tokens: 10
