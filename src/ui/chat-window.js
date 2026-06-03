@@ -509,9 +509,9 @@ class ChatWindowUI {
             this.updateListeningDuration();
         }, 100);
         
-        // Auto-scroll to show the listening animation
+        // Auto-scroll to bottom to show the listening animation
         if (this.elements.chatMessages) {
-            this.elements.chatMessages.scrollTop = 0;
+            this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
         }
     }
 

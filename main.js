@@ -100,6 +100,12 @@ class ApplicationController {
 
       await windowManager.initializeWindows();
       this.setupGlobalShortcuts();
+      
+      // Auto-start speech recognition and show chat window
+      speechService.startRecording();
+      if (typeof windowManager.showChatWindow === 'function') {
+        windowManager.showChatWindow();
+      }
 
       // Initialize default stealth mode with terminal icon
       this.updateAppIcon("terminal");
@@ -680,9 +686,7 @@ class ApplicationController {
       if (currentStatus.isRecording) {
         try {
           speechService.stopRecording();
-          if (typeof windowManager.hideChatWindow === 'function') {
-            windowManager.hideChatWindow();
-          }
+          // We intentionally do not hide the chat window here so the user can still read it.
           logger.info("Speech recognition stopped via global shortcut");
         } catch (error) {
           logger.error("Error stopping speech recognition:", error);

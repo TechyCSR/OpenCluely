@@ -5,7 +5,8 @@ const path = require('path');
 const { spawn } = require('child_process');
 const Groq = require('groq-sdk');
 
-let groq = null;
+let groqClients = [];
+let currentClientIndex = 0;
 let isRecording = false;
 let sessionStartTime = null;
 let recordingProcess = null;
@@ -22,14 +23,19 @@ function log(level, message, data) {
 
 function initialize(config) {
   try {
-    if (!config.groqKey) {
+    if (!config.groqKeys || config.groqKeys.length === 0) {
       available = false;
       process.send({ type: 'init-result', available: false, reason: 'Missing GROQ_API_KEY' });
       return;
     }
-    groq = new Groq({ apiKey: config.groqKey });
+    
+    groqClients = config.groqKeys.map(key => new Groq({ apiKey: key }));
+    
+    // Auto-select Key 2 (index 1) for voice if available, else fallback to index 0
+    currentClientIndex = groqClients.length > 1 ? 1 : 0;
+    
     available = true;
-    log('info', 'Groq SDK initialized in worker');
+    log('info', 'Groq SDK initialized in worker', { keyCount: groqClients.length, startingIndex: currentClientIndex });
     process.send({ type: 'init-result', available: true });
   } catch (error) {
     available = false;
@@ -54,8 +60,8 @@ async function runRecordingLoop() {
   let args = [];
   
   // sox format arguments: raw PCM, 16kHz, 16-bit, mono
-  // we wait for 0.1s of sound > 1%, then stop after 0.8s of silence < 1%
-  const formatArgs = ['-b', '16', '-e', 'signed', '-c', '1', '-r', '16000', tempWavPath, 'silence', '1', '0.1', '1%', '1', '0.8', '1%'];
+  // we wait for 0.1s of sound > 1%, then stop after 0.9s of silence < 1%
+  const formatArgs = ['-b', '16', '-e', 'signed', '-c', '1', '-r', '16000', tempWavPath, 'silence', '1', '0.1', '1%', '1', '0.9', '1%'];
   
   if (isWindows) {
     args = ['-t', 'waveaudio', 'default', '-q', ...formatArgs];
@@ -91,7 +97,7 @@ async function runRecordingLoop() {
           
           process.send({ type: 'interim-transcription', text: 'Transcribing...' });
 
-          const transcription = await groq.audio.transcriptions.create({
+          const transcription = await groqClients[currentClientIndex].audio.transcriptions.create({
             file: fs.createReadStream(tempWavPath),
             model: 'whisper-large-v3-turbo',
             response_format: 'text',
@@ -107,6 +113,13 @@ async function runRecordingLoop() {
       }
     } catch (err) {
       log('error', 'Groq transcription failed', { error: err.message });
+      
+      // If we hit a rate limit, rotate to the next key automatically
+      if (err.status === 429 || (err.message && err.message.includes('429'))) {
+        currentClientIndex = (currentClientIndex + 1) % groqClients.length;
+        log('warn', `Rate limit hit! Rotating to API Key Index ${currentClientIndex}`);
+      }
+      
       // We don't stop recording on API error, we just keep looping unless it's fatal
     }
 

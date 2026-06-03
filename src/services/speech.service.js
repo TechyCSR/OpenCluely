@@ -86,12 +86,12 @@ class SpeechService extends EventEmitter {
 
       // Send init message with credentials and config
       const groqKeyRaw = process.env.GROQ_API_KEY || '';
-      const groqKey = groqKeyRaw.split(',')[0].trim();
+      const groqKeys = groqKeyRaw.split(',').map(k => k.trim()).filter(k => k);
 
       this.worker.send({
         type: 'init',
         config: {
-          groqKey
+          groqKeys
         }
       });
 
