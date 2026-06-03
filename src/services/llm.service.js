@@ -44,9 +44,10 @@ class LLMService {
   getGenerationConfig(overrides = {}) {
     const defaults = config.get('llm.groq.generation') || {};
     const fallback = {
-      temperature: 0.7,
-      max_tokens: 4096,
-      top_p: 0.95
+      temperature: 0.4,
+      max_tokens: 200,
+      top_p: 0.95,
+      stop: ["\n\n", "\n-", "\n*", "\n1."]
     };
 
     const merged = { ...fallback, ...defaults, ...overrides };
@@ -400,7 +401,7 @@ You MUST keep your answers extremely concise. Respond with exactly 1 to 3 short 
     prompt += `
 
 ## Final Response Rules:
-1. Always be conversational and direct.
+1. Always be conversational, casual, and direct. You MUST use natural human filler words (e.g., 'so', 'just', 'like', 'you know', 'actually', 'well') so it sounds like an unscripted, off-the-cuff verbal response. Do NOT sound like you are reading a textbook.
 2. NEVER provide long, detailed responses. Keep it to 1-3 short sentences.
 3. If the user asks a coding question, provide a very concise explanation or a brief snippet, but do not write an essay.
 4. Remember: DO NOT answer statements made by the interviewee (me). Only answer the interviewer's questions.`;

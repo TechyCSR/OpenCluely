@@ -85,16 +85,13 @@ class SpeechService extends EventEmitter {
       }
 
       // Send init message with credentials and config
-      const subscriptionKey = process.env.AZURE_SPEECH_KEY;
-      const region = process.env.AZURE_SPEECH_REGION;
-      const azureConfig = config.get('speech.azure') || {};
+      const groqKeyRaw = process.env.GROQ_API_KEY || '';
+      const groqKey = groqKeyRaw.split(',')[0].trim();
 
       this.worker.send({
         type: 'init',
         config: {
-          subscriptionKey,
-          region,
-          azure: azureConfig
+          groqKey
         }
       });
 
