@@ -125,7 +125,7 @@ class WindowManager {
         window.setAlwaysOnTop(true, 'floating', 2);
       }
     } else {
-      window.setAlwaysOnTop(true);
+      try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
     }
     
     // DevTools can be opened manually if needed for debugging
@@ -145,7 +145,7 @@ class WindowManager {
               window.setAlwaysOnTop(true, 'floating', 2);
             }
           } else {
-            window.setAlwaysOnTop(true);
+            try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
           }
         }
       }, 200);
@@ -458,7 +458,7 @@ class WindowManager {
         
         if (!levelSet) {
           // Final fallback
-          window.setAlwaysOnTop(true);
+          try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
         }
         
         // Additional macOS-specific enforcement
@@ -481,31 +481,31 @@ class WindowManager {
       } catch (error) {
         logger.warn('Error setting always-on-top for macOS', { error: error.message });
         // Absolute fallback
-        window.setAlwaysOnTop(true);
+        try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
       }
     } else if (process.platform === 'win32') {
       // Windows: Multiple enforcement attempts
-      window.setAlwaysOnTop(true);
+      try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
       
       setTimeout(() => {
         if (!window.isDestroyed()) {
-          window.setAlwaysOnTop(true);
+          try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
         }
       }, 100);
       
       setTimeout(() => {
         if (!window.isDestroyed()) {
-          window.setAlwaysOnTop(true);
+          try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
         }
       }, 500);
       
     } else {
       // Linux and other platforms
-      window.setAlwaysOnTop(true);
+      try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
       
       setTimeout(() => {
         if (!window.isDestroyed()) {
-          window.setAlwaysOnTop(true);
+          try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
         }
       }, 100);
     }
@@ -536,7 +536,7 @@ class WindowManager {
               }
             }, 50);
           } else {
-            window.setAlwaysOnTop(true);
+            try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
           }
         } catch (error) {
           logger.debug('Error in enforceAlwaysOnTop', { error: error.message });
@@ -730,7 +730,7 @@ class WindowManager {
         } catch {
           try { win.setAlwaysOnTop(true, 'pop-up-menu', 2); }
           catch { try { win.setAlwaysOnTop(true, 'floating', 2); }
-          catch { win.setAlwaysOnTop(true); }}
+          catch { try { win.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { win.setAlwaysOnTop(true); } }}
         }
       };
 
@@ -754,7 +754,7 @@ class WindowManager {
     } else {
       // Linux/Windows
       win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-      win.setAlwaysOnTop(true);
+      try { win.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { win.setAlwaysOnTop(true); }
       win.show();
       win.focus();
       setTimeout(() => {
@@ -762,7 +762,7 @@ class WindowManager {
         if (!isLLM) {
           win.setVisibleOnAllWorkspaces(false);
         }
-        win.setAlwaysOnTop(true);
+        try { win.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { win.setAlwaysOnTop(true); }
       }, 500);
     }
 
@@ -1013,12 +1013,12 @@ class WindowManager {
             }, 200);
           } else {
             // Windows and Linux
-            window.setAlwaysOnTop(true);
+            try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
             
             // Additional enforcement after a short delay
             setTimeout(() => {
               if (!window.isDestroyed()) {
-                window.setAlwaysOnTop(true);
+                try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
               }
             }, 100);
           }
@@ -1029,7 +1029,7 @@ class WindowManager {
           });
           // Fallback to basic always-on-top
           try {
-            window.setAlwaysOnTop(true);
+            try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
           } catch (fallbackError) {
             logger.error('Fallback always-on-top failed', { 
               type, 
@@ -1076,10 +1076,10 @@ class WindowManager {
             }, 50);
           } else {
             // For other platforms
-            window.setAlwaysOnTop(true);
+            try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
             setTimeout(() => {
               if (!window.isDestroyed()) {
-                window.setAlwaysOnTop(true);
+                try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
               }
             }, 50);
           }
@@ -1487,7 +1487,7 @@ class WindowManager {
         if (process.platform === 'darwin') {
           window.setAlwaysOnTop(true, 'screen-saver', 1);
         } else {
-          window.setAlwaysOnTop(true);
+          try { window.setAlwaysOnTop(true, 'screen-saver', 1); } catch(e) { window.setAlwaysOnTop(true); }
         }
         
         // Ensure window appears on current desktop if it's visible
