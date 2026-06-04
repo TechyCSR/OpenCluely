@@ -98,6 +98,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRecordingStarted: (callback) => ipcRenderer.on('recording-started', callback),
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
+  onResponseModeChanged: (callback) => ipcRenderer.on('response-mode-changed', callback),
+  onToggleShortcutHelp: (callback) => ipcRenderer.on('toggle-shortcut-help', callback),
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),
@@ -116,7 +118,9 @@ contextBridge.exposeInMainWorld('api', {
             'toggle-interaction-mode',
             'update-skill',
             'window-loaded',
-            'set-response-mode'
+            'set-response-mode',
+            'set-coding-language',
+            'trigger-screenshot'
         ];
         if (validChannels.includes(channel)) {
             ipcRenderer.send(channel, data);

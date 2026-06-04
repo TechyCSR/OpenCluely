@@ -840,7 +840,9 @@
             }
 
             // Highlight code
-            Prism.highlightAll();
+            if (typeof Prism !== 'undefined') {
+                Prism.highlightAll();
+            }
         }
 
         function displayFullLayout(response) {
@@ -854,7 +856,9 @@
             full.innerHTML = html;
 
             // Highlight any code
-            Prism.highlightAll();
+            if (typeof Prism !== 'undefined') {
+                Prism.highlightAll();
+            }
 
             // Add copy buttons to code blocks in full view
             const pres = full.querySelectorAll('pre');

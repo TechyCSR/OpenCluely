@@ -34,8 +34,8 @@ class ApplicationController {
   constructor() {
     this.isReady = false;
     this.activeSkill = "dsa";
-  // Default to C++ so language is enforced from first run
-  this.codingLanguage = "cpp";
+  // Default to Auto-Detect so language is inferred naturally
+  this.codingLanguage = "auto";
     this.speechAvailable = false;
 
     // Window configurations for reference
@@ -191,6 +191,10 @@ class ApplicationController {
       "CommandOrControl+Down": () => this.handleDownArrow(),
       "CommandOrControl+Left": () => this.handleLeftArrow(),
       "CommandOrControl+Right": () => this.handleRightArrow(),
+      // Cycle response mode: Simple -> Medium -> Complex -> Simple
+      "CommandOrControl+Shift+X": () => this.cycleResponseMode(),
+      // Show all shortcuts help overlay
+      "CommandOrControl+Shift+Z": () => this.toggleShortcutHelp(),
     };
 
     Object.entries(shortcuts).forEach(([accelerator, handler]) => {
@@ -660,6 +664,11 @@ class ApplicationController {
       sessionManager.setResponseMode(mode);
     });
 
+    // Handle Ctrl+Click screenshot trigger from renderer
+    ipcMain.on("trigger-screenshot", () => {
+      this.triggerScreenshotOCR();
+    });
+
     // Handle quit app (alternative method)
     ipcMain.on("quit-app", () => {
       logger.info("Quit app requested via IPC (on method)");
@@ -803,6 +812,25 @@ class ApplicationController {
     // Broadcast the skill change to all windows
     windowManager.broadcastToAllWindows("skill-updated", { skill: newSkill });
   }
+  cycleResponseMode() {
+    const modes = ['simple', 'medium', 'complex'];
+    const current = sessionManager.getResponseMode();
+    const currentIndex = modes.indexOf(current);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    const nextMode = modes[nextIndex];
+
+    sessionManager.setResponseMode(nextMode);
+
+    // Broadcast to all windows so the custom dropdown updates its label
+    windowManager.broadcastToAllWindows('response-mode-changed', { mode: nextMode });
+
+    logger.info('Response mode cycled via shortcut', { from: current, to: nextMode });
+  }
+
+  toggleShortcutHelp() {
+    // Broadcast to all windows to toggle the help overlay
+    windowManager.broadcastToAllWindows('toggle-shortcut-help', {});
+  }
 
   async triggerScreenshotOCR() {
     if (!this.isReady) {
@@ -813,11 +841,30 @@ class ApplicationController {
     const startTime = Date.now();
 
     try {
+      // Temporarily hide all windows so native dropdowns and the app are not in the screenshot
+      windowManager.windows.forEach(win => {
+        if (!win.isDestroyed() && win.isVisible()) {
+          win.hide();
+          win._wasVisible = true;
+        }
+      });
+
+      // Small delay for OS to process the hides and destroy floating native dropdowns
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      const capture = await captureService.captureAndProcess();
+
+      // Restore windows
+      windowManager.windows.forEach(win => {
+        if (!win.isDestroyed() && win._wasVisible) {
+          windowManager.showOnCurrentDesktop(win);
+          win._wasVisible = false;
+        }
+      });
+
       windowManager.showLLMLoading();
 
-  const capture = await captureService.captureAndProcess();
-
-      if (!capture.imageBuffer || !capture.imageBuffer.length) {
+      if (!capture || !capture.imageBuffer || !capture.imageBuffer.length) {
         windowManager.hideLLMResponse();
         this.broadcastOCRError("Failed to capture screenshot image");
         return;
@@ -829,12 +876,13 @@ class ApplicationController {
       const skillsRequiringProgrammingLanguage = ['dsa'];
       const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
 
+      const lang = this.codingLanguage === 'auto' ? null : this.codingLanguage;
       const llmResult = await llmService.processImageWithSkill(
         capture.imageBuffer,
         capture.mimeType || 'image/png',
         this.activeSkill,
         sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null
+        needsProgrammingLanguage ? lang : null
       );
 
       // Record model response in session
@@ -845,7 +893,16 @@ class ApplicationController {
         isImageAnalysis: true
       });
 
-      windowManager.showLLMResponse(llmResult.response, {
+      // Send the response directly to the chat window instead of opening the popup
+      windowManager.hideLLMResponse();
+      
+      const chatWin = windowManager.windows.get('chat');
+      if (chatWin) {
+        windowManager.showOnCurrentDesktop(chatWin);
+      }
+
+      windowManager.broadcastToAllWindows('llm-response', {
+        response: llmResult.response,
         skill: this.activeSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,

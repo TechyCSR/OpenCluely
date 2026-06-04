@@ -213,6 +213,12 @@ class ChatWindowUI {
         this.isInteractive = false;
         this.elements.chatContainer.classList.add('non-interactive');
         this.showInteractionIndicator('Non-Interactive', false);
+        
+        // Force close any open native dropdown menus by removing focus
+        if (document.activeElement) {
+            document.activeElement.blur();
+        }
+        
         logger.debug('Interaction mode disabled in chat');
     }
 

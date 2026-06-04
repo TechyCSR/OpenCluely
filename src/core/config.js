@@ -41,7 +41,7 @@ class ConfigManager {
       llm: {
         groq: {
           model: 'llama-3.1-8b-instant',
-          visionModel: 'llama-3.2-11b-vision-preview',
+          visionModel: 'llama-4-scout-17b-16e-instruct',
           maxRetries: 5,
           timeout: 60000,
           fallbackEnabled: true,

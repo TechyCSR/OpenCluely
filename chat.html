@@ -45,7 +45,7 @@
         -webkit-app-region: drag;
         background: rgba(0, 0, 0, 0.2);
         backdrop-filter: blur(10px);
-        cursor: move;
+        cursor: default;
         flex-shrink: 0;
       }
       .header-title {
@@ -70,7 +70,7 @@
         color: rgba(255, 255, 255, 0.9);
         border-radius: 6px;
         padding: 6px 10px;
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s ease;
       }
       .icon-button:hover {
@@ -288,7 +288,7 @@
         padding: 4px 8px;
         font-size: 11px;
         border-radius: 4px;
-        cursor: pointer;
+        cursor: default;
         -webkit-app-region: no-drag;
         transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
       }
@@ -450,7 +450,7 @@
         border-radius: 6px;
         padding: 6px 10px;
         color: rgba(255, 255, 255, 0.9);
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s;
         -webkit-app-region: no-drag;
       }
@@ -479,7 +479,7 @@
         border-radius: 6px;
         padding: 6px 10px;
         color: rgba(255, 255, 255, 0.9);
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s;
         -webkit-app-region: no-drag;
       }
@@ -527,15 +527,10 @@
       }
       .non-interactive .input-container {
         pointer-events: none;
-        opacity: 0.5;
+        opacity: 0;
       }
-      .non-interactive .mic-button {
-        pointer-events: none;
-        opacity: 0.5;
-      }
-      .non-interactive .send-button {
-        pointer-events: none;
-        opacity: 0.5;
+      .non-interactive .icon-button {
+        display: none;
       }
 
       /* Minimalist Listening Animation */
@@ -666,7 +661,14 @@
         }
       }
 
-      .response-mode-select {
+      /* Custom dropdown to avoid native OS select (which leaks through setContentProtection) */
+      .custom-dropdown {
+        position: relative;
+        display: inline-block;
+        margin-right: 8px;
+        -webkit-app-region: no-drag;
+      }
+      .custom-dropdown-btn {
         background: rgba(255, 255, 255, 0.1);
         color: rgba(255, 255, 255, 0.8);
         border: 1px solid rgba(255, 255, 255, 0.2);
@@ -674,17 +676,138 @@
         padding: 4px 8px;
         font-size: 12px;
         outline: none;
-        cursor: pointer;
-        margin-right: 8px;
+        cursor: default;
         font-family: inherit;
         transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        user-select: none;
       }
-      .response-mode-select:hover {
+      .custom-dropdown-btn:hover {
         background: rgba(255, 255, 255, 0.15);
       }
-      .response-mode-select option {
-        background: #1e1e1e;
+      .custom-dropdown-btn .arrow {
+        font-size: 8px;
+        transition: transform 0.2s ease;
+      }
+      .custom-dropdown.open .custom-dropdown-btn .arrow {
+        transform: rotate(180deg);
+      }
+      .custom-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        margin-top: 2px;
+        background: rgba(30, 30, 30, 0.95);
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 6px;
+        min-width: 130px;
+        z-index: 9999;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      }
+      .custom-dropdown.open .custom-dropdown-menu {
+        display: block;
+        animation: dropIn 0.15s ease-out;
+      }
+      @keyframes dropIn {
+        from { opacity: 0; transform: translateY(-4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .custom-dropdown-item {
+        padding: 6px 12px;
+        font-size: 12px;
+        color: rgba(255,255,255,0.8);
+        cursor: default;
+        transition: background 0.15s ease;
+      }
+      .custom-dropdown-item:hover {
+        background: rgba(255,255,255,0.1);
+      }
+      .custom-dropdown-item.selected {
+        background: rgba(33, 150, 243, 0.3);
         color: #fff;
+      }
+      .non-interactive .custom-dropdown {
+        display: none;
+      }
+
+      /* Shortcut Help Overlay */
+      .shortcut-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(20px);
+        z-index: 10000;
+        justify-content: center;
+        align-items: center;
+        -webkit-app-region: no-drag;
+      }
+      .shortcut-overlay.visible {
+        display: flex;
+        animation: fadeIn 0.2s ease-out;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .shortcut-card {
+        background: rgba(30, 30, 30, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        padding: 24px 28px;
+        max-width: 380px;
+        width: 90%;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      }
+      .shortcut-card h2 {
+        margin: 0 0 16px 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.95);
+        text-align: center;
+      }
+      .shortcut-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .shortcut-row:last-child {
+        border-bottom: none;
+      }
+      .shortcut-label {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.7);
+      }
+      .shortcut-key {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-family: monospace;
+      }
+      .shortcut-mode-indicator {
+        text-align: center;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .shortcut-mode-indicator span {
+        color: #64b5f6;
+        font-weight: 600;
       }
     </style>
   </head>
@@ -697,11 +820,30 @@
           <div class="recording-indicator" id="recordingIndicator"></div>
         </div>
         <div class="header-actions">
-          <select id="responseModeSelect" class="response-mode-select" title="Set AI Response Length">
-            <option value="simple">Simple</option>
-            <option value="medium">Medium</option>
-            <option value="complex" selected>Complex</option>
-          </select>
+          <div class="custom-dropdown" id="codingLangDropdown">
+            <button class="custom-dropdown-btn" title="Set Coding Language">
+              <span class="label">Auto-Detect Lang</span>
+              <span class="arrow">▼</span>
+            </button>
+            <div class="custom-dropdown-menu">
+              <div class="custom-dropdown-item selected" data-value="auto">Auto-Detect Lang</div>
+              <div class="custom-dropdown-item" data-value="cpp">C++</div>
+              <div class="custom-dropdown-item" data-value="python">Python</div>
+              <div class="custom-dropdown-item" data-value="java">Java</div>
+              <div class="custom-dropdown-item" data-value="javascript">JavaScript</div>
+            </div>
+          </div>
+          <div class="custom-dropdown" id="responseModeDropdown">
+            <button class="custom-dropdown-btn" title="Set AI Response Length">
+              <span class="label">Complex</span>
+              <span class="arrow">▼</span>
+            </button>
+            <div class="custom-dropdown-menu">
+              <div class="custom-dropdown-item" data-value="simple">Simple</div>
+              <div class="custom-dropdown-item" data-value="medium">Medium</div>
+              <div class="custom-dropdown-item selected" data-value="complex">Complex</div>
+            </div>
+          </div>
           <button class="icon-button" id="clearHistoryBtn" title="Clear chat history">
             <i class="fas fa-trash"></i>
           </button>
@@ -729,6 +871,25 @@
           </button>
         </div>
       </div>
+      </div>
+
+      <!-- Shortcut Help Overlay -->
+      <div class="shortcut-overlay" id="shortcutOverlay">
+        <div class="shortcut-card">
+          <h2>⌨ Keyboard Shortcuts</h2>
+          <div class="shortcut-row"><span class="shortcut-label">Screenshot & Analyze</span><span class="shortcut-key">Ctrl+S</span></div>
+          <div class="shortcut-row"><span class="shortcut-label">Screenshot (Alt)</span><span class="shortcut-key">Ctrl+Shift+S</span></div>
+          <div class="shortcut-row"><span class="shortcut-label">Cycle Response Mode</span><span class="shortcut-key">Ctrl+Shift+X</span></div>
+          <div class="shortcut-row"><span class="shortcut-label">Toggle Recording</span><span class="shortcut-key">Alt+R</span></div>
+          <div class="shortcut-row"><span class="shortcut-label">Toggle Stealth Mode</span><span class="shortcut-key">Alt+A</span></div>
+          <div class="shortcut-row"><span class="shortcut-label">Show/Hide Window</span><span class="shortcut-key">Ctrl+Shift+V</span></div>
+          <div class="shortcut-row"><span class="shortcut-label">Open Chat</span><span class="shortcut-key">Ctrl+Shift+C</span></div>
+          <div class="shortcut-row"><span class="shortcut-label">Clear Session</span><span class="shortcut-key">Ctrl+Shift+\</span></div>
+          <div class="shortcut-row"><span class="shortcut-label">Settings</span><span class="shortcut-key">Ctrl+,</span></div>
+          <div class="shortcut-row"><span class="shortcut-label">This Menu</span><span class="shortcut-key">Ctrl+Shift+Z</span></div>
+          <div class="shortcut-mode-indicator">Current mode: <span id="shortcutModeLabel">Complex</span></div>
+        </div>
+      </div>
     </div>
     <script src="lib/markdown.js"></script> 
     <!-- PrismJS core and autoloader for language components -->
@@ -752,11 +913,93 @@
       const listeningDuration = document.getElementById('listeningDuration');
       const interimOverlay = document.getElementById('interimOverlay');
       const clearHistoryBtn = document.getElementById('clearHistoryBtn');
-      const responseModeSelect = document.getElementById('responseModeSelect');
+      // Custom dropdown logic (replaces native <select> to stay hidden from screen recording)
+      function setupCustomDropdown(dropdownEl, ipcChannel) {
+        if (!dropdownEl) return;
+        const btn = dropdownEl.querySelector('.custom-dropdown-btn');
+        const label = dropdownEl.querySelector('.label');
+        const items = dropdownEl.querySelectorAll('.custom-dropdown-item');
 
-      if (responseModeSelect && window.api) {
-        responseModeSelect.addEventListener('change', (e) => {
-          window.api.send('set-response-mode', e.target.value);
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          // Close all other dropdowns first
+          document.querySelectorAll('.custom-dropdown.open').forEach(d => {
+            if (d !== dropdownEl) d.classList.remove('open');
+          });
+          dropdownEl.classList.toggle('open');
+        });
+
+        items.forEach(item => {
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            items.forEach(i => i.classList.remove('selected'));
+            item.classList.add('selected');
+            label.textContent = item.textContent;
+            dropdownEl.classList.remove('open');
+            if (window.api) {
+              window.api.send(ipcChannel, item.dataset.value);
+            }
+          });
+        });
+      }
+
+      // Close dropdowns when clicking anywhere else
+      document.addEventListener('click', () => {
+        document.querySelectorAll('.custom-dropdown.open').forEach(d => d.classList.remove('open'));
+      });
+
+      // Ctrl+Left Click anywhere on the window triggers a screenshot
+      document.addEventListener('click', (e) => {
+        if (e.ctrlKey && e.button === 0 && window.api) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.api.send('trigger-screenshot');
+        }
+      });
+
+      setupCustomDropdown(document.getElementById('responseModeDropdown'), 'set-response-mode');
+      setupCustomDropdown(document.getElementById('codingLangDropdown'), 'set-coding-language');
+
+      // Listen for response mode changes from backend (e.g. Ctrl+X shortcut)
+      if (window.electronAPI && window.electronAPI.onResponseModeChanged) {
+        window.electronAPI.onResponseModeChanged((event, data) => {
+          if (data && data.mode) {
+            const dropdown = document.getElementById('responseModeDropdown');
+            if (dropdown) {
+              const label = dropdown.querySelector('.label');
+              const items = dropdown.querySelectorAll('.custom-dropdown-item');
+              items.forEach(item => {
+                item.classList.remove('selected');
+                if (item.dataset.value === data.mode) {
+                  item.classList.add('selected');
+                  if (label) label.textContent = item.textContent;
+                }
+              });
+            }
+            // Also update the shortcut overlay mode label
+            const modeLabel = document.getElementById('shortcutModeLabel');
+            if (modeLabel) {
+              modeLabel.textContent = data.mode.charAt(0).toUpperCase() + data.mode.slice(1);
+            }
+          }
+        });
+      }
+
+      // Listen for toggle-shortcut-help from backend (Ctrl+Z)
+      if (window.electronAPI && window.electronAPI.onToggleShortcutHelp) {
+        window.electronAPI.onToggleShortcutHelp(() => {
+          const overlay = document.getElementById('shortcutOverlay');
+          if (overlay) {
+            overlay.classList.toggle('visible');
+          }
+        });
+      }
+
+      // Close shortcut overlay when clicking on it
+      const shortcutOverlay = document.getElementById('shortcutOverlay');
+      if (shortcutOverlay) {
+        shortcutOverlay.addEventListener('click', () => {
+          shortcutOverlay.classList.remove('visible');
         });
       }
 

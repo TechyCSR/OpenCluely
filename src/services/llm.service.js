@@ -125,16 +125,33 @@ class LLMService {
         requestId: this.requestCount
       });
 
-      if (config.get('llm.groq.fallbackEnabled')) {
-        return this.generateFallbackResponse('[image]', activeSkill);
-      }
-      throw error;
+      // Temporarily surface the raw error to the chat UI instead of the generic fallback
+      return {
+        response: `[Vision Model Error]: ${error.message}`,
+        metadata: {
+          skill: activeSkill,
+          usedFallback: true,
+          isImageAnalysis: true
+        }
+      };
     }
   }
 
   formatImageInstruction(activeSkill, programmingLanguage) {
+    const sessionManager = require('../managers/session.manager');
+    const mode = sessionManager.getResponseMode();
     const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
-    return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
+    
+    let modeNote = '';
+    if (mode === 'simple') {
+      modeNote = ' Provide ONLY the direct final answer. Do NOT include any explanations, breakdown, steps, or markdown formatting like "Problem Analysis" or "Time Complexity". Just the raw answer.';
+    } else if (mode === 'medium') {
+      modeNote = ' Provide the answer with a brief 1-2 sentence explanation. Keep it extremely concise.';
+    } else {
+      modeNote = ' Extract the problem concisely and provide the best possible solution with explanation and final code.';
+    }
+    
+    return `Analyze this image for a ${activeSkill.toUpperCase()} question.${modeNote}${langNote}`;
   }
 
   async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
@@ -423,7 +440,7 @@ ABSOLUTE RULES:`;
     
     // Fast model rotation pool — each model has independent rate limits on Groq free tier
     const modelPool = isVision
-      ? ['llama-3.2-11b-vision-preview']
+      ? ['llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-scout-17b-16e-instruct']
       : ['llama-3.1-8b-instant', 'llama3-8b-8192', 'gemma2-9b-it', 'llama-3.3-70b-versatile'];
 
     const payload = {
