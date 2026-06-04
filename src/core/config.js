@@ -18,7 +18,7 @@ class ConfigManager {
         isDevelopment: this.env === 'development',
         isProduction: this.env === 'production'
       },
-      
+
       window: {
         defaultWidth: 400,
         defaultHeight: 600,
@@ -47,7 +47,7 @@ class ConfigManager {
           fallbackEnabled: true,
           generation: {
             temperature: 0.7,
-            max_tokens: 300,
+            max_tokens: 350,
             top_p: 0.95
           }
         }

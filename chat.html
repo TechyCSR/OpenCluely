@@ -665,6 +665,27 @@
           transform: translateY(0);
         }
       }
+
+      .response-mode-select {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 12px;
+        outline: none;
+        cursor: pointer;
+        margin-right: 8px;
+        font-family: inherit;
+        transition: all 0.2s ease;
+      }
+      .response-mode-select:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .response-mode-select option {
+        background: #1e1e1e;
+        color: #fff;
+      }
     </style>
   </head>
   <body>
@@ -676,6 +697,11 @@
           <div class="recording-indicator" id="recordingIndicator"></div>
         </div>
         <div class="header-actions">
+          <select id="responseModeSelect" class="response-mode-select" title="Set AI Response Length">
+            <option value="simple">Simple</option>
+            <option value="medium">Medium</option>
+            <option value="complex" selected>Complex</option>
+          </select>
           <button class="icon-button" id="clearHistoryBtn" title="Clear chat history">
             <i class="fas fa-trash"></i>
           </button>
@@ -726,6 +752,13 @@
       const listeningDuration = document.getElementById('listeningDuration');
       const interimOverlay = document.getElementById('interimOverlay');
       const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+      const responseModeSelect = document.getElementById('responseModeSelect');
+
+      if (responseModeSelect && window.api) {
+        responseModeSelect.addEventListener('change', (e) => {
+          window.api.send('set-response-mode', e.target.value);
+        });
+      }
 
       let isRecording = false;
       let isInteractive = true;

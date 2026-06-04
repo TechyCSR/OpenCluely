@@ -10,16 +10,16 @@ class LLMService {
     this.isInitialized = false;
     this.requestCount = 0;
     this.errorCount = 0;
-    
+
     this.initializeClient();
   }
 
   initializeClient() {
     const apiKeyString = config.getApiKey('GROQ') || '';
     const apiKeys = apiKeyString.split(',').map(k => k.trim()).filter(k => k && k !== 'your-api-key-here' && k !== 'your_groq_api_key_here');
-    
+
     if (apiKeys.length === 0) {
-      logger.warn('Groq API key not configured', { 
+      logger.warn('Groq API key not configured', {
         keyExists: false
       });
       return;
@@ -29,14 +29,14 @@ class LLMService {
       this.clients = apiKeys.map(apiKey => new Groq({ apiKey }));
       this.currentClientIndex = 0;
       this.isInitialized = true;
-      
+
       logger.info('Groq AI clients initialized successfully', {
         keyCount: apiKeys.length,
         model: config.get('llm.groq.model')
       });
     } catch (error) {
-      logger.error('Failed to initialize Groq clients', { 
-        error: error.message 
+      logger.error('Failed to initialize Groq clients', {
+        error: error.message
       });
     }
   }
@@ -45,7 +45,7 @@ class LLMService {
     const defaults = config.get('llm.groq.generation') || {};
     const fallback = {
       temperature: 0.4,
-      max_tokens: 300,
+      max_tokens: 350,
       top_p: 0.95
     };
 
@@ -73,7 +73,7 @@ class LLMService {
     try {
       const { promptLoader } = require('../../prompt-loader');
       const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
-      
+
       const base64Image = imageBuffer.toString('base64');
       const imageUrl = `data:${mimeType};base64,${base64Image}`;
 
@@ -144,7 +144,7 @@ class LLMService {
 
     const startTime = Date.now();
     this.requestCount++;
-    
+
     try {
       logger.info('Processing text with LLM', {
         activeSkill,
@@ -155,7 +155,7 @@ class LLMService {
 
       const messages = this.buildGroqRequest(text, activeSkill, sessionMemory, programmingLanguage);
       const responseText = await this.executeRequest(messages);
-      
+
       const finalResponse = programmingLanguage
         ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
         : responseText;
@@ -188,7 +188,7 @@ class LLMService {
       if (config.get('llm.groq.fallbackEnabled')) {
         return this.generateFallbackResponse(text, activeSkill);
       }
-      
+
       throw error;
     }
   }
@@ -200,7 +200,7 @@ class LLMService {
 
     const startTime = Date.now();
     this.requestCount++;
-    
+
     try {
       logger.info('Processing transcription with intelligent response', {
         activeSkill,
@@ -210,7 +210,7 @@ class LLMService {
 
       const messages = this.buildIntelligentTranscriptionRequest(text, activeSkill, sessionMemory, programmingLanguage);
       const responseText = await this.executeRequest(messages);
-      
+
       const finalResponse = programmingLanguage
         ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
         : responseText;
@@ -237,7 +237,7 @@ class LLMService {
       if (config.get('llm.groq.fallbackEnabled')) {
         return this.generateIntelligentFallbackResponse(text, activeSkill);
       }
-      
+
       throw error;
     }
   }
@@ -264,7 +264,7 @@ class LLMService {
 
   buildGroqRequest(text, activeSkill, sessionMemory, programmingLanguage) {
     const sessionManager = require('../managers/session.manager');
-    
+
     if (sessionManager && typeof sessionManager.getConversationHistory === 'function') {
       const conversationHistory = sessionManager.getConversationHistory(4);
       const skillContext = sessionManager.getSkillContext(activeSkill, programmingLanguage);
@@ -272,8 +272,8 @@ class LLMService {
     }
 
     const requestComponents = promptLoader.getRequestComponents(
-      activeSkill, 
-      text, 
+      activeSkill,
+      text,
       sessionMemory,
       programmingLanguage
     );
@@ -326,7 +326,7 @@ class LLMService {
     }
 
     const sessionManager = require('../managers/session.manager');
-    
+
     if (sessionManager && typeof sessionManager.getConversationHistory === 'function') {
       const conversationHistory = sessionManager.getConversationHistory(4);
       const skillContext = sessionManager.getSkillContext(activeSkill, programmingLanguage);
@@ -336,7 +336,7 @@ class LLMService {
     const messages = [];
     const documentContext = sessionManager ? sessionManager.getDocumentContext() : null;
     const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage, documentContext);
-    
+
     if (intelligentPrompt) {
       messages.push({ role: 'system', content: intelligentPrompt });
     }
@@ -350,7 +350,7 @@ class LLMService {
     const sessionManager = require('../managers/session.manager');
     const documentContext = sessionManager.getDocumentContext();
     const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage, documentContext);
-    
+
     if (intelligentPrompt) {
       messages.push({ role: 'system', content: intelligentPrompt });
     }
@@ -375,15 +375,33 @@ class LLMService {
   }
 
   getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage, documentContext = null) {
+    const sessionManager = require('../managers/session.manager');
+    const mode = sessionManager.getResponseMode();
     let prompt = `You are whispering answers to an interviewee during a live interview. The transcription has both the interviewer and interviewee's voice — ONLY answer the interviewer's questions. Ignore anything the interviewee says.
 
-ABSOLUTE RULES:
+ABSOLUTE RULES:`;
+
+    if (mode === 'simple') {
+      prompt += `
+- Answer in 1-2 sentences only. Be extremely concise.
+- NEVER use bullet points, numbered lists, headers, bold, markdown, or any formatting. Only plain flowing sentences.
+- NEVER include code.
+- Sound like a confident person speaking casually.`;
+    } else if (mode === 'medium') {
+      prompt += `
+- Your answer must be 1-2 short paragraphs.
+- NEVER use bullet points, numbered lists, headers, bold, markdown, or any formatting. Only plain flowing sentences.
+- NEVER include code.
+- Sound like a confident person speaking casually.`;
+    } else {
+      prompt += `
 - Your answer must be 2-3 SHORT paragraphs. Each paragraph is 2 sentences max. No exceptions, even for complex questions.
 - NEVER use bullet points, numbered lists, headers, bold, markdown, or any formatting. Only plain flowing sentences.
 - NEVER give each sub-topic its own paragraph. Blend everything together tightly.
 - NEVER include code.
 - Sound like a confident person speaking casually — use filler words like "so", "actually", "you know", "honestly" naturally. Do not sound like a textbook.
 - For simple questions (naming, listing, yes/no), answer in 1-2 sentences only.`;
+    }
 
     if (documentContext) {
       prompt += `\n\nSpeak as the person described below. Use "I", "me", "my". Stay in character.\n\n${documentContext}`;
@@ -397,6 +415,12 @@ ABSOLUTE RULES:
   }
 
   async executeRequest(messages, isVision = false) {
+    const sessionManager = require('../managers/session.manager');
+    const mode = sessionManager.getResponseMode();
+    let maxTokens = 450;
+    if (mode === 'simple') maxTokens = 150;
+    if (mode === 'medium') maxTokens = 250;
+    
     // Fast model rotation pool — each model has independent rate limits on Groq free tier
     const modelPool = isVision
       ? ['llama-3.2-11b-vision-preview']
@@ -405,7 +429,8 @@ ABSOLUTE RULES:
     const payload = {
       messages,
       model: modelPool[0],
-      ...this.getGenerationConfig()
+      ...this.getGenerationConfig(),
+      max_tokens: maxTokens
     };
 
     let lastError = null;
@@ -420,24 +445,24 @@ ABSOLUTE RULES:
     // Try each model instantly on rate limit — zero delay rotation
     for (let i = 0; i < modelPool.length; i++) {
       payload.model = modelPool[i];
-      
+
       // Try each API key for the current model
       for (let j = 0; j < this.clients.length; j++) {
         const clientIndex = (requestStartingKeyIndex + j) % this.clients.length;
         const currentClient = this.clients[clientIndex];
-        
+
         try {
           const response = await currentClient.chat.completions.create(payload);
-          
+
           if (!response.choices || response.choices.length === 0) {
             throw new Error('Empty response from Groq API');
           }
-          
+
           return response.choices[0].message.content;
         } catch (error) {
           lastError = error;
           const errorInfo = this.analyzeError(error);
-          
+
           logger.warn(`Groq model ${payload.model} failed on API key index ${clientIndex}`, {
             error: error.message,
             errorType: errorInfo.type,
@@ -447,23 +472,23 @@ ABSOLUTE RULES:
 
           // If rate limited, instantly try next key for the SAME model
           if (errorInfo.type === 'RATE_LIMIT_ERROR') {
-            continue; 
+            continue;
           }
-          
+
           // If auth error (e.g. invalid key), instantly try next key
           if (errorInfo.type === 'AUTH_ERROR') {
             continue;
           }
-          
+
           // For other errors (like model decommissioned), break inner loop to move to next model
-          break; 
+          break;
         }
       }
-      
+
       // If we got here, all keys for this model failed. 
       if (lastError) {
         const errorInfo = this.analyzeError(lastError);
-        
+
         // If rate limited across all keys, switch model instantly
         if (errorInfo.type === 'RATE_LIMIT_ERROR' && i < modelPool.length - 1) {
           logger.info(`Rate limited across all keys for ${payload.model}, instantly switching to ${modelPool[i + 1]}`);
@@ -482,16 +507,16 @@ ABSOLUTE RULES:
         }
       }
     }
-    
+
     throw new Error(`All Groq models and keys exhausted. Last error: ${lastError ? lastError.message : 'Unknown'}`);
   }
 
   async performPreflightCheck() {
     try {
-      await this.testNetworkConnection({ 
-        host: 'api.groq.com', 
-        port: 443, 
-        name: 'Groq API Endpoint' 
+      await this.testNetworkConnection({
+        host: 'api.groq.com',
+        port: 443,
+        name: 'Groq API Endpoint'
       });
     } catch (error) {
       logger.warn('Preflight check failed', { error: error.message });
@@ -500,19 +525,19 @@ ABSOLUTE RULES:
 
   analyzeError(error) {
     const errorMessage = error.message.toLowerCase();
-    
+
     if (errorMessage.includes('fetch failed') || errorMessage.includes('network error') || errorMessage.includes('timeout')) {
       return { type: 'NETWORK_ERROR', isNetworkError: true };
     }
-    
+
     if (errorMessage.includes('unauthorized') || errorMessage.includes('invalid api key')) {
       return { type: 'AUTH_ERROR', isNetworkError: false };
     }
-    
+
     if (errorMessage.includes('rate limit') || errorMessage.includes('too many requests')) {
       return { type: 'RATE_LIMIT_ERROR', isNetworkError: false };
     }
-    
+
     return { type: 'UNKNOWN_ERROR', isNetworkError: false };
   }
 
@@ -542,7 +567,7 @@ ABSOLUTE RULES:
     return new Promise((resolve, reject) => {
       const net = require('net');
       const socket = new net.Socket();
-      
+
       const timeout = setTimeout(() => {
         socket.destroy();
         reject(new Error(`Connection timeout to ${host}:${port}`));
@@ -572,7 +597,7 @@ ABSOLUTE RULES:
     };
 
     const response = fallbackResponses[activeSkill] || fallbackResponses.default;
-    
+
     return {
       response,
       metadata: {
@@ -612,15 +637,15 @@ ABSOLUTE RULES:
         max_tokens: 10
       });
       const latency = Date.now() - startTime;
-      
-      return { 
-        success: true, 
+
+      return {
+        success: true,
         response: response.choices[0].message.content,
         latency
       };
     } catch (error) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: error.message
       };
     }

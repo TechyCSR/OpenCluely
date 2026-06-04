@@ -655,6 +655,11 @@ class ApplicationController {
       windowManager.broadcastToAllWindows("skill-updated", { skill });
     });
 
+    // Handle response mode change
+    ipcMain.on("set-response-mode", (event, mode) => {
+      sessionManager.setResponseMode(mode);
+    });
+
     // Handle quit app (alternative method)
     ipcMain.on("quit-app", () => {
       logger.info("Quit app requested via IPC (on method)");

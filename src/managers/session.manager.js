@@ -9,6 +9,7 @@ class SessionManager {
     this.maxSize = config.get('session.maxMemorySize');
     this.compressionThreshold = config.get('session.compressionThreshold');
     this.currentSkill = 'dsa'; // Default skill is DSA
+    this.responseMode = 'complex'; // Default to complex
     this.isInitialized = false;
     
     this.initializeWithSkillPrompts();
@@ -77,6 +78,20 @@ class SessionManager {
       from: previousSkill, 
       to: skill 
     });
+  }
+
+  /**
+   * Set the AI response mode length
+   */
+  setResponseMode(mode) {
+    if (['simple', 'medium', 'complex'].includes(mode)) {
+      this.responseMode = mode;
+      logger.info(`Response mode changed to ${mode}`);
+    }
+  }
+
+  getResponseMode() {
+    return this.responseMode || 'complex';
   }
 
   /**

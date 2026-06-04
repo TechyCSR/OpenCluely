@@ -115,7 +115,8 @@ contextBridge.exposeInMainWorld('api', {
             'toggle-recording',
             'toggle-interaction-mode',
             'update-skill',
-            'window-loaded'
+            'window-loaded',
+            'set-response-mode'
         ];
         if (validChannels.includes(channel)) {
             ipcRenderer.send(channel, data);
