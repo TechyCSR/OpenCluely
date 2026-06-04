@@ -28,12 +28,12 @@ function initialize(config) {
       process.send({ type: 'init-result', available: false, reason: 'Missing GROQ_API_KEY' });
       return;
     }
-    
+
     groqClients = config.groqKeys.map(key => new Groq({ apiKey: key }));
-    
+
     // Auto-select Key 2 (index 1) for voice if available, else fallback to index 0
     currentClientIndex = groqClients.length > 1 ? 1 : 0;
-    
+
     available = true;
     log('info', 'Groq SDK initialized in worker', { keyCount: groqClients.length, startingIndex: currentClientIndex });
     process.send({ type: 'init-result', available: true });
@@ -46,23 +46,23 @@ function initialize(config) {
 
 function cleanup() {
   if (recordingProcess) {
-    try { recordingProcess.kill('SIGKILL'); } catch (_) {}
+    try { recordingProcess.kill('SIGKILL'); } catch (_) { }
     recordingProcess = null;
   }
 }
 
 async function runRecordingLoop() {
   if (!isRecording) return;
-  
+
   const tempWavPath = path.join(__dirname, 'temp_audio.wav');
   const isWindows = process.platform === 'win32';
   const cmd = 'sox';
   let args = [];
-  
+
   // sox format arguments: raw PCM, 16kHz, 16-bit, mono
   // we wait for 0.1s of sound > 1%, then stop after 0.9s of silence < 1%
-  const formatArgs = ['-b', '16', '-e', 'signed', '-c', '1', '-r', '16000', tempWavPath, 'silence', '1', '0.1', '1%', '1', '0.9', '1%'];
-  
+  const formatArgs = ['-b', '16', '-e', 'signed', '-c', '1', '-r', '16000', tempWavPath, 'silence', '1', '0.1', '1%', '1', '0.99', '1%'];
+
   if (isWindows) {
     args = ['-t', 'waveaudio', 'default', '-q', ...formatArgs];
   } else {
@@ -81,7 +81,7 @@ async function runRecordingLoop() {
 
   recordingProcess.on('close', async (code) => {
     recordingProcess = null;
-    
+
     if (!isRecording) return;
 
     if (code !== 0 && code !== null) {
@@ -94,7 +94,7 @@ async function runRecordingLoop() {
         const stats = fs.statSync(tempWavPath);
         if (stats.size > 2000) { // Check if it's not basically empty (WAV headers are ~44 bytes)
           log('debug', 'Uploading audio to Groq Whisper...', { size: stats.size });
-          
+
           process.send({ type: 'interim-transcription', text: 'Transcribing...' });
 
           const transcription = await groqClients[currentClientIndex].audio.transcriptions.create({
@@ -105,21 +105,21 @@ async function runRecordingLoop() {
           });
 
           if (transcription && transcription.trim().length > 0) {
-             const dur = Date.now() - sessionStartTime;
-             log('info', 'Final transcription', { text: transcription.trim(), sessionDuration: `${dur}ms` });
-             process.send({ type: 'transcription', text: transcription.trim() });
+            const dur = Date.now() - sessionStartTime;
+            log('info', 'Final transcription', { text: transcription.trim(), sessionDuration: `${dur}ms` });
+            process.send({ type: 'transcription', text: transcription.trim() });
           }
         }
       }
     } catch (err) {
       log('error', 'Groq transcription failed', { error: err.message });
-      
+
       // If we hit a rate limit, rotate to the next key automatically
       if (err.status === 429 || (err.message && err.message.includes('429'))) {
         currentClientIndex = (currentClientIndex + 1) % groqClients.length;
         log('warn', `Rate limit hit! Rotating to API Key Index ${currentClientIndex}`);
       }
-      
+
       // We don't stop recording on API error, we just keep looping unless it's fatal
     }
 
@@ -144,7 +144,7 @@ function startRecording() {
   retryCount = 0;
   process.send({ type: 'recording-started' });
   process.send({ type: 'session-started', sessionId: 'groq-' + Date.now() });
-  
+
   cleanup();
   runRecordingLoop();
 }
@@ -153,10 +153,10 @@ function stopRecording() {
   if (!isRecording) return;
   isRecording = false;
   cleanup();
-  
+
   const dur = sessionStartTime ? Date.now() - sessionStartTime : 0;
   log('info', 'Stopping speech recognition', { sessionDuration: `${dur}ms` });
-  
+
   process.send({ type: 'recording-stopped' });
   process.send({ type: 'session-stopped', sessionId: 'groq-' + Date.now() });
 }

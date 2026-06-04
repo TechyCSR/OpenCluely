@@ -110,7 +110,7 @@
         /* Removed max-height restriction */
       }
       .message {
-        margin-bottom: 16px;
+        margin-bottom: 6px;
         padding: 12px 16px;
         background: rgba(255, 255, 255, 0.08);
         border-radius: 8px;
@@ -867,12 +867,16 @@
         messageDiv.appendChild(textDiv);
 
         chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        // Only auto-scroll for non-assistant messages; assistant scroll is handled by renderAssistantResponse
+        if (type !== 'assistant') {
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
 
         if (!skipPersist) {
           chatHistory.push({ kind: 'message', type, text });
           saveHistory();
         }
+        return messageDiv;
       }
 
       // Markdown formatter using markdown.js library
@@ -1109,7 +1113,7 @@
         messageDiv.appendChild(timeDiv);
         messageDiv.appendChild(textDiv);
         chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        // Don't auto-scroll; renderAssistantResponse handles scroll to top of first element
 
         try { if (window.Prism && Prism.highlightElement) { Prism.highlightElement(codeEl); } } catch (_) {}
 
@@ -1117,6 +1121,7 @@
           chatHistory.push({ kind: 'snippet', language: lang, code: code || '' });
           saveHistory();
         }
+        return messageDiv;
       }
       function renderAssistantResponse(response) {
         if (!response || typeof response !== 'string') return;
@@ -1132,12 +1137,18 @@
 
         const blocks = extractCodeBlocks(response);
         const textOnly = stripCodeBlocks(response, blocks);
-        // Add text response first (if any)
+
+        // Add text response only - code snippets are not shown in the chat
         if (textOnly && textOnly.trim().length) {
-          addMessage(textOnly, 'assistant');
+          firstElement = addMessage(textOnly, 'assistant');
         }
-        // Add each code snippet separately
-        blocks.forEach(b => addCodeSnippet(b.language, b.code));
+
+        // After all content is rendered, scroll to the FIRST element of the response
+        if (firstElement) {
+          setTimeout(() => {
+            firstElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 80);
+        }
       }
 
       // Basic IPC Event Listeners - simplified

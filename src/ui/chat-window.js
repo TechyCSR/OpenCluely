@@ -325,7 +325,7 @@ class ChatWindowUI {
         }
     }
 
-    addMessage(text, type = 'user') {        
+    addMessage(text, type = 'user', autoScroll = true) {        
         if (!this.elements.chatMessages) {
             console.error('❌ Chat messages element not found!');
             return;
@@ -353,8 +353,17 @@ class ChatWindowUI {
         
         this.elements.chatMessages.appendChild(messageDiv);
         
-        // Auto-scroll to bottom
-        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+        if (autoScroll) {
+            // Scroll behavior
+            if (type === 'assistant') {
+                // For AI responses, scroll to the top of the new message so user can start reading immediately
+                messageDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                // For user messages and system messages, scroll to bottom
+                this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+            }
+        }
+        return messageDiv;
     }
 
     // Split AI response into plain text and code snippets and append to chat
@@ -362,10 +371,23 @@ class ChatWindowUI {
         if (!response || typeof response !== 'string') return;
         const blocks = this.extractCodeBlocks(response);
         const textOnly = this.stripCodeBlocks(response, blocks);
+        
+        let firstElement = null;
+        
         if (textOnly && textOnly.trim().length) {
-            this.addMessage(textOnly, 'assistant');
+            firstElement = this.addMessage(textOnly, 'assistant', false);
         }
-        blocks.forEach(b => this.addCodeSnippet(b.language, b.code));
+        
+        blocks.forEach(b => {
+            const el = this.addCodeSnippet(b.language, b.code);
+            if (!firstElement) firstElement = el;
+        });
+
+        if (firstElement) {
+            setTimeout(() => {
+                firstElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
     }
 
     extractCodeBlocks(text) {
@@ -402,7 +424,8 @@ class ChatWindowUI {
         messageDiv.appendChild(timeDiv);
         messageDiv.appendChild(textDiv);
         this.elements.chatMessages.appendChild(messageDiv);
-        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+        // Do not auto-scroll here to prevent jumping past the top of the assistant's response
+        return messageDiv;
     }
 
     escapeHtmlForSnippet(text) {

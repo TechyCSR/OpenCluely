@@ -47,7 +47,7 @@ class ConfigManager {
           fallbackEnabled: true,
           generation: {
             temperature: 0.7,
-            max_tokens: 150,
+            max_tokens: 300,
             top_p: 0.95
           }
         }
