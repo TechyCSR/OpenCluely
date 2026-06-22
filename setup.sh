@@ -47,7 +47,7 @@ Options:
 
 Environment variables:
   GEMINI_API_KEY          If provided, writes into .env
-  WHISPER_MODEL           Whisper model to configure (default: base)
+  WHISPER_MODEL           Whisper model to configure (default: turbo)
   WHISPER_LANGUAGE        Whisper language to configure (default: en)
   WHISPER_SEGMENT_MS      Segment size in ms (default: 4000)
 
@@ -214,6 +214,12 @@ setup_whisper_env() {
     return
   fi
 
+  # Skip whisper setup when only building (build distributions don't need local whisper)
+  if [[ "$DO_BUILD" -eq 1 && "$DO_RUN" -eq 0 ]]; then
+    echo "Skipping local Whisper setup (build-only mode)"
+    return
+  fi
+
   require_command "$PYTHON_BIN" "Python 3 is required for local Whisper setup."
 
   if [[ ! -d "$WHISPER_VENV_DIR" ]]; then
@@ -222,10 +228,38 @@ setup_whisper_env() {
   fi
 
   echo "Installing local Whisper into $WHISPER_VENV_DIR"
-  "$WHISPER_PIP_PATH" install --upgrade pip
-  "$WHISPER_PIP_PATH" install openai-whisper
+  "$WHISPER_PIP_PATH" install --upgrade pip || true
+  "$WHISPER_PIP_PATH" install openai-whisper || {
+    echo "WARNING: pip install openai-whisper failed. Whisper may be unavailable."
+    echo "Common causes: insufficient disk space (needs ~3-5 GB), missing Python headers, or network issues."
+  }
 
   mkdir -p "$WHISPER_MODEL_DIR"
+
+  # Verify the Whisper CLI actually exists before claiming it's configured
+  local whisper_found=0
+  if [[ -f "$WHISPER_COMMAND_PATH" ]]; then
+    echo "Whisper CLI found at: $WHISPER_COMMAND_PATH"
+    whisper_found=1
+  else
+    # Fallback: try python -m whisper inside the venv
+    local venv_python
+    if [[ "$OS_NAME" == "windows" ]]; then
+      venv_python="${WHISPER_VENV_DIR}/Scripts/python.exe"
+    else
+      venv_python="${WHISPER_VENV_DIR}/bin/python"
+    fi
+    if [[ -f "$venv_python" ]] && "$venv_python" -m whisper --help >/dev/null 2>&1; then
+      echo "Whisper CLI not found as standalone script, but 'python -m whisper' works."
+      echo "Adjusting WHISPER_COMMAND to use venv Python module."
+      WHISPER_COMMAND_PATH="$venv_python"
+      whisper_found=1
+    else
+      echo "WARNING: Whisper CLI not found at $WHISPER_COMMAND_PATH"
+      echo "Speech recognition will be unavailable until Whisper is properly installed."
+      echo "You can skip this with: ./setup.sh --skip-whisper"
+    fi
+  fi
 
   upsert_env "SPEECH_PROVIDER" "whisper"
   upsert_env "AZURE_SPEECH_KEY" ""
@@ -236,8 +270,12 @@ setup_whisper_env() {
   upsert_env "WHISPER_LANGUAGE" "${WHISPER_LANGUAGE}"
   upsert_env "WHISPER_SEGMENT_MS" "${WHISPER_SEGMENT_MS}"
 
-  echo "Running Whisper smoke test"
-  npm run test-speech
+  if [[ "$whisper_found" -eq 1 ]]; then
+    echo "Running Whisper smoke test"
+    npm run test-speech
+  else
+    echo "Skipping Whisper smoke test (CLI not found)"
+  fi
 }
 
 build_app() {
