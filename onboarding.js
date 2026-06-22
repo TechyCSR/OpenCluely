@@ -2,7 +2,7 @@
 /**
  * Onboarding wizard controller.
  *
- * Drives the 4-step flow rendered in onboarding.html and persists
+ * Drives the 5-step flow rendered in onboarding.html and persists
  * everything via the electronAPI bridge exposed by preload.js:
  *
  *   1. Welcome
@@ -25,6 +25,7 @@
   const backBtn = $('#backBtn');
   const nextBtn = $('#nextBtn');
   const skipBtn = $('#skipBtn');
+  const nav = $('#wizard .nav'); // the centered nav container
 
   // ── State ─────────────────────────────────────────────────────────
   const state = {

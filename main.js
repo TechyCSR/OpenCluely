@@ -166,7 +166,11 @@ class ApplicationController {
       // Small delay to ensure desktop/space detection is accurate
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      await windowManager.initializeWindows();
+      // During first-run onboarding, defer showing the main overlay
+      // window until the wizard finishes (it needs API keys to function).
+      const status = this.firstRunManager.getStatus();
+      const isFirstRun = status.needsOnboarding;
+      await windowManager.initializeWindows({ showMainWindow: !isFirstRun });
       this.setupGlobalShortcuts();
 
       // Initialize default stealth mode with terminal icon
@@ -615,10 +619,13 @@ class ApplicationController {
       }
     });
 
-    ipcMain.handle("complete-first-run", () => {
+    ipcMain.handle("complete-first-run", async () => {
       try {
         this.firstRunManager.markCompleted();
         this.isFirstRun = false;
+        // Show the main overlay window now that onboarding is done
+        // and API keys are configured.
+        await windowManager.showMainWindow();
         return { success: true };
       } catch (e) {
         return { success: false, error: e.message };

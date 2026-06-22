@@ -100,14 +100,15 @@ class WindowManager {
     // ... existing initialization code ...
   }
 
-  async initializeWindows() {
+  async initializeWindows(options = {}) {
+    const { showMainWindow = true } = options;
     if (this.isInitialized || this.isInitializing) {
       logger.warn('Windows already initialized or initializing');
       return;
     }
 
     this.isInitializing = true;
-    logger.info('Initializing application windows');
+    logger.info('Initializing application windows', { showMainWindow });
     
     try {
       await this.createMainWindow();
@@ -122,6 +123,11 @@ class WindowManager {
       // Make windows interactive by default so they are not click-through
       this.setInteractive(true);
       
+      // Optionally show the main window (deferred during onboarding)
+      if (showMainWindow) {
+        await this.showMainWindow();
+      }
+      
       this.isInitialized = true;
       this.isInitializing = false;
       logger.info('All windows initialized successfully');
@@ -130,6 +136,43 @@ class WindowManager {
       logger.error('Failed to initialize windows', { error: error.message });
       throw error;
     }
+  }
+
+  async showMainWindow() {
+    const mainWindow = this.windows.get('main');
+    if (!mainWindow) return;
+    
+    // Immediate always-on-top enforcement for main window
+    if (process.platform === 'darwin') {
+      try {
+        mainWindow.setAlwaysOnTop(true, 'screen-saver', 2);
+      } catch (error) {
+        mainWindow.setAlwaysOnTop(true, 'floating', 2);
+      }
+    } else {
+      mainWindow.setAlwaysOnTop(true);
+    }
+    
+    // Wait for app to fully initialize and detect current desktop
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    this.showOnCurrentDesktop(mainWindow);
+    
+    // Additional enforcement after showing
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if (!mainWindow.isDestroyed()) {
+      if (process.platform === 'darwin') {
+        try {
+          mainWindow.setAlwaysOnTop(true, 'screen-saver', 2);
+        } catch (error) {
+          mainWindow.setAlwaysOnTop(true, 'floating', 2);
+        }
+      } else {
+        mainWindow.setAlwaysOnTop(true);
+      }
+    }
+    
+    this.isVisible = true;
+    logger.info('Main window displayed');
   }
 
   async createMainWindow() {
