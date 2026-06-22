@@ -85,12 +85,10 @@
           ]
         }
       ],
-      "icon": "assets/icons/app-icon.icns",
+      "icon": "assests/icons/app-icon.icns",
       "darkModeSupport": true,
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     },
     "win": {
       "target": [
@@ -109,7 +107,7 @@
           ]
         }
       ],
-      "icon": "assets/icons/app-icon.ico"
+      "icon": "assests/icons/app-icon.ico"
     },
     "linux": {
       "target": [

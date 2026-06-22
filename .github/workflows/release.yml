@@ -72,10 +72,12 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS code signing (optional)
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # Windows code signing (optional)
+          # Code signing is opt-in via repo secrets. When secrets are
+          # absent we explicitly blank the env vars so electron-builder
+          # doesn't try to resolve a non-existent certificate path.
+          CSC_LINK: ${{ secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD || '' }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK || '' }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run build:${{ matrix.script }}
 
