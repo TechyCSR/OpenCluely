@@ -130,26 +130,26 @@
         }
       ],
       "icon": "assets/icons/app-icon.png",
-      "category": "Utility",
-      "deb": {
-        "depends": [
-          "libgtk-3-0",
-          "libnotify4",
-          "libnss3",
-          "libxss1",
-          "libxtst6",
-          "xauth",
-          "libasound2t64",
-          "libgbm1",
-          "python3 (>= 3.10)",
-          "python3-venv",
-          "python3-pip",
-          "ffmpeg"
-        ],
-        "fpm": [
-          "--after-install=scripts/post-install-deb.sh"
-        ]
-      }
+      "category": "Utility"
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xauth",
+        "libasound2t64",
+        "libgbm1",
+        "python3 (>= 3.10)",
+        "python3-venv",
+        "python3-pip",
+        "ffmpeg"
+      ],
+      "fpm": [
+        "--after-install=scripts/post-install-deb.sh"
+      ]
     },
     "nsis": {
       "oneClick": false,

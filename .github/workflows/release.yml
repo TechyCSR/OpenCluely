@@ -22,6 +22,21 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            script: linux
+            artifact_glob: |
+              dist/*.AppImage
+              dist/*.deb
+          - os: windows-latest
+            script: win
+            artifact_glob: |
+              dist/*.exe
+          - os: macos-latest
+            script: mac
+            artifact_glob: |
+              dist/*.dmg
+              dist/*.zip
 
     steps:
       - name: Checkout
@@ -54,6 +69,7 @@ jobs:
         run: git config --system core.longpaths true
 
       - name: Build
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # macOS code signing (optional)
@@ -61,28 +77,17 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           # Windows code signing (optional)
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            npm run build:linux
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            npm run build:win
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            npm run build:mac
-          fi
+        run: npm run build:${{ matrix.script }}
 
       - name: List build output
+        if: always()
         run: ls -la dist || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: opencluely-${{ matrix.os }}
-          path: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.exe
-            dist/*.AppImage
-            dist/*.deb
+          path: ${{ matrix.artifact_glob }}
           if-no-files-found: warn
 
   release:
