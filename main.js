@@ -2,57 +2,27 @@ require("dotenv").config();
 
 const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
 
-// ── Kill lingering Electron processes from previous dev runs ──
-// On Linux, repeated `npm start` without clean shutdown leaks X11 connections,
-// eventually causing "Maximum number of clients reached". Clean up old
-// OpenCluely/Electron processes that share this working directory.
-try {
-  const { execSync } = require("child_process");
-  const cwd = process.cwd().replace(/\\/g, "/");
-
-  if (process.platform === "linux" || process.platform === "darwin") {
-    try {
-      // Find Electron processes whose cwd matches this project
-      const procs = execSync(
-        `lsof -d cwd +D "${cwd}" 2>/dev/null | grep -E 'electron|opencluely' | awk '{print $2}' | sort -u`,
-        { encoding: "utf8", timeout: 3000 }
-      );
-      const pids = procs.split("\n").map((s) => s.trim()).filter(Boolean);
-      const myPid = String(process.pid);
-      for (const pid of pids) {
-        if (pid !== myPid) {
-          try {
-            process.kill(Number(pid), "SIGTERM");
-          } catch (_) {
-            try {
-              process.kill(Number(pid), "SIGKILL");
-            } catch (_) {}
-          }
-        }
-      }
-      if (pids.length > 1) {
-        console.log(`[STARTUP] Cleaned ${pids.length - 1} lingering Electron process(es)`);
-      }
-    } catch (_) {
-      // lsof may not be available; fall through silently
-    }
-  }
-
-  // Cross-platform fallback: kill any electron processes that have this
-  // project's preload.js or main.js in their command line.
-  if (process.platform === "win32") {
-    try {
-      execSync(
-        `wmic process where "CommandLine like '%opencluely%' and Name='electron.exe'" delete 2>nul`,
-        { timeout: 3000 }
-      );
-    } catch (_) {}
-  }
-} catch (_) {
-  // Ignore cleanup errors — startup must not fail because of this
+// ── Linux GPU process crash workaround ──
+// On many Linux setups (Wayland, X11 without GPU drivers, Docker, headless,
+// or systems with broken Mesa/NVIDIA stacks), Chromium's GPU process crashes
+// on startup with:
+//   FATAL:gpu_data_manager_impl_private.cc(448)] GPU process isn't usable.
+// This kills the entire app and can leave orphan helper processes that
+// exhaust the X11 client limit, producing "Maximum number of clients reached".
+//
+// Disabling hardware acceleration and the GPU subprocess forces Chromium to
+// render via the CPU (SwiftShader). OpenCluely's UI is light enough that
+// this is imperceptible, and it eliminates the GPU crash entirely.
+if (process.platform === "linux") {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch("disable-gpu");
+  app.commandLine.appendSwitch("disable-gpu-compositing");
+  app.commandLine.appendSwitch("disable-software-rasterizer");
+  app.commandLine.appendSwitch("disable-gpu-sandbox");
+  // On X11 only; harmless on Wayland. Prevents Chromium from spawning a
+  // compositor process that adds another X11 client.
+  app.commandLine.appendSwitch("in-process-gpu");
 }
-const logger = require("./src/core/logger").createServiceLogger("MAIN");
-const config = require("./src/core/config");
 
 // Keep Chromium network noise out of the terminal; app-level logs still go through Winston.
 app.commandLine.appendSwitch("log-level", "3");
@@ -60,6 +30,9 @@ app.commandLine.appendSwitch("disable-background-networking");
 app.commandLine.appendSwitch("disable-component-update");
 app.commandLine.appendSwitch("disable-domain-reliability");
 app.commandLine.appendSwitch("no-pings");
+
+const logger = require("./src/core/logger").createServiceLogger("MAIN");
+const config = require("./src/core/config");
 
 // Services
 // Screen capture (image-based)
