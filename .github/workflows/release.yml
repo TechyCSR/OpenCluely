@@ -122,7 +122,26 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp -v {} release/ \;
+          # Pick only the primary installer per platform (max 2-3 per
+          # platform). This intentionally drops:
+          #   - Windows portable EXE (we ship the NSIS installer)
+          #   - macOS .zip (the DMG is the canonical macOS installer)
+          #   - .blockmap files (electron-updater diff metadata)
+          #   - latest-*.yml (electron-updater channel metadata)
+          #   - Source archives (GitHub auto-generates these from the tag)
+          #
+          # The order below is the order files appear in the release page.
+          find artifacts -type f -name 'OpenCluely-Setup-*.exe' \
+            -exec cp -v {} release/ \;
+          # macOS DMGs — electron-builder omits the arch suffix for the
+          # default (x64) arch, so we keep every OpenCluely-*.dmg.
+          find artifacts -type f -name 'OpenCluely-*.dmg' \
+            -exec cp -v {} release/ \;
+          find artifacts -type f -name 'opencluely_*_amd64.deb' \
+            -exec cp -v {} release/ \;
+          find artifacts -type f -name '*.AppImage' \
+            -exec cp -v {} release/ \;
+          echo "--- Files selected for release ---"
           ls -la release/
 
       - name: Generate SHA256 checksums
@@ -146,8 +165,7 @@ jobs:
 
             | Platform | File | Notes |
             |---|---|---|
-            | **Windows** | `*.exe` | NSIS installer — installs app + adds to Start Menu |
-            | **Windows** | `*-portable.exe` | Portable, no install required |
+            | **Windows** | `OpenCluely-Setup-*.exe` | NSIS installer — installs app + adds to Start Menu |
             | **macOS (Apple Silicon)** | `*-arm64.dmg` | M1/M2/M3 Macs |
             | **macOS (Intel)** | `*-x64.dmg` | Older Intel Macs |
             | **Linux** | `*.deb` | Debian/Ubuntu — auto-pulls system deps (Python, ffmpeg, GTK) |

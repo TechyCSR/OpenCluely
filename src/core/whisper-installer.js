@@ -87,14 +87,18 @@ class WhisperInstaller {
     // 1. Honor WHISPER_COMMAND env if user has it set already
     const fromEnv = (process.env.WHISPER_COMMAND || '').trim();
     if (fromEnv) {
-      const probe = await this._probe(fromEnv);
-      if (probe.ok) {
-        return {
-          found: true,
-          command: fromEnv,
-          version: probe.version,
-          source: 'env',
-        };
+      const parsed = this._parseCommandString(fromEnv);
+      if (parsed && parsed.length > 0) {
+        // eslint-disable-next-line no-await-in-loop
+        const probe = await this._probe(parsed);
+        if (probe.ok) {
+          return {
+            found: true,
+            command: fromEnv,
+            version: probe.version,
+            source: 'env',
+          };
+        }
       }
     }
 
@@ -106,7 +110,9 @@ class WhisperInstaller {
       if (probe.ok) {
         return {
           found: true,
-          command: candidate,
+          // Join for display in the wizard UI; the array is preserved
+          // separately if we ever need to re-execute.
+          command: candidate.join(' '),
           version: probe.version,
           source: 'probe',
         };
@@ -206,41 +212,65 @@ class WhisperInstaller {
 
   _candidateCommands() {
     if (this.platform === 'win32') {
-      const localVenv = path.join(this.cwd, '.venv-whisper', 'Scripts', 'whisper.exe');
+      const venvWhisper = path.join(this.cwd, '.venv-whisper', 'Scripts', 'whisper.exe');
+      const venvPython = path.join(this.cwd, '.venv-whisper', 'Scripts', 'python.exe');
       return [
-        'whisper',
-        'whisper.exe',
-        localVenv,
-        path.join(this.cwd, '.venv-whisper', 'Scripts', 'python.exe') + ' -m whisper',
-        'python -m whisper',
-        'python3 -m whisper',
+        // Plain `whisper` on PATH — respects PATHEXT, picks up `whisper.exe`
+        ['whisper'],
+        ['whisper.exe'],
+        // Project-local venv direct path — works even when venv's Scripts
+        // folder isn't on PATH. path.join keeps backslashes intact.
+        [venvWhisper],
+        // Run whisper as a Python module through the venv's python.exe.
+        // Using array form (not string concat) so paths-with-spaces work.
+        [venvPython, '-m', 'whisper'],
+        // System Python via the launcher `py` (the canonical Windows
+        // invocation), then bare `python`, then `python3`.
+        ['py', '-m', 'whisper'],
+        ['python', '-m', 'whisper'],
+        ['python3', '-m', 'whisper'],
       ];
     }
     if (this.platform === 'darwin') {
       const homebrew = '/opt/homebrew/bin/whisper';
       const usrLocal = '/usr/local/bin/whisper';
+      const venvWhisper = path.join(this.cwd, '.venv-whisper', 'bin', 'whisper');
       return [
-        homebrew,
-        usrLocal,
-        'whisper',
-        'python3 -m whisper',
-        path.join(this.cwd, '.venv-whisper', 'bin', 'whisper'),
+        [homebrew],
+        [usrLocal],
+        ['whisper'],
+        ['python3', '-m', 'whisper'],
+        [venvWhisper],
       ];
     }
     const localVenvBin = path.join(this.cwd, '.venv-whisper', 'bin', 'whisper');
     return [
-      'whisper',
-      '/usr/local/bin/whisper',
-      '/usr/bin/whisper',
-      localVenvBin,
-      'python3 -m whisper',
+      ['whisper'],
+      ['/usr/local/bin/whisper'],
+      ['/usr/bin/whisper'],
+      [localVenvBin],
+      ['python3', '-m', 'whisper'],
     ];
   }
 
-  async _probe(command) {
-    const parts = command.match(/(?:[^\s"]+|"[^"]*")+/g) || [command];
-    const cmd = parts[0].replace(/^"|"$/g, '');
-    const args = [...parts.slice(1).map((a) => a.replace(/^"|"$/g, '')), '--help'];
+  /**
+   * Parse a user-supplied command string (e.g. from WHISPER_COMMAND env)
+   * into a `[cmd, ...args]` tuple. Respects double-quoted segments so
+   * paths-with-spaces survive intact.
+   */
+  _parseCommandString(cmdString) {
+    if (!cmdString) return null;
+    const trimmed = String(cmdString).trim();
+    if (!trimmed) return null;
+    const parts = trimmed.match(/(?:[^\s"]+|"[^"]*")+/g) || [trimmed];
+    return parts.map((p) => p.replace(/^"|"$/g, ''));
+  }
+
+  async _probe(candidate) {
+    // Candidate is now always `[cmd, ...args]`. We append `--help` to
+    // confirm the binary actually runs without surfacing a usage error.
+    const cmd = candidate[0];
+    const args = [...candidate.slice(1), '--help'];
     const r = await this.runExec(cmd, args);
     if (!r.ok) return { ok: false };
     const version = this._extractVersion(r.stdout + r.stderr);
@@ -281,8 +311,11 @@ class WhisperInstaller {
   }
 
   _detectPython() {
+    // On Windows, `py` (the Python Launcher) is almost always on PATH
+    // when Python is installed — `python` and `python3` are optional.
+    // On macOS/Linux, prefer `python3` since `python` may point at Py2.
     const candidates = this.platform === 'win32'
-      ? ['python', 'py', 'python3']
+      ? ['py', 'python', 'python3']
       : ['python3', 'python'];
     // Sync probe — just check existence. We don't have an async probe
     // here without breaking the install flow; fall back to first candidate.
