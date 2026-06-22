@@ -13,9 +13,15 @@ class WindowManager {
     this.screenWatcher = null;
     this.desktopWatcher = null;
     this.lastActiveSpace = null;
-    this.screenSharingWatcher = null;
+    this.screenCaptureAvailabilityWatcher = null;
     this.isScreenBeingShared = false;
     this.wasVisibleBeforeSharing = false;
+    this.screenCaptureStatus = {
+      available: null,
+      lastError: null,
+      lastCheckedAt: null
+    };
+    this.isCheckingScreenCaptureStatus = false;
     this.isInitialized = false;
     this.isInitializing = false;
     this.isRecording = false;
@@ -94,7 +100,7 @@ class WindowManager {
       
       this.setupWindowEventHandlers();
       this.setupScreenTracking();
-      this.setupScreenSharingDetection();
+      this.setupScreenCaptureAvailabilityWatcher();
 
       // Make windows interactive by default so they are not click-through
       this.setInteractive(true);
@@ -812,39 +818,70 @@ class WindowManager {
     });
   }
 
-  setupScreenSharingDetection() {
+  setupScreenCaptureAvailabilityWatcher() {
     // Avoid screencast portal errors on Linux/Wayland by disabling periodic detection
     if (process.platform === 'linux') {
-      logger.info('Skipping screen sharing detection on Linux to avoid portal screencast errors');
+      logger.info('Skipping screen capture availability watcher on Linux to avoid portal screencast errors');
       return;
     }
 
-    // Reduced frequency to prevent performance issues
-    this.screenSharingWatcher = setInterval(async () => {
-      await this.checkScreenSharingStatus();
+    if (this.screenCaptureAvailabilityWatcher) {
+      clearInterval(this.screenCaptureAvailabilityWatcher);
+    }
+
+    // This is only a capture availability probe. desktopCapturer.getSources()
+    // cannot tell whether another app is currently sharing the screen.
+    this.screenCaptureAvailabilityWatcher = setInterval(async () => {
+      await this.checkScreenCaptureAvailability();
     }, 5000); // Check every 5 seconds instead of 1
 
-    logger.info('Screen sharing detection initialized');
+    logger.info('Screen capture availability watcher initialized');
   }
 
-  async checkScreenSharingStatus() {
+  async checkScreenCaptureAvailability() {
+    if (this.isCheckingScreenCaptureStatus) {
+      logger.debug('Skipping overlapping screen capture availability check');
+      return;
+    }
+
+    this.isCheckingScreenCaptureStatus = true;
+    const previousAvailability = this.screenCaptureStatus.available;
+    const checkedAt = new Date().toISOString();
+
     try {
-      const sources = await desktopCapturer.getSources({
+      await desktopCapturer.getSources({
         types: ['screen', 'window'],
         thumbnailSize: { width: 1, height: 1 }
       });
 
-      const wasSharing = this.isScreenBeingShared;
-      
-      if (wasSharing !== this.isScreenBeingShared) {
-        if (this.isScreenBeingShared) {
-          this.handleScreenSharingStarted();
-        } else {
-          this.handleScreenSharingStopped();
-        }
+      this.screenCaptureStatus = {
+        available: true,
+        lastError: null,
+        lastCheckedAt: checkedAt
+      };
+
+      if (previousAvailability === false) {
+        logger.info('Screen capture enumeration recovered');
       }
     } catch (error) {
-      logger.debug('Screen sharing detection error', { error: error.message });
+      this.screenCaptureStatus = {
+        available: false,
+        lastError: error.message,
+        lastCheckedAt: checkedAt
+      };
+
+      const logContext = {
+        error: error.message,
+        isScreenBeingShared: this.isScreenBeingShared
+      };
+
+      if (previousAvailability === false) {
+        logger.debug('Screen capture enumeration still unavailable', logContext);
+      } else {
+        logger.warn('Screen capture enumeration unavailable; leaving screen sharing mode unchanged', logContext);
+      }
+    } finally {
+      this.isCheckingScreenCaptureStatus = false;
     }
   }
 
@@ -864,7 +901,7 @@ class WindowManager {
   }
 
   handleScreenSharingStarted() {
-    logger.info('Screen sharing detected - hiding windows');
+    logger.info('Screen sharing mode enabled - hiding windows');
     
     this.windows.forEach((window, type) => {
       if (!window.isDestroyed()) {
@@ -875,7 +912,7 @@ class WindowManager {
   }
 
   handleScreenSharingStopped() {
-    logger.info('Screen sharing ended - restoring windows');
+    logger.info('Screen sharing mode disabled - restoring windows');
     
     if (this.wasVisibleBeforeSharing) {
       this.moveWindowsToActiveScreen();
@@ -1333,7 +1370,8 @@ class WindowManager {
       activeWindow: this.activeWindow,
       isInteractive: this.isInteractive,
       isVisible: this.isVisible,
-      isScreenBeingShared: this.isScreenBeingShared
+      isScreenBeingShared: this.isScreenBeingShared,
+      screenCaptureStatus: { ...this.screenCaptureStatus }
     };
   }
 
@@ -1358,9 +1396,9 @@ class WindowManager {
       this.desktopWatcher = null;
     }
 
-    if (this.screenSharingWatcher) {
-      clearInterval(this.screenSharingWatcher);
-      this.screenSharingWatcher = null;
+    if (this.screenCaptureAvailabilityWatcher) {
+      clearInterval(this.screenCaptureAvailabilityWatcher);
+      this.screenCaptureAvailabilityWatcher = null;
     }
     
     logger.info('All windows destroyed');
