@@ -57,75 +57,6 @@ if (tiltCard) {
     });
 }
 
-// Interactive 3D Card Hover & Tilt for Credit Card styled Token Card
-const ccCard = document.getElementById('cc-card');
-if (ccCard) {
-    const wrap = ccCard.parentElement;
-    const glow = ccCard.querySelector('.cc-glow');
-    
-    wrap.addEventListener('mousemove', (e) => {
-        const rect = wrap.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        const px = x / rect.width;
-        const py = y / rect.height;
-        
-        const tiltX = (py - 0.5) * -25;
-        const tiltY = (px - 0.5) * 25;
-        
-        ccCard.style.transform = `rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
-        
-        // Dynamic glow movement
-        if (glow) {
-            glow.style.top = `${y - rect.height}px`;
-            glow.style.left = `${x - rect.width}px`;
-        }
-    });
-    
-    wrap.addEventListener('mouseleave', () => {
-        ccCard.style.transition = 'transform 0.6s ease-out';
-        ccCard.style.transform = 'rotateX(0deg) rotateY(0deg)';
-        if (glow) {
-            glow.style.top = '-50%';
-            glow.style.left = '-50%';
-        }
-    });
-    
-    wrap.addEventListener('mouseenter', () => {
-        ccCard.style.transition = 'transform 0.15s ease-out';
-    });
-}
-
-// Copy Coin Address to Clipboard
-const copyBtn = document.getElementById('btn-copy-address');
-if (copyBtn) {
-    copyBtn.addEventListener('click', async () => {
-        const address = copyBtn.getAttribute('data-address');
-        const copyText = copyBtn.querySelector('.copy-text');
-        const copyIcon = copyBtn.querySelector('i');
-        
-        try {
-            await navigator.clipboard.writeText(address);
-            
-            // Visual success feedback
-            copyText.textContent = 'Copied!';
-            copyIcon.className = 'fas fa-check';
-            copyBtn.style.background = '#00c853';
-            copyBtn.style.color = '#fff';
-            
-            setTimeout(() => {
-                copyText.textContent = 'Copy Address';
-                copyIcon.className = 'fas fa-copy';
-                copyBtn.style.background = '';
-                copyBtn.style.color = '';
-            }, 2000);
-        } catch (err) {
-            console.error('Failed to copy wallet address:', err);
-        }
-    });
-}
-
 // Scroll Entrance Animations (Fade-in-up)
 const observerOptions = {
     threshold: 0.1,
@@ -142,7 +73,7 @@ const observer = new IntersectionObserver((entries) => {
 }, observerOptions);
 
 // Select sections to animate
-document.querySelectorAll('.feature-card, .step-card, .video-wrapper, .cc-card').forEach(elem => {
+document.querySelectorAll('.feature-card, .step-card, .video-wrapper').forEach(elem => {
     elem.style.opacity = '0';
     elem.style.transform = 'translateY(30px)';
     elem.style.transition = 'opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1)';

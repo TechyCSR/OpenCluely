@@ -25,13 +25,6 @@
   <img src="https://img.shields.io/badge/Speech-Azure%20or%20Local%20Whisper-blueviolet?style=flat-square" alt="Speech" />
 </p>
 
-<p align="center">
-  <a href="https://bankr.bot/launches/0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3">
-    <img src="https://img.shields.io/badge/Support%20Dev-Trade%20My%20Coin%20on%20bankr.bot-00c853?style=for-the-badge&logo=bitcoin&logoColor=white" alt="Support Dev - Bankr.bot" />
-  </a>
-</p>
-<p align="center"><code>0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3</code></p>
-
 ---
 
 
@@ -383,15 +376,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 </b>
 
-##  Support the Developer
+##  Website
 
-If you've ever used my tech through open-source projects and found it valuable, now's a great time to show some support!
-
-I've launched a coin — go hit it and trade:
-
-**Coin Address:** `0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3`
-
-🔗 **[Trade on Bankr.bot](https://bankr.bot/launches/0x4bf765e9a82080bcf6004cbb1c6c8d43ae596ba3)**
+🌐 **[opencluely.techycsr.dev](https://opencluely.techycsr.dev)**
 
 ---
 
