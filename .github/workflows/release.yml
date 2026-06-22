@@ -51,6 +51,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # electron-builder reads `version` from package.json for artifact
+      # naming (e.g. OpenCluely-1.0.0-x64.dmg). When we build from a
+      # git tag (v1.0.7) the package.json still says 1.0.0 by default,
+      # so artifact names drift from the release tag. Sync them here.
+      # `npm pkg set` is cross-platform and doesn't touch git.
+      - name: Sync package.json version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Tag version: $VERSION"
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "Current package.json version: $CURRENT"
+          if [ "$VERSION" != "$CURRENT" ]; then
+            npm pkg set "version=$VERSION"
+            echo "Updated package.json to $VERSION"
+          else
+            echo "Version already matches tag"
+          fi
+
       # Linux: install LinuxBuild dependencies so electron-builder can produce .deb / .AppImage
       - name: Install Linux build dependencies
         if: matrix.os == 'ubuntu-latest'
