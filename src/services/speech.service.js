@@ -872,9 +872,25 @@ class SpeechService extends EventEmitter {
     }
 
     if (this.provider === 'whisper') {
+      if (!this.whisperCommand) {
+        return { success: false, message: 'Local Whisper CLI not found' };
+      }
+      // Actually probe the executable to confirm it works
+      const probe = spawnSync(
+        this.whisperCommand.command,
+        [...this.whisperCommand.baseArgs, '--help'],
+        { encoding: 'utf8', timeout: 10000 }
+      );
+      if (probe.error || probe.status !== 0) {
+        const err = probe.error ? probe.error.message : `exit code ${probe.status}`;
+        return {
+          success: false,
+          message: `Local Whisper CLI detected but probe failed: ${err}`
+        };
+      }
       return {
-        success: !!this.whisperCommand,
-        message: this.whisperCommand ? 'Local Whisper CLI detected' : 'Local Whisper CLI not found'
+        success: true,
+        message: `Local Whisper CLI works: ${this.whisperCommand.command}`
       };
     }
 
@@ -954,7 +970,7 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperModel() {
-    return this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'base';
+    return this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'turbo';
   }
 
   _getWhisperModelDir() {
@@ -984,28 +1000,101 @@ class SpeechService extends EventEmitter {
       candidates.push(...this._expandConfiguredWhisperCandidates(configured));
     }
 
-    candidates.push({ command: 'whisper', baseArgs: [] });
-    candidates.push({ command: 'whisper.exe', baseArgs: [] });
-    candidates.push({ command: 'py', baseArgs: ['-3', '-m', 'whisper'] });
-    candidates.push({ command: 'python3', baseArgs: ['-m', 'whisper'] });
-    candidates.push({ command: 'python', baseArgs: ['-m', 'whisper'] });
+    // Platform-aware fallback candidates (higher priority = tried first)
+    candidates.push({ command: 'whisper', baseArgs: [], source: 'system PATH' });
+    if (process.platform === 'win32') {
+      candidates.push({ command: 'whisper.exe', baseArgs: [], source: 'system PATH (exe)' });
+      candidates.push({ command: 'py', baseArgs: ['-3', '-m', 'whisper'], source: 'py launcher' });
+    }
+    candidates.push({ command: 'python3', baseArgs: ['-m', 'whisper'], source: 'python3 module' });
+    candidates.push({ command: 'python', baseArgs: ['-m', 'whisper'], source: 'python module' });
 
     for (const candidate of candidates) {
       if (!candidate || !candidate.command) {
         continue;
       }
 
-      const probe = spawnSync(candidate.command, [...candidate.baseArgs, '--help'], {
-        encoding: 'utf8',
-        timeout: 5000
-      });
-
-      const output = `${probe.stdout || ''}\n${probe.stderr || ''}`;
-      if (!probe.error && probe.status === 0 && !output.includes('No module named whisper')) {
-        return candidate;
+      const resolved = this._probeWhisperCandidate(candidate);
+      if (resolved) {
+        logger.info('Whisper command resolved', {
+          command: resolved.command,
+          baseArgs: resolved.baseArgs,
+          source: resolved.source || candidate.source || 'unknown'
+        });
+        return resolved;
       }
     }
 
+    logger.warn('No Whisper CLI candidate succeeded after probing all fallbacks');
+    return null;
+  }
+
+  /**
+   * Probe a single candidate: exists check → spawn --help → validate output.
+   * Returns the working candidate object, or null on failure.
+   */
+  _probeWhisperCandidate(candidate) {
+    const cmd = candidate.command;
+    const args = [...candidate.baseArgs, '--help'];
+
+    // Fast path: skip spawnSync if the file clearly doesn't exist
+    if (path.isAbsolute(cmd) || cmd.includes(path.sep) || cmd.includes('/')) {
+      try {
+        const normalized = path.normalize(cmd);
+        if (!fs.existsSync(normalized)) {
+          logger.debug('Whisper probe skipped: file does not exist', {
+            command: cmd,
+            normalized
+          });
+          return null;
+        }
+      } catch (e) {
+        // fs.existsSync can throw on invalid paths; treat as missing
+        return null;
+      }
+    }
+
+    let probe;
+    try {
+      probe = spawnSync(cmd, args, {
+        encoding: 'utf8',
+        timeout: 8000,
+        // On Windows, some relative paths with forward slashes need shell:true
+        shell: process.platform === 'win32' && (cmd.includes('/') || cmd.includes('\\'))
+      });
+    } catch (spawnErr) {
+      logger.debug('Whisper probe spawn error', {
+        command: cmd,
+        error: spawnErr.message
+      });
+      return null;
+    }
+
+    const output = `${probe.stdout || ''}\n${probe.stderr || ''}`;
+    const noModule = output.includes('No module named whisper');
+    const isHelpOutput = output.includes('usage:') || output.includes('whisper') || output.includes('options');
+
+    if (!probe.error && probe.status === 0 && !noModule) {
+      return candidate;
+    }
+
+    // Some whisper builds exit with non-zero on --help but still print usage
+    if (!probe.error && !noModule && isHelpOutput) {
+      logger.debug('Whisper probe accepted non-zero help output', {
+        command: cmd,
+        status: probe.status
+      });
+      return candidate;
+    }
+
+    logger.debug('Whisper probe failed', {
+      command: cmd,
+      status: probe.status,
+      error: probe.error ? probe.error.message : null,
+      noModule,
+      isHelpOutput,
+      outputPreview: output.substring(0, 200)
+    });
     return null;
   }
 
@@ -1015,19 +1104,52 @@ class SpeechService extends EventEmitter {
       return [];
     }
 
-    const candidates = [parsed];
-    const resolvedPath = path.resolve(parsed.command);
+    const candidates = [];
+    // Normalize forward slashes to platform separator before trying anything
+    const normalizedCmd = path.normalize(parsed.command);
 
-    if (resolvedPath !== parsed.command) {
-      candidates.push({ command: resolvedPath, baseArgs: parsed.baseArgs });
+    candidates.push({
+      command: normalizedCmd,
+      baseArgs: parsed.baseArgs,
+      source: 'configured (normalized)'
+    });
+
+    const resolvedPath = path.resolve(normalizedCmd);
+    if (resolvedPath !== normalizedCmd) {
+      candidates.push({
+        command: resolvedPath,
+        baseArgs: parsed.baseArgs,
+        source: 'configured (resolved)'
+      });
     }
 
     if (process.platform === 'win32') {
-      if (!/\.(exe|cmd|bat)$/i.test(parsed.command)) {
-        candidates.push({ command: `${parsed.command}.exe`, baseArgs: parsed.baseArgs });
-        candidates.push({ command: `${parsed.command}.cmd`, baseArgs: parsed.baseArgs });
-        candidates.push({ command: `${resolvedPath}.exe`, baseArgs: parsed.baseArgs });
-        candidates.push({ command: `${resolvedPath}.cmd`, baseArgs: parsed.baseArgs });
+      const base = normalizedCmd;
+      // Try .exe / .cmd / .bat variants when extension is missing
+      if (!/\.(exe|cmd|bat)$/i.test(base)) {
+        candidates.push({ command: `${base}.exe`, baseArgs: parsed.baseArgs, source: 'configured (.exe)' });
+        candidates.push({ command: `${base}.cmd`, baseArgs: parsed.baseArgs, source: 'configured (.cmd)' });
+        if (resolvedPath !== base) {
+          candidates.push({ command: `${resolvedPath}.exe`, baseArgs: parsed.baseArgs, source: 'configured (resolved .exe)' });
+        }
+      }
+      // Some Windows venvs create whisper-script.py alongside whisper.exe
+      const scriptPath = base + '-script.py';
+      candidates.push({ command: 'python', baseArgs: [scriptPath, ...parsed.baseArgs], source: 'configured (script.py)' });
+      // Try using the venv's own python with -m whisper
+      const venvPython = path.join(path.dirname(base), 'python.exe');
+      if (fs.existsSync(venvPython)) {
+        candidates.push({ command: venvPython, baseArgs: ['-m', 'whisper', ...parsed.baseArgs], source: 'configured (venv python -m whisper)' });
+      }
+    } else {
+      // On Unix, try the directory's python3 with -m whisper if the configured path looks like a venv entry point
+      const venvPython3 = path.join(path.dirname(normalizedCmd), 'python3');
+      if (fs.existsSync(venvPython3)) {
+        candidates.push({ command: venvPython3, baseArgs: ['-m', 'whisper', ...parsed.baseArgs], source: 'configured (venv python3 -m whisper)' });
+      }
+      const venvPython = path.join(path.dirname(normalizedCmd), 'python');
+      if (fs.existsSync(venvPython)) {
+        candidates.push({ command: venvPython, baseArgs: ['-m', 'whisper', ...parsed.baseArgs], source: 'configured (venv python -m whisper)' });
       }
     }
 
