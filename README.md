@@ -174,7 +174,7 @@ AZURE_SPEECH_REGION=your_region
 # Local Whisper option
 WHISPER_COMMAND=whisper
 WHISPER_MODEL_DIR=.whisper-models
-WHISPER_MODEL=base
+WHISPER_MODEL=turbo
 WHISPER_LANGUAGE=en
 WHISPER_SEGMENT_MS=4000
 ```
@@ -263,7 +263,7 @@ For the local Whisper path, `./setup.sh` now handles the full repo-local setup:
    SPEECH_PROVIDER=whisper
    WHISPER_COMMAND=whisper
    WHISPER_MODEL_DIR=.whisper-models
-   WHISPER_MODEL=base
+   WHISPER_MODEL=turbo
    WHISPER_LANGUAGE=en
    WHISPER_SEGMENT_MS=4000
    ```
