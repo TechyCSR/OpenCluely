@@ -56,7 +56,10 @@
       "!dist/**/*",
       "!*.md",
       "!.git/**/*",
-      "!.env*"
+      "!.env*",
+      "!.venv-whisper/**/*",
+      "!.whisper-models/**/*",
+      "!eng.traineddata"
     ],
     "extraFiles": [
       {
