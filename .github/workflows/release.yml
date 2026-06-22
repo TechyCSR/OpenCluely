@@ -79,10 +79,6 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run build:${{ matrix.script }}
 
-      - name: List build output
-        if: always()
-        run: ls -la dist || true
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

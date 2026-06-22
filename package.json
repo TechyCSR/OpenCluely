@@ -62,10 +62,7 @@
       "!eng.traineddata"
     ],
     "extraFiles": [
-      {
-        "from": "prompts",
-        "to": "prompts"
-      }
+      "prompts/**/*"
     ],
     "asarUnpack": [
       "node_modules/**/*"
