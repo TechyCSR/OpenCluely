@@ -40,7 +40,11 @@ class ConfigManager {
 
       llm: {
         gemini: {
-          model: 'gemini-2.5-flash',
+          // 'gemini-flash-latest' is Google's rolling alias that always points
+          // to the newest stable Flash model (currently Gemini 3 Flash).
+          // Swap to a pinned version (e.g. 'gemini-2.5-flash',
+          // 'gemini-3-flash-preview') if you need reproducible behaviour.
+          model: 'gemini-flash-latest',
           maxRetries: 3,
           timeout: 60000,
           fallbackEnabled: true,
