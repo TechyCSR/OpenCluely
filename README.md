@@ -174,34 +174,49 @@ WHISPER_SEGMENT_MS=4000
 
 **Note**: Speech recognition is completely optional. If no configured provider is available, the microphone button will be automatically hidden from all interfaces.
 
+## 📦 Download Pre-Built Installers
+
+Don't want to clone and build? Download a pre-built installer for your platform from the [**Releases page**](https://github.com/TechyCSR/OpenCluely/releases).
+
+| Platform | File | Notes |
+|---|---|---|
+| **Windows** | `OpenCluely-Setup-*.exe` | NSIS installer; auto-creates Start Menu shortcut |
+| **Windows** | `OpenCluely-*-portable.exe` | Portable, no install required |
+| **macOS (Apple Silicon)** | `OpenCluely-*-arm64.dmg` | M1 / M2 / M3 / M4 Macs |
+| **macOS (Intel)** | `OpenCluely-*-x64.dmg` | Older Intel Macs |
+| **Linux (Debian/Ubuntu)** | `OpenCluely-*.deb` | Auto-pulls system deps: Python 3.10+, ffmpeg, GTK, NSS |
+| **Linux (Universal)** | `OpenCluely-*.AppImage` | No install — `chmod +x` then run |
+
+Every release is built automatically by GitHub Actions across Windows, macOS, and Linux runners in parallel and uploaded with SHA-256 checksums.
+
 ## 🚀 Quick Start & Installation
 
 ### ⚡ Three Simple Steps (All Operating Systems)
 
-1. **Clone the repository**
+1. **Clone the repository** (skip if you downloaded a pre-built installer above)
    ```bash
    git clone https://github.com/TechyCSR/OpenCluely.git
    cd OpenCluely
    ```
 
-2. **Get your Gemini API key** (Required)
-   - Visit [Google AI Studio](https://aistudio.google.com/)
-   - Click "Create API Key" 
-   - Copy the key (you'll need it in step 3)
-
-3. **Run the setup script** (One command does everything!)
+2. **Run the setup script** (One command does everything!)
    ```bash
    ./setup.sh
    ```
-  
 
-**That's it!** The setup script will:
-- Install all dependencies automatically
-- Create your `.env` file from `env.example` if needed
-- Set up a local Whisper virtualenv in `.venv-whisper`
-- Configure `.env` to use local Whisper by default
-- Build the app (if needed)
-- Launch OpenCluely ready to use (if not works use npm install & then npm start)
+   The setup script will:
+   - Install all Node dependencies automatically
+   - Create your `.env` file from `env.example` if needed (with safe defaults)
+   - Set up a local Whisper virtualenv in `.venv-whisper` (optional, 3 GB)
+   - Configure `.env` to use local Whisper by default
+   - Launch OpenCluely
+
+3. **First-run onboarding**
+   - On first launch, if no Gemini API key is configured, the app **automatically opens the Settings window** and walks you through entering it.
+   - You can paste the key in the Settings UI, or edit `.env` directly — both work.
+   - Get a free key from [Google AI Studio](https://aistudio.google.com/).
+
+   **Note:** Setup will not hard-block if `GEMINI_API_KEY` is missing — the app launches either way and prompts you when needed.
 
 ### 💻 Platform-Specific Notes
 

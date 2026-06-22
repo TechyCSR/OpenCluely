@@ -140,21 +140,30 @@ ensure_gemini_key() {
     upsert_env "GEMINI_API_KEY" "$GEMINI_API_KEY"
   fi
 
-  if ! grep -q '^GEMINI_API_KEY=' .env 2>/dev/null || grep -q 'your_gemini_api_key_here' .env 2>/dev/null; then
-    echo ""
-    echo "=========================================="
-    echo " API KEY REQUIRED"
-    echo "=========================================="
-    echo ""
-    echo "Add your Gemini API key to .env and rerun this script if needed."
-    echo "Get a key from: https://aistudio.google.com/"
-    echo ""
-    read -r -p "Press Enter after you've updated .env..."
+  # GEMINI_API_KEY is now OPTIONAL during setup. The app's first-run
+  # flow will auto-open the Settings window if the key is missing and
+  # guide the user to enter it. Hard-blocking at install time makes
+  # CI / packaging / scripted installs harder for no real benefit.
+
+  if ! grep -q '^GEMINI_API_KEY=' .env 2>/dev/null; then
+    # Make sure the key exists in .env even if unset — the app reads
+    # this on first-run to know whether onboarding is needed.
+    echo "GEMINI_API_KEY=your_gemini_api_key_here" >> .env
   fi
 
   if grep -q 'your_gemini_api_key_here' .env 2>/dev/null; then
-    echo "Error: GEMINI_API_KEY is still not configured in .env"
-    exit 1
+    echo ""
+    echo "=========================================="
+    echo " No Gemini API key detected"
+    echo "=========================================="
+    echo ""
+    echo "The app will start, but AI features won't work until you set"
+    echo "GEMINI_API_KEY in .env (or via the Settings window on first launch)."
+    echo ""
+    echo "Get a free key from: https://aistudio.google.com/"
+    echo ""
+    echo "Setup will continue without blocking."
+    echo ""
   fi
 }
 

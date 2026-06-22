@@ -130,13 +130,35 @@
         }
       ],
       "icon": "assets/icons/app-icon.png",
-      "category": "Utility"
+      "category": "Utility",
+      "deb": {
+        "depends": [
+          "libgtk-3-0",
+          "libnotify4",
+          "libnss3",
+          "libxss1",
+          "libxtst6",
+          "xauth",
+          "libasound2t64",
+          "libgbm1",
+          "python3 (>= 3.10)",
+          "python3-venv",
+          "python3-pip",
+          "ffmpeg"
+        ],
+        "fpm": [
+          "--after-install=scripts/post-install-deb.sh"
+        ]
+      }
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "perMachine": false,
+      "include": "scripts/post-install-nsis.nsh",
+      "deleteAppDataOnUninstall": false
     },
     "dmg": {
       "title": "OpenCluely Interview Assistant",

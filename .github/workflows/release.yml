@@ -1,0 +1,152 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build only (skip release creation)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Linux: install LinuxBuild dependencies so electron-builder can produce .deb / .AppImage
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fakeroot dpkg rpm \
+            libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
+            xauth xvfb libasound2t64 ffmpeg \
+            python3 python3-venv python3-pip
+
+      # Windows: enable long paths for electron-builder
+      - name: Enable Windows long paths
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: git config --system core.longpaths true
+
+      - name: Build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing (optional)
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Windows code signing (optional)
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            npm run build:linux
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            npm run build:win
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            npm run build:mac
+          fi
+
+      - name: List build output
+        run: ls -la dist || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencluely-${{ matrix.os }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: warn
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp -v {} release/ \;
+          ls -la release/
+
+      - name: Generate SHA256 checksums
+        working-directory: release
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: OpenCluely ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            Choose the artifact for your platform:
+
+            | Platform | File | Notes |
+            |---|---|---|
+            | **Windows** | `*.exe` | NSIS installer — installs app + adds to Start Menu |
+            | **Windows** | `*-portable.exe` | Portable, no install required |
+            | **macOS (Apple Silicon)** | `*-arm64.dmg` | M1/M2/M3 Macs |
+            | **macOS (Intel)** | `*-x64.dmg` | Older Intel Macs |
+            | **Linux** | `*.deb` | Debian/Ubuntu — auto-pulls system deps (Python, ffmpeg, GTK) |
+            | **Linux** | `*.AppImage` | Universal — no install, just chmod +x and run |
+
+            ## First Run
+
+            On first launch, OpenCluely will create `.env` and open the **Settings** window for you to enter your **Google Gemini API key**. You can paste it in the Settings UI or edit `.env` directly.
+
+            ## Optional: Local Whisper
+
+            For offline speech recognition, install **Python 3.10+** and **ffmpeg** on your system, then run from the project folder:
+
+            ```bash
+            ./setup.sh --skip-install-system-deps
+            ```
+
+            See [README.md](https://github.com/TechyCSR/OpenCluely) for full setup details.
+
+            ## Checksums
+
+            See `SHA256SUMS.txt` attached to this release.
+          files: |
+            release/*
+          fail_on_unmatched_files: false

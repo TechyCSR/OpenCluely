@@ -33,6 +33,7 @@ app.commandLine.appendSwitch("no-pings");
 
 const logger = require("./src/core/logger").createServiceLogger("MAIN");
 const config = require("./src/core/config");
+const FirstRunManager = require("./src/core/first-run");
 
 // Services
 // Screen capture (image-based)
@@ -52,6 +53,14 @@ class ApplicationController {
   // Default to C++ so language is enforced from first run
   this.codingLanguage = "cpp";
     this.speechAvailable = false;
+
+    // First-run onboarding: detects missing .env / API key and triggers
+    // a settings-window prompt on first launch so users don't have to
+    // dig through docs to figure out they need a Gemini API key.
+    this.firstRunManager = new FirstRunManager({
+      logger: logger
+    });
+    this.isFirstRun = false;
 
     // Window configurations for reference
     this.windowConfigs = {
@@ -162,6 +171,36 @@ class ApplicationController {
 
       this.starting = false;
       this.isReady = true;
+
+      // First-run onboarding: ensure .env exists and prompt the user to
+      // set their Gemini API key via the Settings window if it isn't
+      // configured yet. Non-blocking — failure here just logs.
+      try {
+        this.firstRunManager.ensureEnv();
+        const status = this.firstRunManager.getStatus();
+        this.isFirstRun = status.needsOnboarding;
+        logger.info("First-run status", status);
+        if (this.isFirstRun) {
+          // Defer slightly so all windows finish loading before we pop
+          // the settings dialog on top of them.
+          setTimeout(() => {
+            try {
+              this.showSettings();
+              windowManager.broadcastToAllWindows("first-run", status);
+              logger.info("First-run onboarding: settings window opened");
+            } catch (e) {
+              logger.warn("Could not open first-run settings window", {
+                error: e.message
+              });
+            }
+          }, 800);
+        } else {
+          // Already configured — mark completed so we never nag again.
+          this.firstRunManager.markCompleted();
+        }
+      } catch (e) {
+        logger.warn("First-run check failed", { error: e.message });
+      }
 
       logger.info("Application initialized successfully", {
         windowCount: Object.keys(windowManager.getWindowStats().windows).length,
@@ -558,6 +597,27 @@ class ApplicationController {
 
     ipcMain.handle("get-settings", () => {
       return this.getSettings();
+    });
+
+    // First-run onboarding status — renderer can query to know whether
+    // to show the welcome banner / prompt for API-key entry.
+    ipcMain.handle("get-first-run-status", () => {
+      try {
+        return this.firstRunManager.getStatus();
+      } catch (e) {
+        logger.warn("Failed to get first-run status", { error: e.message });
+        return { needsOnboarding: false, error: e.message };
+      }
+    });
+
+    ipcMain.handle("complete-first-run", () => {
+      try {
+        this.firstRunManager.markCompleted();
+        this.isFirstRun = false;
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
     });
 
     ipcMain.handle("save-settings", (event, settings) => {
