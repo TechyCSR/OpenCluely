@@ -450,12 +450,15 @@ class ApplicationController {
       // Add chat message to session memory
       sessionManager.addUserInput(text, 'chat');
       logger.debug('Chat message added to session memory', { textLength: text.length });
-      
-      // Process typed message with LLM in the same way as transcribed text
+
+      // Typed messages need the full skill pipeline (with history context),
+      // NOT the voice "intelligent filter" pipeline. Voice keeps its filter
+      // behaviour; typed chat goes through processWithLLM so it gets real
+      // answers using the active skill prompt and recent conversation history.
       setTimeout(async () => {
         try {
           const sessionHistory = sessionManager.getOptimizedHistory();
-          await this.processTranscriptionWithLLM(text, sessionHistory);
+          await this.processWithLLM(text, sessionHistory);
         } catch (error) {
           logger.error("Failed to process chat message with LLM", {
             error: error.message,
@@ -463,7 +466,7 @@ class ApplicationController {
           });
         }
       }, 500);
-      
+
       return { success: true };
     });
 
@@ -958,6 +961,16 @@ class ApplicationController {
       // Send response to chat windows
       this.broadcastTranscriptionLLMResponse(llmResult);
 
+      // Also display in the overlay (LLM response) window so the answer
+      // appears in both the chat panel and the floating overlay, mirroring
+      // the behaviour of screenshot/image responses.
+      windowManager.showLLMResponse(llmResult.response, {
+        skill: this.activeSkill,
+        processingTime: llmResult.metadata.processingTime,
+        usedFallback: llmResult.metadata.usedFallback,
+        isTranscriptionResponse: true
+      });
+
       logger.info("Transcription LLM response completed", {
         responseLength: llmResult.response.length,
         skill: this.activeSkill,
@@ -976,7 +989,7 @@ class ApplicationController {
       // Try to provide a fallback response
       try {
         const fallbackResult = llmService.generateIntelligentFallbackResponse(text, this.activeSkill);
-        
+
         sessionManager.addModelResponse(fallbackResult.response, {
           skill: this.activeSkill,
           processingTime: fallbackResult.metadata.processingTime,
@@ -986,7 +999,13 @@ class ApplicationController {
         });
 
         this.broadcastTranscriptionLLMResponse(fallbackResult);
-        
+        // Mirror to overlay window for consistency
+        windowManager.showLLMResponse(fallbackResult.response, {
+          skill: this.activeSkill,
+          processingTime: fallbackResult.metadata.processingTime,
+          usedFallback: true,
+          isTranscriptionResponse: true
+        });
         logger.info("Used fallback response for transcription", {
           skill: this.activeSkill,
           fallbackResponse: fallbackResult.response
