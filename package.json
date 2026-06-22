@@ -61,12 +61,6 @@
       "!.whisper-models/**/*",
       "!eng.traineddata"
     ],
-    "extraFiles": [
-      "prompts/**/*"
-    ],
-    "asarUnpack": [
-      "node_modules/**/*"
-    ],
     "mac": {
       "category": "public.app-category.utilities",
       "target": [
@@ -85,7 +79,6 @@
           ]
         }
       ],
-      "icon": "assests/icons/app-icon.icns",
       "darkModeSupport": true,
       "hardenedRuntime": false,
       "gatekeeperAssess": false
@@ -107,7 +100,8 @@
           ]
         }
       ],
-      "icon": "assests/icons/app-icon.ico"
+      "sign": null,
+      "signtoolOptions": null
     },
     "linux": {
       "target": [
@@ -124,7 +118,7 @@
           ]
         }
       ],
-      "icon": "assets/icons/app-icon.png",
+      "icon": "assests/icons/app-icon.png",
       "category": "Utility"
     },
     "deb": {

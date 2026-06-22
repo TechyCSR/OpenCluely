@@ -72,12 +72,12 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Code signing is opt-in via repo secrets. When secrets are
-          # absent we explicitly blank the env vars so electron-builder
-          # doesn't try to resolve a non-existent certificate path.
-          CSC_LINK: ${{ secrets.CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD || '' }}
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK || '' }}
+          # Intentionally do NOT set CSC_LINK / WIN_CSC_LINK etc.
+          # electron-builder treats empty strings as "set but invalid"
+          # and tries to resolve them as certificate paths, producing
+          # "Env WIN_CSC_LINK is not correct" errors. Code signing is
+          # opt-in: add the secrets to the repo and wire them in here
+          # only when you have real certificates.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run build:${{ matrix.script }}
 
