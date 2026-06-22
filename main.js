@@ -1,6 +1,56 @@
 require("dotenv").config();
 
 const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
+
+// ── Kill lingering Electron processes from previous dev runs ──
+// On Linux, repeated `npm start` without clean shutdown leaks X11 connections,
+// eventually causing "Maximum number of clients reached". Clean up old
+// OpenCluely/Electron processes that share this working directory.
+try {
+  const { execSync } = require("child_process");
+  const cwd = process.cwd().replace(/\\/g, "/");
+
+  if (process.platform === "linux" || process.platform === "darwin") {
+    try {
+      // Find Electron processes whose cwd matches this project
+      const procs = execSync(
+        `lsof -d cwd +D "${cwd}" 2>/dev/null | grep -E 'electron|opencluely' | awk '{print $2}' | sort -u`,
+        { encoding: "utf8", timeout: 3000 }
+      );
+      const pids = procs.split("\n").map((s) => s.trim()).filter(Boolean);
+      const myPid = String(process.pid);
+      for (const pid of pids) {
+        if (pid !== myPid) {
+          try {
+            process.kill(Number(pid), "SIGTERM");
+          } catch (_) {
+            try {
+              process.kill(Number(pid), "SIGKILL");
+            } catch (_) {}
+          }
+        }
+      }
+      if (pids.length > 1) {
+        console.log(`[STARTUP] Cleaned ${pids.length - 1} lingering Electron process(es)`);
+      }
+    } catch (_) {
+      // lsof may not be available; fall through silently
+    }
+  }
+
+  // Cross-platform fallback: kill any electron processes that have this
+  // project's preload.js or main.js in their command line.
+  if (process.platform === "win32") {
+    try {
+      execSync(
+        `wmic process where "CommandLine like '%opencluely%' and Name='electron.exe'" delete 2>nul`,
+        { timeout: 3000 }
+      );
+    } catch (_) {}
+  }
+} catch (_) {
+  // Ignore cleanup errors — startup must not fail because of this
+}
 const logger = require("./src/core/logger").createServiceLogger("MAIN");
 const config = require("./src/core/config");
 
@@ -24,6 +74,7 @@ const sessionManager = require("./src/managers/session.manager");
 class ApplicationController {
   constructor() {
     this.isReady = false;
+    this.starting = false;
     this.activeSkill = "dsa";
   // Default to C++ so language is enforced from first run
   this.codingLanguage = "cpp";
@@ -105,6 +156,12 @@ class ApplicationController {
   }
 
   async onAppReady() {
+    if (this.starting || this.isReady) {
+      logger.debug("onAppReady skipped: already starting or ready");
+      return;
+    }
+    this.starting = true;
+
     // Force stealth mode IMMEDIATELY when app is ready
     app.setName("Terminal ");
     process.title = "Terminal ";
@@ -130,6 +187,7 @@ class ApplicationController {
       // Initialize default stealth mode with terminal icon
       this.updateAppIcon("terminal");
 
+      this.starting = false;
       this.isReady = true;
 
       logger.info("Application initialized successfully", {
@@ -139,6 +197,7 @@ class ApplicationController {
 
       sessionManager.addEvent("Application started");
     } catch (error) {
+      this.starting = false;
       logger.error("Application initialization failed", {
         error: error.message,
       });
@@ -1040,9 +1099,9 @@ class ApplicationController {
   }
 
   onActivate() {
-    if (!this.isReady) {
+    if (!this.isReady && !this.starting) {
       this.onAppReady();
-    } else {
+    } else if (this.isReady) {
       // When app is activated, ensure windows appear on current desktop
       const mainWindow = windowManager.getWindow("main");
       if (mainWindow && mainWindow.isVisible()) {
