@@ -129,7 +129,7 @@ upsert_env() {
   local value="$2"
 
   if grep -q "^${key}=" .env 2>/dev/null; then
-    perl -0pi -e "s/^${key}=.*\$/${key}=${value}/m" .env
+    perl -0pi -e "s|^${key}=.*\$|${key}=${value}|m" .env
   else
     printf "%s=%s\n" "$key" "$value" >> .env
   fi
