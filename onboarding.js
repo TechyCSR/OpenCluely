@@ -64,6 +64,11 @@
     screens.forEach((s) => {
       s.classList.toggle('active', s.dataset.screen === name);
     });
+    // Welcome screen uses an inline hero CTA — hide the regular nav row.
+    const wizardEl = document.getElementById('wizard');
+    if (wizardEl) {
+      wizardEl.classList.toggle('welcome-active', name === 'welcome');
+    }
     refreshStepper();
     backBtn.style.visibility = state.step === 0 ? 'hidden' : 'visible';
     // The primary action label changes by step
@@ -392,6 +397,15 @@
   $('#skipStarBtn').addEventListener('click', () => {
     // No-op — just visual closure
   });
+
+  // ── Wire up: Hero CTA (welcome screen) ────────────────────────────
+  // The big inline "Get Started" button on the welcome screen reuses
+  // the existing nav-button handler so all validation, persistence,
+  // and navigation logic stays in one place.
+  const heroCtaBtn = $('#heroCtaBtn');
+  if (heroCtaBtn) {
+    heroCtaBtn.addEventListener('click', () => nextBtn.click());
+  }
 
   // ── Wire up: nav buttons ──────────────────────────────────────────
   nextBtn.addEventListener('click', async () => {

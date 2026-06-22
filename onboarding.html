@@ -206,6 +206,43 @@
             color: var(--accent);
         }
 
+        /* ── Hero CTA (welcome screen only) ── */
+        .hero-cta {
+            margin-top: 36px;
+            padding: 16px 44px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 14px;
+            min-width: 240px;
+            justify-content: center;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+        .hero-cta:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+        }
+        @media (prefers-color-scheme: light) {
+            .hero-cta {
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            }
+            .hero-cta:hover:not(:disabled) {
+                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+            }
+        }
+        @media (max-width: 520px) {
+            .hero-cta {
+                margin-top: 28px;
+                padding: 14px 32px;
+                font-size: 14px;
+                min-width: 200px;
+            }
+        }
+
+        /* Hide regular nav on the welcome screen — the hero CTA replaces it */
+        .wizard.welcome-active .nav {
+            visibility: hidden;
+        }
+
         /* ── Form controls ── */
         .field {
             margin-bottom: 20px;
@@ -695,6 +732,9 @@
                         <div class="feature-pill"><i class="fas fa-microphone"></i> Voice input</div>
                         <div class="feature-pill"><i class="fas fa-shield-halved"></i> Local &amp; private</div>
                     </div>
+                    <button class="btn primary hero-cta" id="heroCtaBtn" type="button">
+                        Get Started <i class="fas fa-arrow-right"></i>
+                    </button>
                 </div>
             </section>
 
