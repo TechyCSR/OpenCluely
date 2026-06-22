@@ -100,8 +100,7 @@
           ]
         }
       ],
-      "sign": null,
-      "signtoolOptions": null
+      "sign": null
     },
     "linux": {
       "target": [
