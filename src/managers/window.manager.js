@@ -73,6 +73,23 @@ class WindowManager {
         alwaysOnTop: true,
         visibleOnAllWorkspaces: true,
         fullscreenable: false
+      },
+      onboarding: {
+        width: 560,
+        height: 680,
+        file: 'onboarding.html',
+        title: 'Welcome to OpenCluely',
+        frame: false,
+        titleBarStyle: 'hidden',
+        transparent: true,
+        skipTaskbar: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        closable: true,
+        alwaysOnTop: true,
+        visibleOnAllWorkspaces: true,
+        fullscreenable: false
       }
     };
 
@@ -245,6 +262,27 @@ class WindowManager {
         backgroundColor: '#00000000',
         level: process.platform === 'darwin' ? 'floating' : undefined,
         // Additional macOS flags for better always-on-top behavior
+        ...(process.platform === 'darwin' && {
+          type: 'panel',
+          acceptFirstMouse: true,
+          disableAutoHideCursor: true
+        })
+      };
+  } else if (type === 'onboarding') {
+      // First-run onboarding wizard — same frameless/panel style as
+      // settings, but closable (X button) and slightly larger.
+      browserWindowOptions = {
+        ...baseOptions,
+        frame: false,
+        titleBarStyle: 'hidden',
+        transparent: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        closable: true,
+        hasShadow: true,
+        backgroundColor: '#00000000',
+        level: process.platform === 'darwin' ? 'floating' : undefined,
         ...(process.platform === 'darwin' && {
           type: 'panel',
           acceptFirstMouse: true,
@@ -1250,6 +1288,43 @@ class WindowManager {
     if (settingsWindow) {
       settingsWindow.hide();
     }
+  }
+
+  async showOnboarding() {
+    if (this.isScreenBeingShared) return null;
+
+    let onboardingWindow = this.windows.get('onboarding');
+    if (!onboardingWindow) {
+      onboardingWindow = await this.createWindow('onboarding');
+      this.windows.set('onboarding', onboardingWindow);
+
+      // Once the wizard renderer signals it's ready, send it the
+      // current first-run status so it can pre-populate correctly.
+      onboardingWindow.webContents.once('did-finish-load', () => {
+        logger.info('Onboarding window loaded');
+      });
+    }
+
+    this.showOnCurrentDesktop(onboardingWindow);
+    this.centerWindow(onboardingWindow);
+    onboardingWindow.focus();
+    logger.info('Onboarding window displayed');
+    return onboardingWindow;
+  }
+
+  hideOnboarding() {
+    const onboardingWindow = this.windows.get('onboarding');
+    if (onboardingWindow) {
+      onboardingWindow.hide();
+    }
+  }
+
+  closeOnboarding() {
+    const onboardingWindow = this.windows.get('onboarding');
+    if (onboardingWindow && !onboardingWindow.isDestroyed()) {
+      onboardingWindow.close();
+    }
+    this.windows.delete('onboarding');
   }
 
   expandLLMWindow(contentMetrics = null) {

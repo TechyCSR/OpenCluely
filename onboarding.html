@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to OpenCluely</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-glass: rgba(20, 20, 22, 0.72);
+            --bg-glass-strong: rgba(30, 30, 34, 0.86);
+            --border: rgba(255, 255, 255, 0.10);
+            --border-strong: rgba(255, 255, 255, 0.22);
+            --text: rgba(255, 255, 255, 0.95);
+            --text-dim: rgba(255, 255, 255, 0.65);
+            --text-faint: rgba(255, 255, 255, 0.45);
+            --accent: #7c5cff;
+            --accent-2: #5cffd1;
+            --danger: #ff5c7a;
+            --success: #5cff9d;
+            --warning: #ffc15c;
+        }
+
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--text);
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .wizard {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(15, 15, 20, 0.92) 0%, rgba(25, 18, 45, 0.92) 100%);
+            backdrop-filter: blur(30px);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Background ambient glow */
+        .wizard::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 20%, rgba(124, 92, 255, 0.18), transparent 50%),
+                        radial-gradient(circle at 70% 80%, rgba(92, 255, 209, 0.12), transparent 50%);
+            pointer-events: none;
+            animation: drift 18s ease-in-out infinite alternate;
+        }
+        @keyframes drift {
+            from { transform: translate(0, 0) rotate(0deg); }
+            to   { transform: translate(-3%, 2%) rotate(2deg); }
+        }
+
+        /* ── Header ── */
+        .header {
+            padding: 18px 24px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        .brand-dot {
+            width: 9px; height: 9px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            box-shadow: 0 0 12px rgba(124, 92, 255, 0.7);
+        }
+        .step-badge {
+            font-size: 11px;
+            color: var(--text-dim);
+            background: rgba(255, 255, 255, 0.06);
+            padding: 4px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        /* ── Stepper ── */
+        .stepper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 0 24px 16px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+        }
+        .step-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+            transition: all 0.3s ease;
+        }
+        .step-dot.active {
+            width: 28px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-2));
+            box-shadow: 0 0 10px rgba(124, 92, 255, 0.5);
+        }
+        .step-dot.done {
+            background: var(--accent-2);
+        }
+
+        /* ── Content area ── */
+        .content {
+            flex: 1;
+            padding: 0 32px;
+            overflow-y: auto;
+            position: relative;
+            z-index: 1;
+        }
+        .screen {
+            display: none;
+            animation: fadeUp 0.35s ease;
+        }
+        .screen.active {
+            display: block;
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .screen h1 {
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.3px;
+        }
+        .screen .subtitle {
+            font-size: 13.5px;
+            color: var(--text-dim);
+            margin-bottom: 24px;
+            line-height: 1.55;
+        }
+
+        /* ── Welcome screen hero ── */
+        .hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            min-height: 60vh;
+        }
+        .hero-logo {
+            width: 92px;
+            height: 92px;
+            border-radius: 24px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: #fff;
+            margin-bottom: 24px;
+            box-shadow: 0 16px 50px rgba(124, 92, 255, 0.35);
+            animation: floaty 4s ease-in-out infinite;
+        }
+        @keyframes floaty {
+            0%, 100% { transform: translateY(0); }
+            50%      { transform: translateY(-6px); }
+        }
+        .hero h1 {
+            font-size: 30px;
+            margin-bottom: 12px;
+        }
+        .hero .tagline {
+            font-size: 14px;
+            color: var(--text-dim);
+            max-width: 380px;
+            line-height: 1.6;
+        }
+        .feature-row {
+            display: flex;
+            gap: 14px;
+            margin-top: 28px;
+        }
+        .feature-pill {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            padding: 8px 14px;
+            border-radius: 14px;
+            font-size: 11.5px;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .feature-pill i {
+            color: var(--accent-2);
+        }
+
+        /* ── Form controls ── */
+        .field {
+            margin-bottom: 16px;
+        }
+        .field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+        .field .hint {
+            font-size: 11.5px;
+            color: var(--text-faint);
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+        .field .hint a {
+            color: var(--accent-2);
+            text-decoration: none;
+        }
+        .field .hint a:hover {
+            text-decoration: underline;
+        }
+
+        .input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .input-wrap .icon {
+            position: absolute;
+            left: 12px;
+            color: var(--text-faint);
+            font-size: 13px;
+        }
+        input.input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 11px 40px 11px 36px;
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        input.input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
+        }
+        .input-wrap .toggle-vis {
+            position: absolute;
+            right: 8px;
+            background: transparent;
+            border: 0;
+            color: var(--text-faint);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+        }
+        .input-wrap .toggle-vis:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11.5px;
+            padding: 5px 10px;
+            border-radius: 10px;
+            margin-top: 8px;
+            border: 1px solid var(--border);
+        }
+        .status-pill.idle    { color: var(--text-faint); }
+        .status-pill.testing { color: var(--warning); border-color: rgba(255, 193, 92, 0.3); }
+        .status-pill.success { color: var(--success); border-color: rgba(92, 255, 157, 0.3); background: rgba(92, 255, 157, 0.06); }
+        .status-pill.error   { color: var(--danger);  border-color: rgba(255, 92, 122, 0.3); background: rgba(255, 92, 122, 0.06); }
+
+        /* ── Choice cards ── */
+        .choice-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .choice-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            transition: all 0.2s ease;
+        }
+        .choice-card:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+        .choice-card.selected {
+            background: rgba(124, 92, 255, 0.10);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.2);
+        }
+        .choice-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-2);
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+        .choice-card.selected .choice-icon {
+            background: var(--accent);
+            color: #fff;
+        }
+        .choice-text { flex: 1; }
+        .choice-title {
+            font-size: 13.5px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .choice-desc {
+            font-size: 11.5px;
+            color: var(--text-dim);
+            line-height: 1.5;
+        }
+        .choice-radio {
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            flex-shrink: 0;
+            margin-top: 9px;
+            transition: all 0.2s ease;
+        }
+        .choice-card.selected .choice-radio {
+            border-color: var(--accent);
+            background: var(--accent);
+            box-shadow: inset 0 0 0 3px #1a1a22;
+        }
+
+        /* ── Whisper install screen ── */
+        .install-card {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            margin-top: 12px;
+        }
+        .install-title {
+            font-size: 12.5px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .install-title i {
+            color: var(--accent-2);
+        }
+        .install-list {
+            list-style: none;
+            padding: 0;
+        }
+        .install-list li {
+            font-size: 11.5px;
+            color: var(--text-dim);
+            line-height: 1.6;
+            padding-left: 16px;
+            position: relative;
+            margin-bottom: 2px;
+        }
+        .install-list li::before {
+            content: "·";
+            color: var(--accent);
+            position: absolute;
+            left: 4px;
+            font-weight: 700;
+        }
+
+        .install-log {
+            background: #0a0a0e;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            max-height: 120px;
+            overflow-y: auto;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .install-log:empty::before {
+            content: "Install output will appear here…";
+            color: var(--text-faint);
+            font-style: italic;
+        }
+
+        .detect-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            font-size: 12px;
+        }
+        .detect-row code {
+            font-family: 'SF Mono', Menlo, monospace;
+            font-size: 11.5px;
+            color: var(--accent-2);
+            background: rgba(0, 0, 0, 0.35);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* ── Star / Finish ── */
+        .star-card {
+            background: linear-gradient(135deg, rgba(124, 92, 255, 0.12), rgba(92, 255, 209, 0.08));
+            border: 1px solid rgba(124, 92, 255, 0.3);
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+            margin-top: 16px;
+        }
+        .star-card .star-icon {
+            font-size: 36px;
+            color: #ffd15c;
+            margin-bottom: 10px;
+        }
+        .star-card h3 {
+            font-size: 16px;
+            margin-bottom: 6px;
+        }
+        .star-card p {
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.5;
+            margin-bottom: 14px;
+        }
+        .star-card .actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .finish-card {
+            text-align: center;
+            padding: 24px 12px 12px;
+        }
+        .finish-card .check {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: #fff;
+            margin: 0 auto 16px;
+            box-shadow: 0 12px 36px rgba(92, 255, 209, 0.35);
+        }
+        .summary-list {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin: 14px 0;
+            font-size: 12px;
+        }
+        .summary-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .summary-row:last-child { border-bottom: 0; }
+        .summary-row .label {
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .summary-row .value {
+            font-weight: 600;
+            font-size: 11.5px;
+        }
+        .summary-row .value.ok    { color: var(--success); }
+        .summary-row .value.skip  { color: var(--text-faint); }
+
+        /* ── Footer ── */
+        .footer {
+            padding: 12px 24px 14px;
+            border-top: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-dim);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+        }
+        .footer a {
+            color: var(--text-dim);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .footer a:hover {
+            color: var(--text);
+        }
+        .footer .dev {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .footer .dev strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+        .footer .github {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* ── Navigation ── */
+        .nav {
+            padding: 14px 24px 18px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+        }
+        .btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 18px;
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+        .btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.22);
+        }
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .btn.primary {
+            background: linear-gradient(135deg, var(--accent), #6c4cff);
+            border-color: transparent;
+            color: #fff;
+            box-shadow: 0 6px 18px rgba(124, 92, 255, 0.35);
+        }
+        .btn.primary:hover:not(:disabled) {
+            box-shadow: 0 8px 22px rgba(124, 92, 255, 0.5);
+            transform: translateY(-1px);
+        }
+        .btn.success {
+            background: linear-gradient(135deg, var(--accent-2), #4cd9ad);
+            border-color: transparent;
+            color: #0d2a1e;
+            box-shadow: 0 6px 18px rgba(92, 255, 209, 0.35);
+        }
+        .btn.ghost {
+            background: transparent;
+            border-color: transparent;
+            color: var(--text-dim);
+        }
+        .btn.ghost:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+        }
+        .btn.danger {
+            background: rgba(255, 92, 122, 0.12);
+            border-color: rgba(255, 92, 122, 0.3);
+            color: var(--danger);
+        }
+        .btn .spinner {
+            width: 12px; height: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .nav-right {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* ── Misc ── */
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10.5px;
+            padding: 3px 8px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+        .pill.green { color: var(--success); border-color: rgba(92, 255, 157, 0.3); }
+        .pill.amber { color: var(--warning); border-color: rgba(255, 193, 92, 0.3); }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="wizard" id="wizard">
+
+        <!-- ── Header ── -->
+        <div class="header">
+            <div class="brand">
+                <div class="brand-dot"></div>
+                OpenCluely
+            </div>
+            <div class="step-badge" id="stepBadge">Step 1 of 4</div>
+        </div>
+
+        <!-- ── Stepper ── -->
+        <div class="stepper" id="stepper">
+            <div class="step-dot active"></div>
+            <div class="step-dot"></div>
+            <div class="step-dot"></div>
+            <div class="step-dot"></div>
+        </div>
+
+        <!-- ── Content ── -->
+        <div class="content">
+
+            <!-- SCREEN 1: Welcome -->
+            <section class="screen active" data-screen="welcome">
+                <div class="hero">
+                    <div class="hero-logo"><i class="fas fa-bolt"></i></div>
+                    <h1>Welcome to OpenCluely</h1>
+                    <p class="tagline">
+                        Your AI-powered interview &amp; problem-solving copilot.
+                        Let's get you set up in about a minute.
+                    </p>
+                    <div class="feature-row">
+                        <div class="feature-pill"><i class="fas fa-keyboard"></i> Live answers</div>
+                        <div class="feature-pill"><i class="fas fa-microphone"></i> Voice input</div>
+                        <div class="feature-pill"><i class="fas fa-shield-halved"></i> Local &amp; private</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SCREEN 2: API Key -->
+            <section class="screen" data-screen="apikey">
+                <h1>Connect Google Gemini</h1>
+                <p class="subtitle">
+                    OpenCluely uses Google's Gemini to generate answers. You'll need a free API key.
+                </p>
+
+                <div class="field">
+                    <label for="geminiKey">Gemini API Key</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-key icon"></i>
+                        <input
+                            type="password"
+                            id="geminiKey"
+                            class="input"
+                            placeholder="AIza…"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <button class="toggle-vis" id="toggleVis" type="button" title="Show / hide">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="hint">
+                        Don't have one? Get a free key at
+                        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
+                            aistudio.google.com/apikey
+                        </a>.
+                        It's stored locally in <code>.env</code> — never sent anywhere except Google.
+                    </div>
+                    <div id="keyStatus" class="status-pill idle" style="display:none;">
+                        <i class="fas fa-circle-info"></i>
+                        <span class="text">Enter your key above</span>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <button class="btn" id="testKeyBtn" type="button">
+                        <i class="fas fa-plug"></i> Test connection
+                    </button>
+                </div>
+            </section>
+
+            <!-- SCREEN 3: Speech -->
+            <section class="screen" data-screen="speech">
+                <h1>Speech Recognition</h1>
+                <p class="subtitle">
+                    How would you like to capture audio? You can change this later in Settings.
+                </p>
+
+                <div class="choice-list" id="speechChoices">
+                    <div class="choice-card" data-value="whisper">
+                        <div class="choice-icon"><i class="fas fa-microphone"></i></div>
+                        <div class="choice-text">
+                            <div class="choice-title">Local Whisper <span class="pill green">Private</span></div>
+                            <div class="choice-desc">
+                                Run OpenAI Whisper on your own machine. Free, offline, and private —
+                                no data leaves your computer. Requires Python.
+                            </div>
+                        </div>
+                        <div class="choice-radio"></div>
+                    </div>
+                    <div class="choice-card" data-value="azure">
+                        <div class="choice-icon"><i class="fas fa-cloud"></i></div>
+                        <div class="choice-text">
+                            <div class="choice-title">Azure Speech <span class="pill amber">Cloud</span></div>
+                            <div class="choice-desc">
+                                Microsoft Azure cloud STT. Needs an Azure Speech key + region.
+                                High accuracy, requires internet.
+                            </div>
+                        </div>
+                        <div class="choice-radio"></div>
+                    </div>
+                    <div class="choice-card" data-value="skip">
+                        <div class="choice-icon"><i class="fas fa-forward"></i></div>
+                        <div class="choice-text">
+                            <div class="choice-title">Skip for now</div>
+                            <div class="choice-desc">
+                                Set this up later in Settings. You can still type messages into the chat window.
+                            </div>
+                        </div>
+                        <div class="choice-radio"></div>
+                    </div>
+                </div>
+
+                <!-- Inline Azure key entry (revealed only if Azure selected) -->
+                <div id="azurePanel" style="display:none; margin-top: 14px;">
+                    <div class="field">
+                        <label for="azureKey">Azure Speech Key</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-key icon"></i>
+                            <input type="password" id="azureKey" class="input" placeholder="Azure key" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="azureRegion">Azure Region</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-globe icon"></i>
+                            <input type="text" id="azureRegion" class="input" placeholder="eastus" autocomplete="off">
+                        </div>
+                        <div class="hint">e.g. <code>eastus</code>, <code>westus2</code>, <code>westeurope</code></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SCREEN 4: Whisper install (only shown when whisper chosen) -->
+            <section class="screen" data-screen="whisper">
+                <h1>Local Whisper Setup</h1>
+                <p class="subtitle" id="whisperSubtitle">
+                    Detecting your Whisper installation…
+                </p>
+
+                <div class="detect-row" id="detectRow">
+                    <div>
+                        <div style="font-size:11px; color: var(--text-faint); margin-bottom:2px;">Detected command</div>
+                        <code id="detectCmd">scanning…</code>
+                    </div>
+                    <div id="detectStatus" class="status-pill idle">
+                        <i class="fas fa-circle-notch fa-spin"></i>
+                        <span class="text">Probing</span>
+                    </div>
+                </div>
+
+                <div class="install-card" id="installCard">
+                    <div class="install-title">
+                        <i class="fas fa-circle-info"></i>
+                        <span id="installCardTitle">What we'll do</span>
+                    </div>
+                    <ul class="install-list" id="installList"></ul>
+                </div>
+
+                <div class="install-log" id="installLog"></div>
+            </section>
+
+            <!-- SCREEN 5: Finish (star prompt + summary) -->
+            <section class="screen" data-screen="finish">
+                <div class="finish-card">
+                    <div class="check"><i class="fas fa-check"></i></div>
+                    <h1>You're all set!</h1>
+                    <p class="subtitle" style="margin-bottom: 18px;">
+                        Here's what we configured. You can change any of this later in Settings.
+                    </p>
+
+                    <div class="summary-list" id="summaryList">
+                        <!-- populated dynamically -->
+                    </div>
+
+                    <div class="star-card">
+                        <div class="star-icon"><i class="fas fa-star"></i></div>
+                        <h3>Enjoying OpenCluely?</h3>
+                        <p>
+                            If this saved you time in an interview or a coding session,
+                            a quick ⭐ on GitHub helps others find it.
+                        </p>
+                        <div class="actions">
+                            <button class="btn primary" id="starBtn" type="button">
+                                <i class="fab fa-github"></i> Star on GitHub
+                            </button>
+                            <button class="btn ghost" id="skipStarBtn" type="button">
+                                Maybe later
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ── Footer (always visible) ── -->
+        <div class="footer">
+            <div class="dev">
+                Built by <strong>@Techycsr</strong>
+                <span style="opacity:0.5;">·</span>
+                <a href="https://techycsr.dev" target="_blank" rel="noreferrer">techycsr.dev</a>
+            </div>
+            <div class="github">
+                <a href="https://github.com/TechyCSR/OpenCluely" target="_blank" rel="noreferrer">
+                    <i class="fab fa-github"></i> GitHub
+                </a>
+            </div>
+        </div>
+
+        <!-- ── Navigation ── -->
+        <div class="nav">
+            <button class="btn ghost" id="backBtn" type="button" style="visibility:hidden;">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            <div class="nav-right">
+                <button class="btn ghost" id="skipBtn" type="button" style="display:none;">
+                    Skip
+                </button>
+                <button class="btn primary" id="nextBtn" type="button">
+                    Get started <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./onboarding.js"></script>
+</body>
+</html>

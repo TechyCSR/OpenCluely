@@ -60,6 +60,9 @@ class ApplicationController {
     this.firstRunManager = new FirstRunManager({
       logger: logger
     });
+    // Lazily-initialised in getWhisperInstaller() so tests can mock
+    // the constructor without polluting main-process startup.
+    this._whisperInstaller = null;
     this.isFirstRun = false;
 
     // Window configurations for reference
@@ -172,9 +175,9 @@ class ApplicationController {
       this.starting = false;
       this.isReady = true;
 
-      // First-run onboarding: ensure .env exists and prompt the user to
-      // set their Gemini API key via the Settings window if it isn't
-      // configured yet. Non-blocking — failure here just logs.
+      // First-run onboarding: ensure .env exists and launch the
+      // multi-step onboarding wizard if the user hasn't completed it.
+      // Non-blocking — failure here just logs.
       try {
         this.firstRunManager.ensureEnv();
         const status = this.firstRunManager.getStatus();
@@ -182,16 +185,18 @@ class ApplicationController {
         logger.info("First-run status", status);
         if (this.isFirstRun) {
           // Defer slightly so all windows finish loading before we pop
-          // the settings dialog on top of them.
+          // the wizard on top of them.
           setTimeout(() => {
             try {
-              this.showSettings();
+              windowManager.showOnboarding();
               windowManager.broadcastToAllWindows("first-run", status);
-              logger.info("First-run onboarding: settings window opened");
+              logger.info("First-run onboarding: wizard opened");
             } catch (e) {
-              logger.warn("Could not open first-run settings window", {
+              logger.warn("Could not open first-run onboarding window", {
                 error: e.message
               });
+              // Fallback to legacy settings prompt
+              try { this.showSettings(); } catch (_) { /* ignore */ }
             }
           }, 800);
         } else {
@@ -617,6 +622,61 @@ class ApplicationController {
         return { success: true };
       } catch (e) {
         return { success: false, error: e.message };
+      }
+    });
+
+    // Open a URL in the system browser (used by the GitHub star button
+    // in onboarding).
+    ipcMain.handle("open-external", async (_event, url) => {
+      try {
+        if (typeof url !== "string" || !/^https?:\/\//i.test(url)) {
+          return { ok: false, error: "Invalid URL" };
+        }
+        const { shell } = require("electron");
+        await shell.openExternal(url);
+        return { ok: true };
+      } catch (e) {
+        logger.warn("Failed to open external URL", { url, error: e.message });
+        return { ok: false, error: e.message };
+      }
+    });
+
+    // Close the onboarding wizard window.
+    ipcMain.handle("close-onboarding", () => {
+      try {
+        windowManager.closeOnboarding();
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    });
+
+    // Detect an installed Whisper CLI across common locations.
+    ipcMain.handle("detect-whisper", async () => {
+      try {
+        const installer = this.getWhisperInstaller();
+        return await installer.detect();
+      } catch (e) {
+        logger.warn("Whisper detection failed", { error: e.message });
+        return { found: false, command: null, version: null, error: e.message };
+      }
+    });
+
+    // Install Whisper. Streams progress lines back via `webContents.send`
+    // so the renderer can paint them as they arrive.
+    ipcMain.handle("install-whisper", async (event) => {
+      try {
+        const installer = this.getWhisperInstaller();
+        const sender = event.sender;
+        const result = await installer.install({
+          onProgress: (line) => {
+            try { sender.send("install-progress", line); } catch (_) { /* ignore */ }
+          },
+        });
+        return result;
+      } catch (e) {
+        logger.error("Whisper install failed", { error: e.message });
+        return { ok: false, command: null, message: e.message, logs: "" };
       }
     });
 
@@ -1180,6 +1240,17 @@ class ApplicationController {
       sessionEvents: sessionStats.eventCount,
       sessionSize: sessionStats.approximateSize,
     });
+  }
+
+  getWhisperInstaller() {
+    if (!this._whisperInstaller) {
+      const WhisperInstaller = require("./src/core/whisper-installer");
+      this._whisperInstaller = new WhisperInstaller({
+        cwd: process.cwd(),
+        platform: process.platform,
+      });
+    }
+    return this._whisperInstaller;
   }
 
   getSettings() {

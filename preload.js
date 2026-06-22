@@ -44,6 +44,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // First-run onboarding
   getFirstRunStatus: () => ipcRenderer.invoke('get-first-run-status'),
   completeFirstRun: () => ipcRenderer.invoke('complete-first-run'),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  closeOnboarding: () => ipcRenderer.invoke('close-onboarding'),
+  detectWhisper: () => ipcRenderer.invoke('detect-whisper'),
+  installWhisper: () => ipcRenderer.invoke('install-whisper'),
+  onInstallProgress: (callback) => {
+    const wrapped = (_event, line) => {
+      try { callback(line); } catch (e) { console.error('onInstallProgress error:', e); }
+    };
+    ipcRenderer.on('install-progress', wrapped);
+    return () => ipcRenderer.removeListener('install-progress', wrapped);
+  },
   updateAppIcon: (iconKey) => ipcRenderer.invoke('update-app-icon', iconKey),
   updateActiveSkill: (skill) => ipcRenderer.invoke('update-active-skill', skill),
   restartAppForStealth: () => ipcRenderer.invoke('restart-app-for-stealth'),
