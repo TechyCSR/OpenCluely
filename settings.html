@@ -362,52 +362,64 @@
                             <option value="whisper">Local Whisper</option>
                         </select>
                     </div>
-                    <div class="settings-item">
-                        <div>
-                            <div class="settings-item-label">Azure Speech Key</div>
-                            <div class="settings-item-description">Your Azure Cognitive Services API key</div>
-                        </div>
-                        <input type="password" class="input-field" id="azureKey" placeholder="Enter your Azure key">
-                    </div>
-                    <div class="settings-item">
-                        <div>
-                            <div class="settings-item-label">Azure Region</div>
-                            <div class="settings-item-description">Your Azure service region</div>
-                        </div>
-                        <input type="text" class="input-field" id="azureRegion" placeholder="e.g. eastus">
-                    </div>
-                    <div class="settings-item">
-                        <div class="settings-stack">
+
+                    <!-- Azure fields (shown only when Azure is selected) -->
+                    <div id="azureFields" class="settings-group">
+                        <div class="settings-item">
                             <div>
-                                <div class="settings-item-label">Whisper Command</div>
-                                <div class="settings-item-description">CLI command for local Whisper, such as <code>whisper</code> or <code>python3 -m whisper</code></div>
+                                <div class="settings-item-label">Azure Speech Key</div>
+                                <div class="settings-item-description">Your Azure Cognitive Services API key</div>
                             </div>
-                            <input type="text" class="input-field" id="whisperCommand" placeholder="whisper" style="max-width: 100%;">
+                            <input type="password" class="input-field" id="azureKey" placeholder="Enter your Azure key">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Azure Region</div>
+                                <div class="settings-item-description">Your Azure service region</div>
+                            </div>
+                            <input type="text" class="input-field" id="azureRegion" placeholder="e.g. eastus">
                         </div>
                     </div>
-                    <div class="settings-item">
-                        <div>
-                            <div class="settings-item-label">Whisper Model</div>
-                            <div class="settings-item-description">Local model name used by the Whisper CLI</div>
+
+                    <!-- Whisper fields (shown only when Whisper is selected) -->
+                    <div id="whisperFields" class="settings-group">
+                        <div class="settings-item">
+                            <div class="settings-stack">
+                                <div>
+                                    <div class="settings-item-label">Whisper Command</div>
+                                    <div class="settings-item-description">CLI command for local Whisper, such as <code>whisper</code> or <code>python3 -m whisper</code></div>
+                                </div>
+                                <input type="text" class="input-field" id="whisperCommand" placeholder="whisper" style="max-width: 100%;">
+                            </div>
                         </div>
-                        <input type="text" class="input-field" id="whisperModel" placeholder="turbo">
-                    </div>
-                    <div class="settings-item">
-                        <div>
-                            <div class="settings-item-label">Whisper Language</div>
-                            <div class="settings-item-description">Language code for local transcription</div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Whisper Model</div>
+                                <div class="settings-item-description">Local model name used by the Whisper CLI</div>
+                            </div>
+                            <input type="text" class="input-field" id="whisperModel" placeholder="turbo">
                         </div>
-                        <input type="text" class="input-field" id="whisperLanguage" placeholder="en">
-                    </div>
-                    <div class="settings-item">
-                        <div>
-                            <div class="settings-item-label">Whisper Segment Length</div>
-                            <div class="settings-item-description">Chunk size in milliseconds for local transcription</div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Whisper Language</div>
+                                <div class="settings-item-description">Language code for local transcription</div>
+                            </div>
+                            <input type="text" class="input-field" id="whisperLanguage" placeholder="en">
                         </div>
-                        <input type="number" class="input-field" id="whisperSegmentMs" placeholder="4000" min="2000" step="500">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Whisper Segment Length</div>
+                                <div class="settings-item-description">Chunk size in milliseconds for local transcription</div>
+                            </div>
+                            <input type="number" class="input-field" id="whisperSegmentMs" placeholder="4000" min="2000" step="500">
+                        </div>
+                        <div class="settings-note">
+                            Local Whisper runs on this machine and needs a Whisper CLI installed. These settings apply immediately for the current app session and are also written back to <code>.env</code> so they persist across restarts.
+                        </div>
                     </div>
-                    <div class="settings-note">
-                        Local Whisper runs on this machine and needs a Whisper CLI installed. These settings apply immediately for the current app session; use <code>.env</code> for startup defaults.
+
+                    <div id="azureFieldsNote" class="settings-note">
+                        Azure credentials apply immediately and are also written back to <code>.env</code> so they persist across restarts.
                     </div>
                 </div>
             </div>

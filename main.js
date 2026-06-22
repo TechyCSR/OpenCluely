@@ -1123,30 +1123,42 @@ class ApplicationController {
   }
 
   getSettings() {
+    // Surface every value the settings UI can edit, reading the live source
+    // of truth (process.env) so the UI shows exactly what the running app is
+    // using. Empty strings are returned rather than skipped so the UI can
+    // distinguish "unset" from "stale value from a previous load".
     return {
-      codingLanguage: this.codingLanguage || "cpp", // Default to C++
+      codingLanguage: this.codingLanguage || "cpp",
       activeSkill: this.activeSkill || "dsa",
       appIcon: this.appIcon || "terminal",
       selectedIcon: this.appIcon || "terminal",
-      // pass through env-derived settings for UI convenience (masked)
+      windowGap: windowManager.windowGap,
+
+      speechProvider: speechService.provider || "whisper",
+      azureKey: process.env.AZURE_SPEECH_KEY || "",
+      azureRegion: process.env.AZURE_SPEECH_REGION || "",
+      whisperCommand: process.env.WHISPER_COMMAND || "",
+      whisperModel: process.env.WHISPER_MODEL || "turbo",
+      whisperLanguage: process.env.WHISPER_LANGUAGE || "en",
+      whisperSegmentMs: process.env.WHISPER_SEGMENT_MS || "4000",
+      geminiKey: process.env.GEMINI_API_KEY || "",
+
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
       speechAvailable: this.speechAvailable
     };
   }
-  
+
   saveSettings(settings) {
     try {
-      // Update application settings
+      // ── In-memory updates + window broadcasts ──
       if (settings.codingLanguage) {
         this.codingLanguage = settings.codingLanguage;
-        // Broadcast language change to all windows for sync
         windowManager.broadcastToAllWindows("coding-language-changed", {
           language: settings.codingLanguage,
         });
       }
       if (settings.activeSkill) {
         this.activeSkill = settings.activeSkill;
-        // Broadcast skill change to all windows
         windowManager.broadcastToAllWindows("skill-updated", {
           skill: settings.activeSkill,
         });
@@ -1154,19 +1166,67 @@ class ApplicationController {
       if (settings.appIcon) {
         this.appIcon = settings.appIcon;
       }
-
-      // Handle icon change specifically
       if (settings.selectedIcon) {
         this.appIcon = settings.selectedIcon;
-        // Immediately update the app icon
         this.updateAppIcon(settings.selectedIcon);
       }
+      if (settings.windowGap !== undefined) {
+        const gap = Number(settings.windowGap);
+        if (Number.isFinite(gap)) windowManager.setWindowGap(gap);
+      }
 
-      // Persist settings to file or config
-      this.persistSettings(settings);
+      // ── Persist provider / API-key fields back to .env ──
+      // The settings UI is now the source of truth for these values.
+      // Writing to .env ensures they survive app restarts and are picked
+      // up the next time the app boots.
+      const envUpdates = {};
+      if (settings.speechProvider === "azure" || settings.speechProvider === "whisper") {
+        envUpdates.SPEECH_PROVIDER = settings.speechProvider;
+      }
+      if (settings.azureKey !== undefined) {
+        envUpdates.AZURE_SPEECH_KEY = settings.azureKey;
+      }
+      if (settings.azureRegion !== undefined) {
+        envUpdates.AZURE_SPEECH_REGION = settings.azureRegion;
+      }
+      if (settings.whisperCommand !== undefined) {
+        envUpdates.WHISPER_COMMAND = settings.whisperCommand;
+      }
+      if (settings.whisperModel !== undefined) {
+        envUpdates.WHISPER_MODEL = settings.whisperModel;
+      }
+      if (settings.whisperLanguage !== undefined) {
+        envUpdates.WHISPER_LANGUAGE = settings.whisperLanguage;
+      }
+      if (settings.whisperSegmentMs !== undefined) {
+        envUpdates.WHISPER_SEGMENT_MS = String(settings.whisperSegmentMs);
+      }
+      if (settings.geminiKey !== undefined) {
+        envUpdates.GEMINI_API_KEY = settings.geminiKey;
+      }
 
-      logger.info("Settings saved successfully", settings);
-      return { success: true };
+      const persistedKeys = this.persistEnvUpdates(envUpdates);
+
+      // If provider changed, reinitialize speech service so the new provider
+      // is picked up immediately without a restart.
+      if (settings.speechProvider && speechService.provider !== settings.speechProvider) {
+        try {
+          speechService.initializeClient();
+          this.speechAvailable = speechService.isAvailable
+            ? speechService.isAvailable()
+            : false;
+        } catch (e) {
+          logger.warn("Failed to reinitialize speech service after settings change", {
+            error: e.message
+          });
+        }
+      }
+
+      logger.info("Settings saved successfully", {
+        ...settings,
+        persistedEnvKeys: persistedKeys
+      });
+      return { success: true, persistedEnvKeys: persistedKeys };
     } catch (error) {
       logger.error("Failed to save settings", { error: error.message });
       return { success: false, error: error.message };
@@ -1177,6 +1237,83 @@ class ApplicationController {
     // You can extend this to save to a file or database
     // For now, we'll just keep them in memory
     logger.debug("Settings persisted", settings);
+  }
+
+  /**
+   * Write key=value pairs to the project's .env file. Existing keys are
+   * replaced in-place; new keys are appended. Comments and unrelated lines
+   * are preserved. Uses an atomic write (temp file + rename) so a crash
+   * mid-write cannot corrupt .env.
+   *
+   * @param {Object<string, string>} updates - keys to upsert
+   * @returns {string[]} keys that were actually persisted
+   */
+  persistEnvUpdates(updates) {
+    if (!updates || typeof updates !== "object") return [];
+    const keys = Object.keys(updates);
+    if (keys.length === 0) return [];
+
+    const fs = require("fs");
+    const path = require("path");
+    const envPath = path.join(process.cwd(), ".env");
+
+    let existing = "";
+    try {
+      existing = fs.readFileSync(envPath, "utf8");
+    } catch (_) {
+      // .env doesn't exist yet — we'll create one from scratch
+      existing = "";
+    }
+
+    const existingLines = existing.length > 0 ? existing.split(/\r?\n/) : [];
+    const updated = new Set();
+    const outLines = [];
+
+    for (const line of existingLines) {
+      // Match "KEY=" (with optional whitespace) but skip comment lines
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=/);
+      if (m && Object.prototype.hasOwnProperty.call(updates, m[1])) {
+        const key = m[1];
+        // Escape any embedded newlines/backslashes in the value so the
+        // resulting .env line is single-line and parseable.
+        const value = String(updates[key]).replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
+        outLines.push(`${key}=${value}`);
+        updated.add(key);
+      } else {
+        outLines.push(line);
+      }
+    }
+
+    // Append any keys that weren't already present
+    for (const key of keys) {
+      if (!updated.has(key)) {
+        const value = String(updates[key]).replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
+        outLines.push(`${key}=${value}`);
+        updated.add(key);
+      }
+    }
+
+    // Update process.env so the running app picks up the new values
+    // immediately (and so the settings UI reads the same source of truth).
+    for (const key of keys) {
+      process.env[key] = String(updates[key]);
+    }
+
+    const newContent = outLines.join("\n");
+    try {
+      const tmpPath = envPath + ".tmp";
+      fs.writeFileSync(tmpPath, newContent, "utf8");
+      fs.renameSync(tmpPath, envPath);
+    } catch (e) {
+      logger.error("Failed to persist .env updates", {
+        error: e.message,
+        keys
+      });
+      return [];
+    }
+
+    logger.info("Persisted .env updates", { keys: Array.from(updated) });
+    return Array.from(updated);
   }
 
   updateAppIcon(iconKey) {

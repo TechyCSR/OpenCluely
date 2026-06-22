@@ -72,22 +72,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // Function to load settings into UI
     const loadSettingsIntoUI = (settings) => {
         if (settings.speechProvider && speechProviderSelect) speechProviderSelect.value = settings.speechProvider;
-        if (settings.azureKey && azureKeyInput) azureKeyInput.value = settings.azureKey;
-        if (settings.azureRegion && azureRegionInput) azureRegionInput.value = settings.azureRegion;
-        if (settings.whisperCommand && whisperCommandInput) whisperCommandInput.value = settings.whisperCommand;
-        if (settings.whisperModel && whisperModelInput) whisperModelInput.value = settings.whisperModel;
-        if (settings.whisperLanguage && whisperLanguageInput) whisperLanguageInput.value = settings.whisperLanguage;
-        if (settings.whisperSegmentMs && whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs;
-        if (settings.geminiKey && geminiKeyInput) geminiKeyInput.value = settings.geminiKey;
-        if (settings.windowGap && windowGapInput) windowGapInput.value = settings.windowGap;
-        
+        // Always set the input value, even if empty, so the user sees what's
+        // currently configured (including env-derived defaults). Previously
+        // empty strings were skipped which left stale UI values.
+        if (azureKeyInput) azureKeyInput.value = settings.azureKey || '';
+        if (azureRegionInput) azureRegionInput.value = settings.azureRegion || '';
+        if (whisperCommandInput) whisperCommandInput.value = settings.whisperCommand || '';
+        if (whisperModelInput) whisperModelInput.value = settings.whisperModel || '';
+        if (whisperLanguageInput) whisperLanguageInput.value = settings.whisperLanguage || '';
+        if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
+        if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
+        if (windowGapInput) windowGapInput.value = settings.windowGap || '';
+
         // Set C++ as default if no coding language is specified
         if (codingLanguageSelect) {
             codingLanguageSelect.value = settings.codingLanguage || 'cpp';
         }
-        
+
         if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
-        
+
         // Handle icon selection
         const selectedIcon = settings.selectedIcon || settings.appIcon;
         if (selectedIcon && iconGrid) {
@@ -144,15 +147,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updateSpeechFieldStates = () => {
         const provider = speechProviderSelect ? speechProviderSelect.value : 'azure';
-        const azureDisabled = provider !== 'azure';
-        const whisperDisabled = provider !== 'whisper';
 
+        // Show/hide provider-specific field groups instead of just disabling
+        // them. This keeps the settings UI clean — only the relevant fields
+        // for the selected provider are visible.
+        const azureGroup = document.getElementById('azureFields');
+        const whisperGroup = document.getElementById('whisperFields');
+        const azureNote = document.getElementById('azureFieldsNote');
+
+        if (azureGroup) {
+            azureGroup.style.display = provider === 'azure' ? '' : 'none';
+        }
+        if (whisperGroup) {
+            whisperGroup.style.display = provider === 'whisper' ? '' : 'none';
+        }
+        if (azureNote) {
+            azureNote.style.display = provider === 'azure' ? '' : 'none';
+        }
+
+        // Also toggle disabled attribute for any leftover direct field refs
         [azureKeyInput, azureRegionInput].forEach(input => {
-            if (input) input.disabled = azureDisabled;
+            if (input) input.disabled = provider !== 'azure';
         });
-
         [whisperCommandInput, whisperModelInput, whisperLanguageInput, whisperSegmentMsInput].forEach(input => {
-            if (input) input.disabled = whisperDisabled;
+            if (input) input.disabled = provider !== 'whisper';
         });
     };
 
