@@ -226,6 +226,7 @@ Every release is built automatically by GitHub Actions across Windows, macOS, an
 - **Windows Whisper path**: `setup.sh` now writes `WHISPER_COMMAND=.venv-whisper/Scripts/whisper.exe`
 - **macOS/Linux Whisper path**: `setup.sh` writes `WHISPER_COMMAND=.venv-whisper/bin/whisper`
 
+
 ### 🎛️ Setup Script Options
 
 ```bash
