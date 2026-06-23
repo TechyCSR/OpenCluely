@@ -265,9 +265,19 @@
   }
 
   async function runWhisperInstall() {
+    const btn = document.getElementById('installWhisperBtn');
     installLog.textContent = '';
     setDetectStatus('testing', 'Installing');
     appendLog('Starting install…');
+
+    // Lock the button while installing so the user can't double-click
+    // and spawn parallel installs. Change the label to "Installing…"
+    // with a spinner so they see real progress.
+    if (btn) {
+      btn.disabled = true;
+      btn.dataset.originalHtml = btn.dataset.originalHtml || btn.innerHTML;
+      btn.innerHTML = '<span class="spinner"></span> Installing…';
+    }
 
     // Subscribe to streamed progress lines from the main process.
     // `installWhisper()` only returns once install completes; live
@@ -286,13 +296,29 @@
         detectCmd.textContent = r.command;
         setDetectStatus('success', 'Installed');
         appendLog(`\n✓ ${r.message}`);
+        if (btn) {
+          // Keep button disabled — install is done. Show a checkmark
+          // so the user sees the final state at a glance.
+          btn.innerHTML = '<i class="fas fa-check-circle"></i> Installed';
+          btn.classList.remove('primary');
+          btn.classList.add('success');
+        }
       } else {
         setDetectStatus('error', 'Install failed');
         appendLog(`\n✗ ${r.message}`);
+        // Restore the button so the user can retry.
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = btn.dataset.originalHtml || '<i class="fas fa-download"></i> Install Whisper now';
+        }
       }
     } catch (e) {
       setDetectStatus('error', 'Install error');
       appendLog(`\n! ${e.message || e}`);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = btn.dataset.originalHtml || '<i class="fas fa-download"></i> Install Whisper now';
+      }
     } finally {
       if (progressHandler && window.electronAPI.removeAllListeners) {
         try { window.electronAPI.removeAllListeners('install-progress'); } catch (_) { /* ignore */ }

@@ -1054,18 +1054,50 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
       };
     } catch (error) {
       const errorAnalysis = this.analyzeError(error);
-      logger.error('Connection test failed', { 
+      logger.error('Connection test failed', {
         error: error.message,
         errorAnalysis
       });
-      
-      return { 
-        success: false, 
-        error: error.message,
+
+      // Map raw SDK errors to user-friendly messages. The wizard only
+      // surfaces `error`, so any raw "[GoogleGenerativeAI Error]: ..."
+      // string would land in the UI verbatim.
+      const friendlyError = this._friendlyTestError(error, errorAnalysis);
+
+      return {
+        success: false,
+        error: friendlyError,
+        errorType: errorAnalysis?.type || 'UNKNOWN',
         errorAnalysis,
         networkConnectivity: await this.checkNetworkConnectivity().catch(() => null)
       };
     }
+  }
+
+  /**
+   * Translate raw SDK / network errors into something a user can act on.
+   */
+  _friendlyTestError(error, analysis) {
+    const type = analysis?.type;
+    const raw = (error?.message || '').toLowerCase();
+
+    if (type === 'NETWORK_ERROR' || raw.includes('fetch failed') || raw.includes('enotfound')) {
+      return 'Cannot reach Google servers. Check your internet connection, firewall, or VPN settings.';
+    }
+    if (type === 'AUTH_ERROR' || raw.includes('api key') || raw.includes('401') || raw.includes('403')) {
+      return 'Invalid API key or insufficient permissions. Double-check the key at aistudio.google.com/apikey.';
+    }
+    if (type === 'RATE_LIMIT_ERROR' || raw.includes('429') || raw.includes('quota')) {
+      return 'Rate limit or quota exceeded. Wait a moment or check your Google Cloud billing.';
+    }
+    if (type === 'TIMEOUT_ERROR') {
+      return 'Request timed out. The Google API may be slow or unreachable right now.';
+    }
+    if (type === 'MODEL_ERROR' || raw.includes('model') || raw.includes('404')) {
+      return 'The configured Gemini model is unavailable. Try a different model in Settings.';
+    }
+    // Fall back to a stripped-down raw message (no SDK prefix noise)
+    return (error?.message || 'Connection failed').replace(/^\[GoogleGenerativeAI Error\]:\s*/i, '');
   }
 
   updateApiKey(newApiKey) {

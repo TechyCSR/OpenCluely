@@ -1366,14 +1366,35 @@ class ApplicationController {
         }
       }
 
-      // If provider changed, reinitialize speech service so the new provider
-      // is picked up immediately without a restart.
-      if (settings.speechProvider && speechService.provider !== settings.speechProvider) {
+      // Reinitialize speech service when provider OR whisper command
+      // changes. Without the second check, the install flow (which
+      // writes a new whisperCommand after install but keeps the same
+      // provider) would leave the speech service pointing at a stale
+      // (or non-existent) binary, and the main overlay's mic button
+      // would stay hidden / non-functional.
+      const providerChanged = settings.speechProvider && speechService.provider !== settings.speechProvider;
+      const whisperCommandChanged = settings.whisperCommand !== undefined &&
+        (process.env.WHISPER_COMMAND || '') !== String(settings.whisperCommand || '');
+      if (providerChanged || whisperCommandChanged) {
         try {
           speechService.initializeClient();
           this.speechAvailable = speechService.isAvailable
             ? speechService.isAvailable()
             : false;
+          // Broadcast so any open window (settings, overlay, chat)
+          // can react immediately — especially the main overlay's
+          // mic button, which queries availability on load.
+          const { BrowserWindow } = require("electron");
+          BrowserWindow.getAllWindows().forEach((win) => {
+            if (!win.isDestroyed()) {
+              win.webContents.send("speech-availability", { available: this.speechAvailable });
+            }
+          });
+          logger.info('Speech service reinitialized after settings change', {
+            providerChanged,
+            whisperCommandChanged,
+            speechAvailable: this.speechAvailable,
+          });
         } catch (e) {
           logger.warn("Failed to reinitialize speech service after settings change", {
             error: e.message
