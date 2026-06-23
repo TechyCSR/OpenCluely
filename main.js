@@ -1345,6 +1345,22 @@ class ApplicationController {
 
       const persistedKeys = this.persistEnvUpdates(envUpdates);
 
+      // If the Gemini key was just saved, reinitialize the LLM service
+      // so the new client picks up the key. Without this, the test-
+      // connection button in the onboarding wizard fails with
+      // "Service not initialized" because the client was first created
+      // at app startup, before any key was set.
+      if (settings.geminiKey !== undefined && envUpdates.GEMINI_API_KEY !== undefined) {
+        try {
+          llmService.initializeClient();
+          logger.info("LLM service reinitialized after Gemini key update");
+        } catch (e) {
+          logger.warn("Failed to reinitialize LLM service after Gemini key update", {
+            error: e.message
+          });
+        }
+      }
+
       // If provider changed, reinitialize speech service so the new provider
       // is picked up immediately without a restart.
       if (settings.speechProvider && speechService.provider !== settings.speechProvider) {
