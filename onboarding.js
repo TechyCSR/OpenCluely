@@ -40,8 +40,6 @@
     modelDownloadChoice: null, // 'now' | 'later'
     modelDownloading: false,
     modelDownloaded: false,
-    whisperTestPassed: false,
-    whisperTesting: false,
     finished: false,
   };
 
@@ -76,12 +74,8 @@
     }
     refreshStepper();
     backBtn.style.visibility = state.step === 0 ? 'hidden' : 'visible';
-    // Reset next button state unless we're actively downloading a model or awaiting a test
-    const awaitingTest = name === 'model-download' &&
-      state.modelDownloadChoice === 'now' &&
-      state.modelDownloaded &&
-      !state.whisperTestPassed;
-    if (name !== 'model-download' || (!state.modelDownloading && !state.whisperTesting && !awaitingTest)) {
+    // Reset next button state unless we're actively downloading a model
+    if (name !== 'model-download' || !state.modelDownloading) {
       nextBtn.disabled = false;
       nextBtn.classList.remove('success');
       nextBtn.classList.add('primary');
@@ -138,10 +132,7 @@
         // Allow advancing whether whisper is detected OR user skipped
         return state.whisperDetected || state.skippingWhisper;
       case 'model-download':
-        if (!state.modelDownloadChoice || state.modelDownloading) return false;
-        // If user chose to download now, require a successful mic test before continuing.
-        if (state.modelDownloadChoice === 'now' && state.modelDownloaded && !state.whisperTestPassed) return false;
-        return true;
+        return !!state.modelDownloadChoice && !state.modelDownloading;
       case 'finish':
         return true;
       default:
@@ -153,7 +144,6 @@
   const geminiInput = $('#geminiKey');
   const toggleVis = $('#toggleVis');
   const keyStatus = $('#keyStatus');
-  const testKeyBtn = $('#testKeyBtn');
 
   function setKeyStatus(state_, text) {
     keyStatus.className = `status-pill ${state_}`;
@@ -179,7 +169,7 @@
     } else if (keyStatus.classList.contains('success')) {
       // Keep success state — they had a valid key, may be editing
     } else {
-      setKeyStatus('idle', 'Key entered — click Test connection');
+      setKeyStatus('idle', 'Key entered');
     }
   });
 
@@ -189,37 +179,6 @@
     toggleVis.innerHTML = showing
       ? '<i class="fas fa-eye"></i>'
       : '<i class="fas fa-eye-slash"></i>';
-  });
-
-  testKeyBtn.addEventListener('click', async () => {
-    const key = geminiInput.value.trim();
-    if (!key) {
-      setKeyStatus('error', 'Enter a key first');
-      return;
-    }
-    if (!window.electronAPI) {
-      setKeyStatus('error', 'Bridge unavailable');
-      return;
-    }
-    testKeyBtn.disabled = true;
-    testKeyBtn.innerHTML = '<span class="spinner"></span> Testing…';
-    setKeyStatus('testing', 'Testing connection to Google Gemini…');
-    try {
-      // saveSettings writes the key into .env (atomic via persistEnvUpdates).
-      await window.electronAPI.saveSettings({ geminiKey: key });
-      const result = await window.electronAPI.testGeminiConnection();
-      if (result && result.success) {
-        state.geminiKey = key;
-        setKeyStatus('success', `Connected — ${result.model || 'Gemini ready'}`);
-      } else {
-        setKeyStatus('error', (result && result.error) || 'Connection failed');
-      }
-    } catch (e) {
-      setKeyStatus('error', `Error: ${e.message || e}`);
-    } finally {
-      testKeyBtn.disabled = false;
-      testKeyBtn.innerHTML = '<i class="fas fa-plug"></i> Test connection';
-    }
   });
 
   // ── Wire up: Speech choices ───────────────────────────────────────
@@ -418,17 +377,10 @@
             // Start downloading the model immediately
             startModelDownload();
           } else {
-            // 'later' doesn't need a test
             nextBtn.disabled = false;
           }
         });
       });
-
-      // Wire up the Whisper test button
-      const testBtn = document.getElementById('testWhisperBtn');
-      if (testBtn) {
-        testBtn.addEventListener('click', runWhisperTest);
-      }
     }
 
     // Restore selection state when navigating back
@@ -436,25 +388,9 @@
       card.classList.toggle('selected', card.dataset.value === state.modelDownloadChoice);
     });
 
-    // Restore test panel visibility and state
-    const testCard = document.getElementById('whisperTestCard');
-    if (testCard && state.modelDownloadChoice === 'now' && state.modelDownloaded) {
-      testCard.style.display = 'block';
-    }
-    const testBtn = document.getElementById('testWhisperBtn');
-    if (testBtn && state.whisperTestPassed) {
-      testBtn.innerHTML = '<i class="fas fa-check-circle"></i> Test passed';
-      testBtn.classList.remove('primary');
-      testBtn.classList.add('success');
-    }
-
-    // Re-enable continue button if a choice has been made and (if applicable) test passed
-    if (state.modelDownloadChoice && !state.modelDownloading && !state.whisperTesting) {
-      if (state.modelDownloadChoice === 'now' && state.modelDownloaded && !state.whisperTestPassed) {
-        nextBtn.disabled = true;
-      } else {
-        nextBtn.disabled = false;
-      }
+    // Re-enable continue button if a choice has been made and not actively downloading
+    if (state.modelDownloadChoice && !state.modelDownloading) {
+      nextBtn.disabled = false;
     }
   }
 
@@ -477,11 +413,10 @@
       if (r.ok) {
         state.modelDownloaded = true;
         appendModelLog(`\n✓ Model downloaded successfully: ${r.path}`);
-        // Show the Whisper mic test panel
-        const testCard = document.getElementById('whisperTestCard');
-        if (testCard) testCard.style.display = 'block';
-        // Keep Continue disabled until test passes
-        nextBtn.disabled = true;
+        nextBtn.disabled = false;
+        nextBtn.classList.remove('primary');
+        nextBtn.classList.add('success');
+        nextBtn.innerHTML = '<i class="fas fa-check-circle"></i> Continue';
       } else {
         appendModelLog(`\n✗ Download failed: ${r.message}`);
         // Let user continue anyway; they'll download on first use
@@ -496,48 +431,6 @@
         try { window.electronAPI.removeAllListeners('install-progress'); } catch (_) { /* ignore */ }
       }
     }
-  }
-
-  async function runWhisperTest() {
-    const btn = document.getElementById('testWhisperBtn');
-    const resultEl = document.getElementById('whisperTestResult');
-    if (!btn || !window.electronAPI || !window.electronAPI.testWhisperRecording) return;
-
-    state.whisperTesting = true;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Listening…';
-    if (resultEl) resultEl.textContent = 'Speak now…';
-
-    try {
-      const r = await window.electronAPI.testWhisperRecording();
-      if (r.ok) {
-        state.whisperTestPassed = true;
-        if (resultEl) resultEl.innerHTML = `<span style="color: var(--success);">✓ Heard:</span> “${escapeHtml(r.text)}”`;
-        btn.innerHTML = '<i class="fas fa-check-circle"></i> Test passed';
-        btn.classList.remove('primary');
-        btn.classList.add('success');
-        nextBtn.disabled = false;
-        nextBtn.classList.remove('primary');
-        nextBtn.classList.add('success');
-        nextBtn.innerHTML = '<i class="fas fa-check-circle"></i> Continue';
-      } else {
-        if (resultEl) resultEl.innerHTML = `<span style="color: var(--error);">✗ ${escapeHtml(r.error || 'Test failed')}</span>`;
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-redo"></i> Retry test';
-      }
-    } catch (e) {
-      if (resultEl) resultEl.innerHTML = `<span style="color: var(--error);">✗ ${escapeHtml(e.message || e)}</span>`;
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-redo"></i> Retry test';
-    } finally {
-      state.whisperTesting = false;
-    }
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   // ── Wire up: Finish screen ────────────────────────────────────────

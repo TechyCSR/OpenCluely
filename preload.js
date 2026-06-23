@@ -49,7 +49,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   detectWhisper: () => ipcRenderer.invoke('detect-whisper'),
   installWhisper: () => ipcRenderer.invoke('install-whisper'),
   downloadWhisperModel: (modelName) => ipcRenderer.invoke('download-whisper-model', modelName),
-  testWhisperRecording: () => ipcRenderer.invoke('test-whisper-recording'),
   onInstallProgress: (callback) => {
     const wrapped = (_event, line) => {
       try { callback(line); } catch (e) { console.error('onInstallProgress error:', e); }

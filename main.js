@@ -379,15 +379,6 @@ class ApplicationController {
       return speechService.isAvailable ? speechService.isAvailable() : false;
     });
 
-    ipcMain.handle("test-whisper-recording", async () => {
-      try {
-        const result = await speechService.testWhisperRecording(5000);
-        return result;
-      } catch (error) {
-        return { ok: false, error: error.message };
-      }
-    });
-
     ipcMain.handle("start-speech-recognition", () => {
       speechService.startRecording();
       return speechService.getStatus();
