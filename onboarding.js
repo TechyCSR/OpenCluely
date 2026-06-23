@@ -37,6 +37,8 @@
     whisperCmd: null,
     whisperDetected: false,
     skippingWhisper: false,
+    modelDownloadChoice: null, // 'now' | 'later'
+    modelDownloading: false,
     finished: false,
   };
 
@@ -71,6 +73,12 @@
     }
     refreshStepper();
     backBtn.style.visibility = state.step === 0 ? 'hidden' : 'visible';
+    // Reset next button state unless we're actively downloading a model
+    if (name !== 'model-download' || !state.modelDownloading) {
+      nextBtn.disabled = false;
+      nextBtn.classList.remove('success');
+      nextBtn.classList.add('primary');
+    }
     // The primary action label changes by step
     if (name === 'welcome') nextBtn.innerHTML = 'Get started <i class="fas fa-arrow-right"></i>';
     else if (name === 'finish') nextBtn.innerHTML = 'Finish <i class="fas fa-check"></i>';
@@ -123,7 +131,7 @@
         // Allow advancing whether whisper is detected OR user skipped
         return state.whisperDetected || state.skippingWhisper;
       case 'model-download':
-        return !!state.modelDownloadChoice;
+        return !!state.modelDownloadChoice && !state.modelDownloading;
       case 'finish':
         return true;
       default:
@@ -385,31 +393,40 @@
 
   let modelDownloadInitialized = false;
   function enterModelDownloadScreen() {
-    if (modelDownloadInitialized) return;
-    modelDownloadInitialized = true;
+    if (!modelDownloadInitialized) {
+      modelDownloadInitialized = true;
 
-    // Set up choice card click handlers
-    $$('#modelDownloadChoices .choice-card').forEach((card) => {
-      card.addEventListener('click', () => {
-        const value = card.dataset.value;
-        state.modelDownloadChoice = value;
-        $$('#modelDownloadChoices .choice-card').forEach((c) => c.classList.remove('selected'));
-        card.classList.add('selected');
-        
-        if (value === 'now') {
-          // Start downloading the model immediately
-          startModelDownload();
-        }
+      // Set up choice card click handlers once
+      $$('#modelDownloadChoices .choice-card').forEach((card) => {
+        card.addEventListener('click', () => {
+          const value = card.dataset.value;
+          state.modelDownloadChoice = value;
+          $$('#modelDownloadChoices .choice-card').forEach((c) => c.classList.remove('selected'));
+          card.classList.add('selected');
+          
+          if (value === 'now') {
+            // Start downloading the model immediately
+            startModelDownload();
+          }
+        });
       });
+    }
+
+    // Restore selection state when navigating back
+    $$('#modelDownloadChoices .choice-card').forEach((card) => {
+      card.classList.toggle('selected', card.dataset.value === state.modelDownloadChoice);
     });
+
+    // Re-enable continue button if a choice has been made (or download already completed)
+    if (state.modelDownloadChoice && !state.modelDownloading) {
+      nextBtn.disabled = false;
+    }
   }
 
   async function startModelDownload() {
-    const nextBtnEl = document.getElementById('nextBtn');
-    if (nextBtnEl) {
-      nextBtnEl.disabled = true;
-      nextBtnEl.innerHTML = '<span class="spinner"></span> Downloading…';
-    }
+    state.modelDownloading = true;
+    nextBtn.disabled = true;
+    nextBtn.innerHTML = '<span class="spinner"></span> Downloading…';
 
     appendModelLog('Starting model download…');
 
@@ -421,26 +438,25 @@
 
     try {
       const r = await window.electronAPI.downloadWhisperModel('turbo');
+      state.modelDownloading = false;
       if (r.ok) {
         appendModelLog(`\n✓ Model downloaded successfully: ${r.path}`);
-        if (nextBtnEl) {
-          nextBtnEl.innerHTML = '<i class="fas fa-check-circle"></i> Downloaded';
-          nextBtnEl.classList.remove('primary');
-          nextBtnEl.classList.add('success');
-        }
+        // Re-enable continue so user can proceed to finish
+        nextBtn.disabled = false;
+        nextBtn.classList.remove('primary');
+        nextBtn.classList.add('success');
+        nextBtn.innerHTML = '<i class="fas fa-check-circle"></i> Continue';
       } else {
         appendModelLog(`\n✗ Download failed: ${r.message}`);
-        if (nextBtnEl) {
-          nextBtnEl.disabled = false;
-          nextBtnEl.innerHTML = 'Continue <i class="fas fa-arrow-right"></i>';
-        }
+        // Let user continue anyway; they'll download on first use
+        nextBtn.disabled = false;
+        nextBtn.innerHTML = 'Continue <i class="fas fa-arrow-right"></i>';
       }
     } catch (e) {
+      state.modelDownloading = false;
       appendModelLog(`\n! Error: ${e.message || e}`);
-      if (nextBtnEl) {
-        nextBtnEl.disabled = false;
-        nextBtnEl.innerHTML = 'Continue <i class="fas fa-arrow-right"></i>';
-      }
+      nextBtn.disabled = false;
+      nextBtn.innerHTML = 'Continue <i class="fas fa-arrow-right"></i>';
     } finally {
       if (progressHandler && window.electronAPI.removeAllListeners) {
         try { window.electronAPI.removeAllListeners('install-progress'); } catch (_) { /* ignore */ }
