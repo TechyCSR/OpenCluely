@@ -909,6 +909,21 @@
                 </div>
 
                 <div class="install-log" id="modelDownloadLog"></div>
+
+                <!-- Whisper test panel (shown after model is downloaded) -->
+                <div class="install-card" id="whisperTestCard" style="display:none; margin-top: 14px;">
+                    <div class="install-title">
+                        <i class="fas fa-microphone"></i>
+                        <span>Test Whisper</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;">
+                        Click the button below and speak a short sentence to confirm the microphone and Whisper model are working.
+                    </p>
+                    <button class="btn primary" id="testWhisperBtn" type="button">
+                        <i class="fas fa-microphone-lines"></i> Record 5-second test
+                    </button>
+                    <div id="whisperTestResult" style="margin-top: 12px; font-size: 12px; color: var(--text-dim);"></div>
+                </div>
             </section>
 
             <!-- SCREEN 6: Finish (star prompt + summary) -->

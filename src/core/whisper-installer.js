@@ -528,51 +528,41 @@ class WhisperInstaller {
     }
 
     const command = detectResult.command;
-    log(`→ Downloading ${modelName} model using ${command}…`);
+    log(`→ Preparing to download ${modelName} model…`);
 
-    // Parse the command to get the python executable and module
-    let pythonCmd, moduleName;
+    // Parse the command to get the python executable that owns the whisper module.
+    let pythonCmd;
     if (command.includes(' -m ')) {
-      const parts = command.split(' -m ');
-      pythonCmd = parts[0].trim();
-      moduleName = parts[1].trim();
+      pythonCmd = command.split(' -m ')[0].trim();
     } else if (command.endsWith(' -m whisper')) {
       pythonCmd = command.replace(' -m whisper', '').trim();
-      moduleName = 'whisper';
     } else {
-      // Fallback: assume it's a direct whisper command
-      pythonCmd = 'python3';
-      moduleName = 'whisper';
+      // The command is a whisper binary (likely inside the venv). Derive the
+      // sibling python interpreter from the venv layout.
+      const binDir = path.dirname(command);
+      const isWin = this.platform === 'win32';
+      const pythonExe = isWin ? 'python.exe' : 'python';
+      const candidate = path.join(binDir, pythonExe);
+      if (fs.existsSync(candidate)) {
+        pythonCmd = candidate;
+      } else {
+        pythonCmd = isWin ? 'python' : 'python3';
+      }
     }
 
-    const result = await this.runExec(pythonCmd, ['-m', moduleName, '--model', modelName, '--help'], {
-      timeout: 30000,
+    // whisper.load_model() downloads the weights lazily and prints progress
+    // to stderr. We capture that output and relay it via onProgress.
+    log(`→ Downloading ${modelName} weights (this may take a minute)…`);
+    const loadResult = await this.runExec(pythonCmd, [
+      '-c',
+      `import whisper; whisper.load_model('${modelName}'); print('model_loaded')`
+    ], {
+      timeout: 600000,
       onProgress: log,
     });
 
-    if (!result.ok) {
-      // Try running a small transcription to trigger download
-      log(`→ Triggering model download via test transcription…`);
-      const testResult = await this.runExec(pythonCmd, ['-m', moduleName, '--model', modelName, '--language', 'en', '/dev/null'], {
-        timeout: 120000,
-        onProgress: log,
-      });
-      
-      if (!testResult.ok) {
-        // Check if it's just a file not found error (model downloading)
-        if (testResult.stderr && testResult.stderr.includes('Downloading')) {
-          // Wait for download to complete
-          const downloadResult = await this.runExec(pythonCmd, ['-m', moduleName, '--model', modelName, '--help'], {
-            timeout: 300000,
-            onProgress: log,
-          });
-          if (downloadResult.ok) {
-            const modelPath = this._getModelPath(modelName);
-            return { ok: true, message: `Model ${modelName} downloaded successfully`, path: modelPath };
-          }
-        }
-        return { ok: false, message: testResult.stderr || testResult.error };
-      }
+    if (!loadResult.ok) {
+      return { ok: false, message: loadResult.stderr || loadResult.error };
     }
 
     const modelPath = this._getModelPath(modelName);

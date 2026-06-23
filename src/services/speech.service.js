@@ -818,6 +818,62 @@ class SpeechService extends EventEmitter {
     this._audioDataLogged = false;
   }
 
+  /**
+   * Record a short audio clip and return the transcription.
+   * Used by the onboarding wizard to verify the Whisper model works.
+   */
+  async testWhisperRecording(durationMs = 5000) {
+    return new Promise((resolve, reject) => {
+      if (!this.isAvailable()) {
+        reject(new Error('Speech recognition is not available'));
+        return;
+      }
+
+      let timeoutId = null;
+      let transcriptionReceived = false;
+
+      const onTranscription = (text) => {
+        if (transcriptionReceived) return;
+        transcriptionReceived = true;
+        cleanup();
+        resolve({ ok: true, text: text.trim() });
+      };
+
+      const onError = (error) => {
+        if (transcriptionReceived) return;
+        cleanup();
+        reject(new Error(typeof error === 'string' ? error : error?.message || 'Speech test failed'));
+      };
+
+      const cleanup = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        this.off('transcription', onTranscription);
+        this.off('error', onError);
+      };
+
+      this.once('transcription', onTranscription);
+      this.once('error', onError);
+
+      try {
+        this.startRecording();
+        timeoutId = setTimeout(() => {
+          if (transcriptionReceived) return;
+          this.stopRecording();
+          // Give Whisper a short window to emit transcription after stop
+          setTimeout(() => {
+            if (!transcriptionReceived) {
+              cleanup();
+              reject(new Error('No transcription received. Speak louder or check your microphone.'));
+            }
+          }, 3000);
+        }, durationMs);
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    });
+  }
+
   async recognizeFromFile(audioFilePath) {
     if (this.provider === 'azure') {
       if (!this.speechConfig) {
