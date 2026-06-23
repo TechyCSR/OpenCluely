@@ -18,6 +18,8 @@ class PromptLoader {
       return;
     }
 
+    // In packaged builds asar-unpacked files are still reachable through
+    // their original path thanks to Electron's fs patching.
     const promptsDir = path.join(__dirname, 'prompts');
     
     try {

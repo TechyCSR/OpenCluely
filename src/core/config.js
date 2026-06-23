@@ -40,10 +40,11 @@ class ConfigManager {
 
       llm: {
         gemini: {
-          // 'gemini-1.5-flash' is Google's stable Flash model for v1 API.
-          // Swap to a newer version (e.g. 'gemini-2.0-flash',
-          // 'gemini-2.5-flash') when available.
-          model: 'gemini-1.5-flash',
+          // 'gemini-3.5-flash' is Google's current stable Flash model.
+          // 'gemini-3-flash-preview' is the fallback because it also has a
+          // free tier and is less likely to hit demand spikes.
+          model: 'gemini-3.5-flash',
+          fallbackModels: ['gemini-3-flash-preview', 'gemini-2.5-flash'],
           maxRetries: 3,
           timeout: 60000,
           fallbackEnabled: true,

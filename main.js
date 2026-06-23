@@ -1551,7 +1551,7 @@ class ApplicationController {
         return { success: false, error: "Invalid icon key" };
       }
 
-      const fullIconPath = path.resolve(iconPath);
+      const fullIconPath = path.resolve(__dirname, iconPath);
 
       if (!fs.existsSync(fullIconPath)) {
         logger.error("Icon file not found", {
@@ -1636,7 +1636,7 @@ class ApplicationController {
           // Force dock refresh
           setTimeout(() => {
             app.dock.setIcon(
-              require("path").resolve(`assests/icons/${iconKey}.png`)
+              require("path").resolve(__dirname, `assests/icons/${iconKey}.png`)
             );
           }, 50);
         }

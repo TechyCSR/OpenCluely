@@ -31,7 +31,7 @@
   "license": "ISC",
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.2.0",
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^2.9.0",
     "dotenv": "^16.3.1",
     "markdown": "^0.5.0",
     "marked": "^15.0.12",
@@ -60,6 +60,10 @@
       "!.venv-whisper/**/*",
       "!.whisper-models/**/*",
       "!eng.traineddata"
+    ],
+    "asarUnpack": [
+      "assests/icons/**/*",
+      "prompts/**/*"
     ],
     "mac": {
       "category": "public.app-category.utilities",

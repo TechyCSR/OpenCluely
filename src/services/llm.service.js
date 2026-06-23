@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const logger = require('../core/logger').createServiceLogger('LLM');
 const config = require('../core/config');
 const { promptLoader } = require('../../prompt-loader');
@@ -26,18 +26,14 @@ class LLMService {
     }
 
     try {
-      this.client = new GoogleGenerativeAI(apiKey);
+      this.client = new GoogleGenAI({ apiKey });
       
-      // Use the correct model name for v1 API
-      const modelName = config.get('llm.gemini.model');
-      this.model = this.client.getGenerativeModel({ 
-        model: modelName,
-        generationConfig: this.getGenerationConfig()
-      });
+      // Use the configured model name (default: gemini-3.5-flash)
+      this.model = config.get('llm.gemini.model');
       this.isInitialized = true;
       
       logger.info('Gemini AI client initialized successfully', {
-        model: modelName
+        model: this.model
       });
     } catch (error) {
       logger.error('Failed to initialize Gemini client', { 
@@ -67,6 +63,15 @@ class LLMService {
   }
 
   extractTextFromCandidates(response) {
+    // New @google/genai SDK exposes response.text as a convenience getter.
+    if (response && typeof response.text === 'string' && response.text.trim().length > 0) {
+      return {
+        text: response.text.trim(),
+        candidate: response.candidates?.[0] || null,
+        finishReason: response.candidates?.[0]?.finishReason || null
+      };
+    }
+
     const candidates = Array.isArray(response?.candidates)
       ? response.candidates
       : Array.isArray(response)
@@ -715,100 +720,137 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   async executeRequest(geminiRequest) {
     const maxRetries = config.get('llm.gemini.maxRetries');
     const timeout = config.get('llm.gemini.timeout');
-    
-    // Add request debugging
+    const primaryModel = this.model;
+    const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
+    const modelsToTry = [primaryModel, ...fallbackModels];
+
     logger.debug('Executing Gemini request', {
       hasModel: !!this.model,
       hasClient: !!this.client,
       requestKeys: Object.keys(geminiRequest),
       timeout,
       maxRetries,
+      modelsToTry,
       nodeVersion: process.version,
       platform: process.platform
     });
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        // Pre-flight check
-        await this.performPreflightCheck();
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), timeout)
-        );
-        
-        logger.debug(`Gemini API attempt ${attempt} starting`, {
-          timestamp: new Date().toISOString(),
-          timeout
-        });
-        
-        const requestPromise = this.model.generateContent(geminiRequest);
-        const result = await Promise.race([requestPromise, timeoutPromise]);
-        
-        if (!result.response) {
-          throw new Error('Empty response from Gemini API');
-        }
 
-        const { text, finishReason } = this.extractTextFromCandidates(result.response);
+    let lastError = null;
 
-        if (finishReason === 'MAX_TOKENS') {
-          logger.warn('Gemini primary response reached max tokens limit', {
+    for (const modelName of modelsToTry) {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // Pre-flight check
+          await this.performPreflightCheck();
+
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Request timeout')), timeout)
+          );
+
+          logger.debug(`Gemini API attempt ${attempt} starting with model ${modelName}`, {
+            timestamp: new Date().toISOString(),
+            timeout,
+            model: modelName
+          });
+
+          const requestPromise = this.client.models.generateContent({
+            model: modelName,
+            contents: geminiRequest.contents,
+            config: geminiRequest.generationConfig,
+            systemInstruction: geminiRequest.systemInstruction
+          });
+          const result = await Promise.race([requestPromise, timeoutPromise]);
+
+          if (!result) {
+            throw new Error('Empty response from Gemini API');
+          }
+
+          const { text, finishReason } = this.extractTextFromCandidates(result);
+
+          if (finishReason === 'MAX_TOKENS') {
+            logger.warn('Gemini response reached max tokens limit', {
+              attempt,
+              finishReason,
+              model: modelName
+            });
+          }
+
+          logger.debug('Gemini API request successful', {
             attempt,
+            model: modelName,
+            responseLength: text.length,
             finishReason
           });
-        }
 
-        logger.debug('Gemini API request successful', {
-          attempt,
-          responseLength: text.length,
-          finishReason
-        });
+          return text;
+        } catch (error) {
+          const errorInfo = this.analyzeError(error);
+          lastError = error;
 
-        return text;
-      } catch (error) {
-        const errorInfo = this.analyzeError(error);
-        
-        // Enhanced error logging for fetch failures
-        if (errorInfo.type === 'NETWORK_ERROR') {
-          logger.error('Network error details', {
-            attempt,
-            errorMessage: error.message,
-            errorStack: error.stack,
-            errorName: error.name,
-            nodeEnv: process.env.NODE_ENV,
-            electronVersion: process.versions.electron,
-            chromeVersion: process.versions.chrome,
-            nodeVersion: process.versions.node,
-            userAgent: this.getUserAgent()
+          // Enhanced error logging for fetch failures
+          if (errorInfo.type === 'NETWORK_ERROR') {
+            logger.error('Network error details', {
+              attempt,
+              model: modelName,
+              errorMessage: error.message,
+              errorStack: error.stack,
+              errorName: error.name,
+              nodeEnv: process.env.NODE_ENV,
+              electronVersion: process.versions.electron,
+              chromeVersion: process.versions.chrome,
+              nodeVersion: process.versions.node,
+              userAgent: this.getUserAgent()
+            });
+          }
+
+          logger.warn(`Gemini API attempt ${attempt} failed for model ${modelName}`, {
+            error: error.message,
+            errorType: errorInfo.type,
+            isNetworkError: errorInfo.isNetworkError,
+            suggestedAction: errorInfo.suggestedAction,
+            remainingAttempts: maxRetries - attempt,
+            model: modelName
           });
-        }
-        
-        logger.warn(`Gemini API attempt ${attempt} failed`, {
-          error: error.message,
-          errorType: errorInfo.type,
-          isNetworkError: errorInfo.isNetworkError,
-          suggestedAction: errorInfo.suggestedAction,
-          remainingAttempts: maxRetries - attempt
-        });
 
-        if (attempt === maxRetries) {
-          const finalError = new Error(`Gemini API failed after ${maxRetries} attempts: ${error.message}`);
-          finalError.errorAnalysis = errorInfo;
-          finalError.originalError = error;
-          throw finalError;
-        }
+          // For model-unavailable / overloaded / rate-limit errors, move to
+          // the next fallback model immediately instead of burning all retries.
+          const isModelUnavailable = errorInfo.type === 'RATE_LIMIT_ERROR' ||
+            error.message.includes('503') ||
+            error.message.includes('UNAVAILABLE') ||
+            error.message.includes('high demand');
 
-        // Use exponential backoff with jitter for network errors
-        const baseDelay = errorInfo.isNetworkError ? 2500 : 1500;
-        const delay = baseDelay * attempt + Math.random() * 1000;
-        
-        logger.debug(`Waiting ${delay}ms before retry ${attempt + 1}`, {
-          baseDelay,
-          isNetworkError: errorInfo.isNetworkError
-        });
-        
-        await this.delay(delay);
+          if (isModelUnavailable && modelName !== modelsToTry[modelsToTry.length - 1]) {
+            logger.info(`Switching to fallback model after ${modelName} unavailable`, {
+              model: modelName,
+              error: error.message
+            });
+            break; // exit retry loop for this model and try next model
+          }
+
+          if (attempt === maxRetries) {
+            break; // exit retry loop for this model and try next model
+          }
+
+          // Use exponential backoff with jitter for network errors
+          const baseDelay = errorInfo.isNetworkError ? 2500 : 1500;
+          const delay = baseDelay * attempt + Math.random() * 1000;
+
+          logger.debug(`Waiting ${delay}ms before retry ${attempt + 1}`, {
+            baseDelay,
+            isNetworkError: errorInfo.isNetworkError,
+            model: modelName
+          });
+
+          await this.delay(delay);
+        }
       }
     }
+
+    const finalErrorInfo = this.analyzeError(lastError);
+    const finalError = new Error(`Gemini API failed after trying ${modelsToTry.join(', ')}: ${lastError?.message}`);
+    finalError.errorAnalysis = finalErrorInfo;
+    finalError.originalError = lastError;
+    throw finalError;
   }
 
   async performPreflightCheck() {
@@ -1026,32 +1068,61 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
         logger.warn('Network connectivity issues detected', networkCheck);
       }
 
-      const testRequest = {
-        contents: [{
-          role: 'user',
-          parts: [{ text: 'Test connection. Please respond with "OK".' }]
-        }]
-      };
+      const generationConfig = this.getGenerationConfig({ temperature: 0, maxOutputTokens: 64 });
+      const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
+      const modelsToTry = [this.model, ...fallbackModels];
 
-      this.applyGenerationDefaults(testRequest, { temperature: 0, maxOutputTokens: 10 });
+      let lastError = null;
+      let result = null;
+      let usedModel = null;
 
-      const startTime = Date.now();
-      const result = await this.model.generateContent(testRequest);
-      const latency = Date.now() - startTime;
-      const { text } = this.extractTextFromCandidates(result.response);
-      
-      logger.info('Connection test successful', { 
-        response: text, 
-        latency,
-        networkCheck: hasNetworkIssues ? 'issues_detected' : 'healthy'
-      });
-      
-      return { 
-        success: true, 
-        response: text,
-        latency,
-        networkConnectivity: networkCheck
-      };
+      for (const modelName of modelsToTry) {
+        try {
+          const startTime = Date.now();
+          result = await this.client.models.generateContent({
+            model: modelName,
+            contents: 'Test connection. Please respond with "OK".',
+            config: generationConfig
+          });
+          usedModel = modelName;
+          const latency = Date.now() - startTime;
+          const { text } = this.extractTextFromCandidates(result);
+
+          logger.info('Connection test successful', {
+            response: text,
+            latency,
+            model: usedModel,
+            networkCheck: hasNetworkIssues ? 'issues_detected' : 'healthy'
+          });
+
+          return {
+            success: true,
+            response: text,
+            latency,
+            model: usedModel,
+            networkConnectivity: networkCheck
+          };
+        } catch (error) {
+          lastError = error;
+          logger.warn(`Connection test failed for model ${modelName}`, {
+            error: error.message,
+            model: modelName
+          });
+
+          const isModelUnavailable = error.message.includes('503') ||
+            error.message.includes('UNAVAILABLE') ||
+            error.message.includes('high demand') ||
+            error.message.includes('quota') ||
+            error.message.includes('rate limit');
+
+          if (!isModelUnavailable && modelName === this.model) {
+            // Primary model failed for a non-availability reason; don't hide it
+            break;
+          }
+        }
+      }
+
+      throw lastError || new Error('Connection test failed on all models');
     } catch (error) {
       const errorAnalysis = this.analyzeError(error);
       logger.error('Connection test failed', {
@@ -1060,8 +1131,8 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
       });
 
       // Map raw SDK errors to user-friendly messages. The wizard only
-      // surfaces `error`, so any raw "[GoogleGenerativeAI Error]: ..."
-      // string would land in the UI verbatim.
+      // surfaces `error`, so any raw SDK error string would land in the
+      // UI verbatim.
       const friendlyError = this._friendlyTestError(error, errorAnalysis);
 
       return {
@@ -1096,8 +1167,11 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     if (type === 'MODEL_ERROR' || raw.includes('model') || raw.includes('404')) {
       return 'The configured Gemini model is unavailable. Try a different model in Settings.';
     }
+    if (raw.includes('503') || raw.includes('unavailable') || raw.includes('high demand')) {
+      return 'Gemini is experiencing high demand. Please wait a moment and try again.';
+    }
     // Fall back to a stripped-down raw message (no SDK prefix noise)
-    return (error?.message || 'Connection failed').replace(/^\[GoogleGenerativeAI Error\]:\s*/i, '');
+    return (error?.message || 'Connection failed').replace(/^\[(GoogleGenerativeAI|GoogleGenAI) Error\]:\s*/i, '');
   }
 
   updateApiKey(newApiKey) {
@@ -1125,14 +1199,45 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   async executeAlternativeRequest(geminiRequest) {
     const https = require('https');
     const apiKey = config.getApiKey('GEMINI');
-    const model = config.get('llm.gemini.model');
-    
-    logger.info('Using alternative HTTPS request method');
-    
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-    
+    const primaryModel = config.get('llm.gemini.model');
+    const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
+    const modelsToTry = [primaryModel, ...fallbackModels];
+
+    logger.info('Using alternative HTTPS request method', { modelsToTry });
+
+    let lastError = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        const result = await this._executeAlternativeRequestForModel(geminiRequest, modelName, apiKey);
+        return result;
+      } catch (error) {
+        lastError = error;
+        logger.warn(`Alternative HTTPS request failed for model ${modelName}`, {
+          error: error.message,
+          model: modelName
+        });
+
+        const isModelUnavailable = error.message.includes('503') ||
+          error.message.includes('UNAVAILABLE') ||
+          error.message.includes('high demand');
+
+        if (!isModelUnavailable && modelName === primaryModel) {
+          break;
+        }
+      }
+    }
+
+    throw lastError || new Error('Alternative HTTPS request failed for all models');
+  }
+
+  async _executeAlternativeRequestForModel(geminiRequest, modelName, apiKey) {
+    const https = require('https');
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+
     const postData = JSON.stringify(geminiRequest);
-    
+
     const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
 
     const options = {

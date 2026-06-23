@@ -198,7 +198,7 @@
       // saveSettings writes the key into .env (atomic via persistEnvUpdates).
       await window.electronAPI.saveSettings({ geminiKey: key });
       const result = await window.electronAPI.testGeminiConnection();
-      if (result && result.ok) {
+      if (result && result.success) {
         state.geminiKey = key;
         setKeyStatus('success', `Connected — ${result.model || 'Gemini ready'}`);
       } else {
