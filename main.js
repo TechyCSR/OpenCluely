@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const path = require("path");
 const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
 
 // ── Linux GPU process crash workaround ──
@@ -58,7 +59,10 @@ class ApplicationController {
     // a settings-window prompt on first launch so users don't have to
     // dig through docs to figure out they need a Gemini API key.
     this.firstRunManager = new FirstRunManager({
-      logger: logger
+      logger: logger,
+      // Sentinel lives in userData so it survives cwd changes
+      // (the app may be launched from any directory).
+      sentinelPath: path.join(app.getPath("userData"), ".opencluely-firstrun-completed"),
     });
     // Lazily-initialised in getWhisperInstaller() so tests can mock
     // the constructor without polluting main-process startup.
@@ -166,10 +170,21 @@ class ApplicationController {
       // Small delay to ensure desktop/space detection is accurate
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      // During first-run onboarding, defer showing the main overlay
-      // window until the wizard finishes (it needs API keys to function).
-      const status = this.firstRunManager.getStatus();
+      // First-run onboarding: ensure .env exists and read status once
+      // so we can decide whether to defer showing the main overlay.
+      let status;
+      try {
+        this.firstRunManager.ensureEnv();
+        status = this.firstRunManager.getStatus();
+        this.isFirstRun = status.needsOnboarding;
+        logger.info("First-run status", status);
+      } catch (e) {
+        logger.warn("First-run check failed", { error: e.message });
+        status = { needsOnboarding: false };
+        this.isFirstRun = false;
+      }
       const isFirstRun = status.needsOnboarding;
+
       await windowManager.initializeWindows({ showMainWindow: !isFirstRun });
       this.setupGlobalShortcuts();
 
@@ -179,36 +194,26 @@ class ApplicationController {
       this.starting = false;
       this.isReady = true;
 
-      // First-run onboarding: ensure .env exists and launch the
-      // multi-step onboarding wizard if the user hasn't completed it.
-      // Non-blocking — failure here just logs.
-      try {
-        this.firstRunManager.ensureEnv();
-        const status = this.firstRunManager.getStatus();
-        this.isFirstRun = status.needsOnboarding;
-        logger.info("First-run status", status);
-        if (this.isFirstRun) {
-          // Defer slightly so all windows finish loading before we pop
-          // the wizard on top of them.
-          setTimeout(() => {
-            try {
-              windowManager.showOnboarding();
-              windowManager.broadcastToAllWindows("first-run", status);
-              logger.info("First-run onboarding: wizard opened");
-            } catch (e) {
-              logger.warn("Could not open first-run onboarding window", {
-                error: e.message
-              });
-              // Fallback to legacy settings prompt
-              try { this.showSettings(); } catch (_) { /* ignore */ }
-            }
-          }, 800);
-        } else {
-          // Already configured — mark completed so we never nag again.
-          this.firstRunManager.markCompleted();
-        }
-      } catch (e) {
-        logger.warn("First-run check failed", { error: e.message });
+      // Launch the onboarding wizard if this is the first run.
+      if (this.isFirstRun) {
+        // Defer slightly so all windows finish loading before we pop
+        // the wizard on top of them.
+        setTimeout(() => {
+          try {
+            windowManager.showOnboarding();
+            windowManager.broadcastToAllWindows("first-run", status);
+            logger.info("First-run onboarding: wizard opened");
+          } catch (e) {
+            logger.warn("Could not open first-run onboarding window", {
+              error: e.message
+            });
+            // Fallback to legacy settings prompt
+            try { this.showSettings(); } catch (_) { /* ignore */ }
+          }
+        }, 800);
+      } else {
+        // Already configured — mark completed so we never nag again.
+        this.firstRunManager.markCompleted();
       }
 
       logger.info("Application initialized successfully", {

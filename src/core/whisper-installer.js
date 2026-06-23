@@ -230,6 +230,22 @@ class WhisperInstaller {
     }
     log(`✓ Found Python: ${python}`);
 
+    // openai-whisper requires Python 3.9+ (3.10+ recommended for best
+    // performance). Catch version mismatch BEFORE attempting pip
+    // install — the pip error is cryptic and confusing.
+    const version = await this._getPythonVersion(python);
+    if (!version) {
+      log('! Could not determine Python version');
+      return { ok: false, command: null, message: 'Could not determine Python version', logs: '' };
+    }
+    log(`→ Python version: ${version}`);
+    if (!this._isPythonVersionOk(version)) {
+      const msg = `Python ${version} is too old. openai-whisper requires Python 3.9 or newer. Please upgrade Python and retry.`;
+      log(`! ${msg}`);
+      return { ok: false, command: null, message: msg, logs: msg };
+    }
+    log('✓ Python version OK');
+
     const vp = this.venvPaths;
     const venvExists = fs.existsSync(vp.python);
 
@@ -286,6 +302,21 @@ class WhisperInstaller {
       return { ok: false, command: null, message: msg, logs: msg };
     }
 
+    // Check for ffmpeg — whisper needs it for any non-WAV audio.
+    // We log a warning but don't fail; user can install it later.
+    const ffmpeg = await this._probeFfmpeg();
+    if (ffmpeg.found) {
+      log(`✓ ffmpeg detected (${ffmpeg.path})`);
+    } else {
+      const ffmpegMsg = this.platform === 'win32'
+        ? 'ffmpeg not found — install with `winget install ffmpeg` or download from gyan.dev. Required for non-WAV audio.'
+        : this.platform === 'darwin'
+          ? 'ffmpeg not found — install with `brew install ffmpeg`. Required for non-WAV audio.'
+          : 'ffmpeg not found — install with `sudo apt install ffmpeg` (Debian/Ubuntu). Required for non-WAV audio.';
+      log(`! ${ffmpegMsg}`);
+      log('  (Whisper will work for WAV files; install ffmpeg later for other formats)');
+    }
+
     const commandStr = `${vp.python} -m whisper`;
     log(`✓ Whisper CLI ready: ${commandStr} (v${verify.version || '?'})`);
 
@@ -294,7 +325,27 @@ class WhisperInstaller {
       command: commandStr,
       message: `Installed Whisper v${verify.version || '?'} into ${this.venvPath}`,
       logs: pipResult.stdout,
+      ffmpegDetected: ffmpeg.found,
     };
+  }
+
+  /**
+   * Probe for ffmpeg on PATH. Returns { found, path }.
+   */
+  async _probeFfmpeg() {
+    try {
+      const { spawnSync } = require('child_process');
+      const r = spawnSync(
+        this.platform === 'win32' ? 'where' : 'which',
+        ['ffmpeg'],
+        { windowsHide: true },
+      );
+      if (r.status === 0) {
+        const path = (r.stdout || '').toString().split(/\r?\n/)[0].trim();
+        return { found: true, path };
+      }
+    } catch (_) { /* ignore */ }
+    return { found: false, path: null };
   }
 
   /**
@@ -426,6 +477,33 @@ class WhisperInstaller {
       } catch (_) { /* ignore */ }
     }
     return null;
+  }
+
+  /**
+   * Resolve Python's `--version` string into a `major.minor` tuple
+   * (e.g. '3.11'). Returns null if it can't be determined.
+   */
+  async _getPythonVersion(pythonCmd) {
+    const r = await this.runExec(pythonCmd, ['-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'], {
+      timeout: 10000,
+    });
+    if (!r.ok) return null;
+    const m = (r.stdout || '').trim().match(/^(\d+)\.(\d+)/);
+    return m ? `${m[1]}.${m[2]}` : null;
+  }
+
+  /**
+   * openai-whisper requires Python 3.9+. We warn below 3.10 and refuse
+   * below 3.9. Returns false if the version is too old.
+   */
+  _isPythonVersionOk(version) {
+    const m = (version || '').match(/^(\d+)\.(\d+)/);
+    if (!m) return false;
+    const major = parseInt(m[1], 10);
+    const minor = parseInt(m[2], 10);
+    if (major > 3) return true;
+    if (major === 3 && minor >= 9) return true;
+    return false;
   }
 }
 
