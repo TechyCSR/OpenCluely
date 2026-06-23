@@ -432,6 +432,14 @@ class MainWindowUI {
                     });
                 }
             });
+
+            // Listen for main window shown event to refresh speech availability
+            window.electronAPI.onMainWindowShown(() => {
+                logger.debug('Main window shown - refreshing speech availability', {
+                    component: 'MainWindowUI'
+                });
+                this.loadSpeechAvailability();
+            });
             
             // Global keyboard shortcuts
             document.addEventListener('keydown', (e) => {

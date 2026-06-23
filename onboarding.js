@@ -96,6 +96,7 @@
   function computeScreenOrder() {
     const out = ['welcome', 'apikey', 'speech'];
     if (state.speechProvider === 'whisper') out.push('whisper');
+    if (state.speechProvider === 'whisper') out.push('model-download');
     out.push('finish');
     return out;
   }
@@ -121,6 +122,8 @@
       case 'whisper':
         // Allow advancing whether whisper is detected OR user skipped
         return state.whisperDetected || state.skippingWhisper;
+      case 'model-download':
+        return !!state.modelDownloadChoice;
       case 'finish':
         return true;
       default:
@@ -371,6 +374,80 @@
     runWhisperDetect();
   }
 
+  // ── Wire up: Model Download screen ───────────────────────────────
+  const modelDownloadLog = $('#modelDownloadLog');
+  const modelDownloadChoices = $('#modelDownloadChoices');
+
+  function appendModelLog(line) {
+    modelDownloadLog.textContent += (modelDownloadLog.textContent ? '\n' : '') + line;
+    modelDownloadLog.scrollTop = modelDownloadLog.scrollHeight;
+  }
+
+  let modelDownloadInitialized = false;
+  function enterModelDownloadScreen() {
+    if (modelDownloadInitialized) return;
+    modelDownloadInitialized = true;
+
+    // Set up choice card click handlers
+    $$('#modelDownloadChoices .choice-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const value = card.dataset.value;
+        state.modelDownloadChoice = value;
+        $$('#modelDownloadChoices .choice-card').forEach((c) => c.classList.remove('selected'));
+        card.classList.add('selected');
+        
+        if (value === 'now') {
+          // Start downloading the model immediately
+          startModelDownload();
+        }
+      });
+    });
+  }
+
+  async function startModelDownload() {
+    const nextBtnEl = document.getElementById('nextBtn');
+    if (nextBtnEl) {
+      nextBtnEl.disabled = true;
+      nextBtnEl.innerHTML = '<span class="spinner"></span> Downloading…';
+    }
+
+    appendModelLog('Starting model download…');
+
+    let progressHandler = null;
+    if (window.electronAPI && window.electronAPI.onInstallProgress) {
+      progressHandler = (line) => appendModelLog(line);
+      window.electronAPI.onInstallProgress(progressHandler);
+    }
+
+    try {
+      const r = await window.electronAPI.downloadWhisperModel('turbo');
+      if (r.ok) {
+        appendModelLog(`\n✓ Model downloaded successfully: ${r.path}`);
+        if (nextBtnEl) {
+          nextBtnEl.innerHTML = '<i class="fas fa-check-circle"></i> Downloaded';
+          nextBtnEl.classList.remove('primary');
+          nextBtnEl.classList.add('success');
+        }
+      } else {
+        appendModelLog(`\n✗ Download failed: ${r.message}`);
+        if (nextBtnEl) {
+          nextBtnEl.disabled = false;
+          nextBtnEl.innerHTML = 'Continue <i class="fas fa-arrow-right"></i>';
+        }
+      }
+    } catch (e) {
+      appendModelLog(`\n! Error: ${e.message || e}`);
+      if (nextBtnEl) {
+        nextBtnEl.disabled = false;
+        nextBtnEl.innerHTML = 'Continue <i class="fas fa-arrow-right"></i>';
+      }
+    } finally {
+      if (progressHandler && window.electronAPI.removeAllListeners) {
+        try { window.electronAPI.removeAllListeners('install-progress'); } catch (_) { /* ignore */ }
+      }
+    }
+  }
+
   // ── Wire up: Finish screen ────────────────────────────────────────
   function populateSummary() {
     const rows = [];
@@ -482,6 +559,15 @@
       }
     }
 
+    // Model download screen: persist choice
+    if (name === 'model-download') {
+      if (window.electronAPI && state.modelDownloadChoice) {
+        try {
+          await window.electronAPI.saveSettings({ whisperModelDownload: state.modelDownloadChoice });
+        } catch (_) { /* ignore */ }
+      }
+    }
+
     // Finish: close onboarding
     if (name === 'finish') {
       try {
@@ -504,6 +590,7 @@
     state.step = orderScreenToStep(nextName);
     showScreen(nextName);
     if (nextName === 'whisper') enterWhisperScreen();
+    if (nextName === 'model-download') enterModelDownloadScreen();
     if (nextName === 'finish') populateSummary();
 
     // Re-render stepper with new total

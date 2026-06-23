@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   closeOnboarding: () => ipcRenderer.invoke('close-onboarding'),
   detectWhisper: () => ipcRenderer.invoke('detect-whisper'),
   installWhisper: () => ipcRenderer.invoke('install-whisper'),
+  downloadWhisperModel: (modelName) => ipcRenderer.invoke('download-whisper-model', modelName),
   onInstallProgress: (callback) => {
     const wrapped = (_event, line) => {
       try { callback(line); } catch (e) { console.error('onInstallProgress error:', e); }
@@ -106,6 +107,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRecordingStarted: (callback) => ipcRenderer.on('recording-started', callback),
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
+  onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),

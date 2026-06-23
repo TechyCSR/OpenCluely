@@ -872,7 +872,46 @@
                 <div class="install-log" id="installLog"></div>
             </section>
 
-            <!-- SCREEN 5: Finish (star prompt + summary) -->
+            <!-- SCREEN 5: Whisper Model Download -->
+            <section class="screen" data-screen="model-download">
+                <h1>Whisper Model Download</h1>
+                <p class="subtitle" id="modelDownloadSubtitle">
+                    The Whisper transcription model needs to be downloaded before first use.
+                </p>
+
+                <div class="install-card" id="modelDownloadCard">
+                    <div class="install-title">
+                        <i class="fas fa-circle-info"></i>
+                        <span id="modelDownloadTitle">Choose when to download the model</span>
+                    </div>
+                    <div class="choice-list" id="modelDownloadChoices">
+                        <div class="choice-card" data-value="now">
+                            <div class="choice-icon"><i class="fas fa-download"></i></div>
+                            <div class="choice-text">
+                                <div class="choice-title">Download Now</div>
+                                <div class="choice-desc">
+                                    Download the <code>turbo</code> model (~150 MB) now so it's ready when you need it. Recommended.
+                                </div>
+                            </div>
+                            <div class="choice-radio"></div>
+                        </div>
+                        <div class="choice-card" data-value="later">
+                            <div class="choice-icon"><i class="fas fa-clock"></i></div>
+                            <div class="choice-text">
+                                <div class="choice-title">Download on First Use</div>
+                                <div class="choice-desc">
+                                    Download the model automatically when you first use voice input. First transcription will take longer.
+                                </div>
+                            </div>
+                            <div class="choice-radio"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="install-log" id="modelDownloadLog"></div>
+            </section>
+
+            <!-- SCREEN 6: Finish (star prompt + summary) -->
             <section class="screen" data-screen="finish">
                 <div class="finish-card">
                     <div class="check"><i class="fas fa-check"></i></div>

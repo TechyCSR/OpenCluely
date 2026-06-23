@@ -631,6 +631,16 @@ class ApplicationController {
         // Show the main overlay window now that onboarding is done
         // and API keys are configured.
         await windowManager.showMainWindow();
+        // Broadcast speech availability so the mic button appears
+        this.speechAvailable = speechService.isAvailable
+          ? speechService.isAvailable()
+          : false;
+        const { BrowserWindow } = require("electron");
+        BrowserWindow.getAllWindows().forEach((win) => {
+          if (!win.isDestroyed()) {
+            win.webContents.send("speech-availability", { available: this.speechAvailable });
+          }
+        });
         return { success: true };
       } catch (e) {
         return { success: false, error: e.message };
@@ -689,6 +699,23 @@ class ApplicationController {
       } catch (e) {
         logger.error("Whisper install failed", { error: e.message });
         return { ok: false, command: null, message: e.message, logs: "" };
+      }
+    });
+
+    // Download Whisper model. Streams progress lines back via `webContents.send`
+    ipcMain.handle("download-whisper-model", async (event, modelName) => {
+      try {
+        const installer = this.getWhisperInstaller();
+        const sender = event.sender;
+        const result = await installer.downloadModel(modelName || 'turbo', {
+          onProgress: (line) => {
+            try { sender.send("install-progress", line); } catch (_) { /* ignore */ }
+          },
+        });
+        return result;
+      } catch (e) {
+        logger.error("Whisper model download failed", { error: e.message });
+        return { ok: false, message: e.message, path: null };
       }
     });
 

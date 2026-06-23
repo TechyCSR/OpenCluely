@@ -175,6 +175,8 @@ class WindowManager {
     
     this.isVisible = true;
     logger.info('Main window displayed');
+    // Notify renderer to refresh speech availability
+    mainWindow.webContents.send('main-window-shown', {});
   }
 
   async createMainWindow(options = {}) {

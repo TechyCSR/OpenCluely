@@ -505,6 +505,84 @@ class WhisperInstaller {
     if (major === 3 && minor >= 9) return true;
     return false;
   }
+
+  /**
+   * Download a Whisper model using the installed CLI.
+   * Models: tiny, base, small, medium, large, turbo
+   */
+  async downloadModel(modelName = 'turbo', { onProgress } = {}) {
+    const log = (line) => {
+      if (typeof onProgress === 'function' && line) {
+        try { onProgress(line); } catch (_) { /* swallow handler errors */ }
+      }
+    };
+
+    // Get the whisper command
+    const detectResult = await this.detect();
+    if (!detectResult.found) {
+      return { ok: false, message: 'Whisper CLI not found. Install Whisper first.' };
+    }
+
+    const command = detectResult.command;
+    log(`→ Downloading ${modelName} model using ${command}…`);
+
+    // Parse the command to get the python executable and module
+    let pythonCmd, moduleName;
+    if (command.includes(' -m ')) {
+      const parts = command.split(' -m ');
+      pythonCmd = parts[0].trim();
+      moduleName = parts[1].trim();
+    } else if (command.endsWith(' -m whisper')) {
+      pythonCmd = command.replace(' -m whisper', '').trim();
+      moduleName = 'whisper';
+    } else {
+      // Fallback: assume it's a direct whisper command
+      pythonCmd = 'python3';
+      moduleName = 'whisper';
+    }
+
+    const result = await this.runExec(pythonCmd, ['-m', moduleName, '--model', modelName, '--help'], {
+      timeout: 30000,
+      onProgress: log,
+    });
+
+    if (!result.ok) {
+      // Try running a small transcription to trigger download
+      log(`→ Triggering model download via test transcription…`);
+      const testResult = await this.runExec(pythonCmd, ['-m', moduleName, '--model', modelName, '--language', 'en', '/dev/null'], {
+        timeout: 120000,
+        onProgress: log,
+      });
+      
+      if (!testResult.ok) {
+        // Check if it's just a file not found error (model downloading)
+        if (testResult.stderr && testResult.stderr.includes('Downloading')) {
+          // Wait for download to complete
+          const downloadResult = await this.runExec(pythonCmd, ['-m', moduleName, '--model', modelName, '--help'], {
+            timeout: 300000,
+            onProgress: log,
+          });
+          if (downloadResult.ok) {
+            const modelPath = this._getModelPath(modelName);
+            return { ok: true, message: `Model ${modelName} downloaded successfully`, path: modelPath };
+          }
+        }
+        return { ok: false, message: testResult.stderr || testResult.error };
+      }
+    }
+
+    const modelPath = this._getModelPath(modelName);
+    log(`✓ Model ${modelName} ready at ${modelPath}`);
+    return { ok: true, message: `Model ${modelName} downloaded successfully`, path: modelPath };
+  }
+
+  /**
+   * Get the expected model cache path.
+   */
+  _getModelPath(modelName) {
+    const homeDir = require('os').homedir();
+    return path.join(homeDir, '.cache', 'whisper', `${modelName}.pt`);
+  }
 }
 
 module.exports = WhisperInstaller;
