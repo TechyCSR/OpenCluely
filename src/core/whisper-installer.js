@@ -2,24 +2,39 @@
  * Whisper detection and install helpers.
  *
  * Used by the onboarding wizard to:
- *   - Probe whether the Whisper CLI is on PATH (or in known venv locations)
- *   - Detect the platform's package manager / python availability
- *   - Run a real install (pip / brew / .venv creation) so the user can
- *     one-click through onboarding without dropping into a terminal.
+ *   - Probe whether the Whisper CLI is on PATH (or in a project-local venv)
+ *   - Run a real install into a project-local venv (no sudo, no PEP 668)
+ *   - Stream live progress so the wizard can paint install output
  *
- * All shell calls are timeouts-bounded so a hanging installer can't
- * lock up the wizard UI.
+ * Why a venv on every platform:
+ *   - Windows: avoids needing admin rights to install into system Python
+ *   - Linux (PEP 668): pip refuses to install into externally-managed
+ *     environments on Ubuntu 23.04+, Debian 12+, Fedora 38+, etc.
+ *   - macOS: keeps system Python untouched; respects Homebrew isolation
+ *
+ * All shell calls are timeouts-bounded and stream stdout/stderr live
+ * via the optional `onProgress` callback so the UI can show real-time
+ * install output instead of a frozen spinner.
  */
 
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 
 const PROBE_TIMEOUT_MS = 8000;
-const INSTALL_TIMEOUT_MS = 240000; // pip downloads can be slow
+const INSTALL_TIMEOUT_MS = 300000; // pip downloads can be slow on cold cache
 
-function runExec(cmd, args, { timeout = PROBE_TIMEOUT_MS } = {}) {
+/**
+ * Run a command, streaming stdout/stderr lines to `onProgress` as they
+ * arrive. Resolves with the full result once the process exits.
+ */
+function runExec(cmd, args, { timeout = PROBE_TIMEOUT_MS, onProgress } = {}) {
+  const log = (line) => {
+    if (typeof onProgress === 'function' && line) {
+      try { onProgress(line); } catch (_) { /* swallow handler errors */ }
+    }
+  };
+
   return new Promise((resolve) => {
     let settled = false;
     const finish = (result) => {
@@ -28,47 +43,83 @@ function runExec(cmd, args, { timeout = PROBE_TIMEOUT_MS } = {}) {
       resolve(result);
     };
 
+    // Use `spawn` (not `execFile`) so we can stream stdout/stderr line
+    // by line instead of buffering the entire pip run.
     let child;
     try {
-      child = execFile(cmd, args, {
-        timeout,
+      child = spawn(cmd, args, {
         windowsHide: true,
-        env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
-        maxBuffer: 2 * 1024 * 1024,
-      }, (err, stdout, stderr) => {
-        if (err) {
-          finish({
-            ok: false,
-            code: err.code ?? null,
-            signal: err.signal ?? null,
-            stdout: stdout?.toString() ?? '',
-            stderr: (stderr?.toString() ?? err.message ?? '').trim(),
-            error: err.message,
-          });
-        } else {
-          finish({
-            ok: true,
-            code: 0,
-            stdout: (stdout ?? '').toString(),
-            stderr: (stderr ?? '').toString(),
-          });
-        }
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1' },
       });
     } catch (e) {
-      finish({ ok: false, error: e.message, stderr: e.message });
+      finish({ ok: false, error: e.message, stderr: e.message, stdout: '', code: null });
       return;
     }
 
-    // Hard timeout — execFile's internal timeout sometimes lets the
-    // child keep running on Windows; we don't kill aggressively to
-    // avoid corrupting an in-progress pip install, but we do resolve.
-    setTimeout(() => {
+    let stdoutBuf = '';
+    let stderrBuf = '';
+
+    const handleChunk = (buf, isErr) => {
+      buf.data += buf.chunk;
+      const lines = buf.data.split(/\r?\n/);
+      buf.data = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.length === 0) continue;
+        if (isErr) stderrBuf += (stderrBuf ? '\n' : '') + line;
+        else stdoutBuf += (stdoutBuf ? '\n' : '') + line;
+        log(line);
+      }
+    };
+
+    const outBuf = { data: '', chunk: '' };
+    const errBuf = { data: '', chunk: '' };
+    child.stdout.on('data', (chunk) => { outBuf.chunk = chunk.toString('utf8'); handleChunk(outBuf, false); });
+    child.stderr.on('data', (chunk) => { errBuf.chunk = chunk.toString('utf8'); handleChunk(errBuf, true); });
+
+    const killTimer = setTimeout(() => {
+      log(`! Command timed out after ${timeout}ms — killing`);
+      try { child.kill('SIGKILL'); } catch (_) { /* ignore */ }
       finish({
         ok: false,
         timeout: true,
-        stderr: `Command timed out after ${timeout}ms: ${cmd} ${args.join(' ')}`,
+        stdout: stdoutBuf,
+        stderr: (stderrBuf + (stderrBuf ? '\n' : '') + 'Timed out').trim(),
+        error: `Timeout after ${timeout}ms: ${cmd} ${args.join(' ')}`,
+        code: null,
       });
-    }, timeout + 1000).unref();
+    }, timeout);
+
+    child.on('error', (err) => {
+      clearTimeout(killTimer);
+      log(`! Spawn error: ${err.message}`);
+      finish({
+        ok: false,
+        stdout: stdoutBuf,
+        stderr: stderrBuf || err.message,
+        error: err.message,
+        code: err.code ?? null,
+      });
+    });
+
+    child.on('close', (code, signal) => {
+      clearTimeout(killTimer);
+      // Flush any trailing partial line
+      if (outBuf.data) { stdoutBuf += (stdoutBuf ? '\n' : '') + outBuf.data; log(outBuf.data); }
+      if (errBuf.data) { stderrBuf += (stderrBuf ? '\n' : '') + errBuf.data; log(errBuf.data); }
+
+      if (code === 0) {
+        finish({ ok: true, code, stdout: stdoutBuf, stderr: stderrBuf });
+      } else {
+        finish({
+          ok: false,
+          code,
+          signal,
+          stdout: stdoutBuf,
+          stderr: stderrBuf,
+          error: `Exited with code ${code}${signal ? ` (signal ${signal})` : ''}`,
+        });
+      }
+    });
   });
 }
 
@@ -79,10 +130,35 @@ class WhisperInstaller {
     this.runExec = options.runExec || runExec;
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Paths
+  // ─────────────────────────────────────────────────────────────────
+
+  get venvPath() {
+    return path.join(this.cwd, '.venv-whisper');
+  }
+
   /**
-   * Probe for any working Whisper CLI. Returns:
-   *   { found: bool, command: string|null, version: string|null, source: string }
+   * Inside the venv:
+   *   - macOS/Linux: bin/whisper, bin/python, bin/pip
+   *   - Windows:     Scripts\whisper.exe, Scripts\python.exe, Scripts\pip.exe
    */
+  get venvPaths() {
+    const bin = this.platform === 'win32' ? 'Scripts' : 'bin';
+    const ext = this.platform === 'win32' ? '.exe' : '';
+    const dir = path.join(this.venvPath, bin);
+    return {
+      dir,
+      python: path.join(dir, `python${ext}`),
+      pip: path.join(dir, `pip${ext}`),
+      whisper: path.join(dir, `whisper${ext}`),
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Detection
+  // ─────────────────────────────────────────────────────────────────
+
   async detect() {
     // 1. Honor WHISPER_COMMAND env if user has it set already
     const fromEnv = (process.env.WHISPER_COMMAND || '').trim();
@@ -110,8 +186,6 @@ class WhisperInstaller {
       if (probe.ok) {
         return {
           found: true,
-          // Join for display in the wizard UI; the array is preserved
-          // separately if we ever need to re-execute.
           command: candidate.join(' '),
           version: probe.version,
           source: 'probe',
@@ -122,52 +196,104 @@ class WhisperInstaller {
     return { found: false, command: null, version: null, source: 'none' };
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Install
+  // ─────────────────────────────────────────────────────────────────
+
   /**
-   * Run a real install. Picks the right strategy per platform.
-   * Emits progress via `onProgress(line)` if provided.
+   * Install whisper into a project-local venv. Works on every platform
+   * without admin rights and without hitting PEP 668.
    *
-   * Returns { ok, command, message, logs }.
+   * Steps:
+   *   1. Find Python on the system (py / python3 / python)
+   *   2. Create .venv-whisper/ if missing
+   *   3. pip install openai-whisper into it (live progress)
+   *   4. Verify the resulting whisper CLI works
+   *
+   * @param {object} options
+   * @param {(line: string) => void} [options.onProgress] Live output
+   * @returns {Promise<{ok: boolean, command: string|null, message: string, logs: string}>}
    */
   async install({ onProgress } = {}) {
     const log = (line) => {
       if (typeof onProgress === 'function') onProgress(line);
     };
 
-    const strategy = this._pickInstallStrategy();
-    log(`→ Using install strategy: ${strategy.name}`);
-    log(`→ Command: ${strategy.cmd} ${strategy.args.join(' ')}`);
+    log('→ Detecting Python on the system…');
+    const python = this._detectPython();
+    if (!python) {
+      const msg = this.platform === 'win32'
+        ? 'Python 3.10+ not found. Install from python.org and make sure "Add Python to PATH" is checked.'
+        : 'python3 not found. Install with your package manager (e.g. `sudo apt install python3 python3-venv`).';
+      log(`! ${msg}`);
+      return { ok: false, command: null, message: msg, logs: msg };
+    }
+    log(`✓ Found Python: ${python}`);
 
-    const result = await this.runExec(strategy.cmd, strategy.args, {
+    const vp = this.venvPaths;
+    const venvExists = fs.existsSync(vp.python);
+
+    // Step 2: create venv if needed
+    if (!venvExists) {
+      log(`→ Creating venv at ${this.venvPath}…`);
+      const venvResult = await this.runExec(python, ['-m', 'venv', this.venvPath], {
+        timeout: 60000,
+        onProgress: log,
+      });
+      if (!venvResult.ok) {
+        const msg = `Failed to create venv: ${venvResult.stderr || venvResult.error}`;
+        log(`! ${msg}`);
+        return { ok: false, command: null, message: msg, logs: venvResult.stdout + '\n' + venvResult.stderr };
+      }
+      log('✓ Venv created');
+    } else {
+      log(`✓ Venv already exists at ${this.venvPath}`);
+    }
+
+    // Confirm the venv's python actually exists now (venv creation can
+    // partially fail on Windows without admin rights to symlink).
+    if (!fs.existsSync(vp.python)) {
+      const msg = `Venv created but ${vp.python} is missing. Try deleting ${this.venvPath} and retrying.`;
+      log(`! ${msg}`);
+      return { ok: false, command: null, message: msg, logs: msg };
+    }
+
+    // Step 3: pip install into the venv
+    log(`→ Installing openai-whisper into venv (this can take a few minutes)…`);
+    const pipResult = await this.runExec(vp.python, ['-m', 'pip', 'install', '--upgrade', 'openai-whisper'], {
       timeout: INSTALL_TIMEOUT_MS,
+      onProgress: log,
     });
+    if (!pipResult.ok) {
+      const msg = `pip install failed: ${pipResult.stderr || pipResult.error}`;
+      log(`! ${msg}`);
+      return { ok: false, command: null, message: msg, logs: pipResult.stdout + '\n' + pipResult.stderr };
+    }
+    log('✓ openai-whisper installed');
 
-    if (!result.ok) {
-      return {
-        ok: false,
-        command: null,
-        message: result.stderr || result.error || 'Install failed',
-        logs: (result.stdout || '') + (result.stderr ? '\n' + result.stderr : ''),
-      };
+    // Step 4: verify the resulting CLI
+    log(`→ Verifying whisper CLI at ${vp.whisper}…`);
+    if (!fs.existsSync(vp.whisper)) {
+      const msg = `Install reported success but ${vp.whisper} was not created. Check your pip output above.`;
+      log(`! ${msg}`);
+      return { ok: false, command: null, message: msg, logs: msg };
     }
 
-    // After install, re-detect so we report the working command
-    const detection = await this.detect();
-    if (!detection.found) {
-      return {
-        ok: false,
-        command: null,
-        message:
-          'Install completed but the Whisper CLI is still not on PATH. ' +
-          'You may need to restart the app or check your PATH.',
-        logs: (result.stdout || '') + (result.stderr ? '\n' + result.stderr : ''),
-      };
+    const verify = await this._probe([vp.whisper]);
+    if (!verify.ok) {
+      const msg = `whisper binary exists but doesn't respond to --help. It may be corrupted.`;
+      log(`! ${msg}`);
+      return { ok: false, command: null, message: msg, logs: msg };
     }
+
+    const commandStr = `${vp.python} -m whisper`;
+    log(`✓ Whisper CLI ready: ${commandStr} (v${verify.version || '?'})`);
 
     return {
       ok: true,
-      command: detection.command,
-      message: `Whisper CLI detected: ${detection.command}`,
-      logs: (result.stdout || '') + (result.stderr ? '\n' + result.stderr : ''),
+      command: commandStr,
+      message: `Installed Whisper v${verify.version || '?'} into ${this.venvPath}`,
+      logs: pipResult.stdout,
     };
   }
 
@@ -178,29 +304,32 @@ class WhisperInstaller {
     switch (this.platform) {
       case 'win32':
         return {
-          title: 'Install via pip in a project-local venv',
+          title: 'Install via a project-local Python venv',
           steps: [
-            "We'll create `.venv-whisper\\` and install openai-whisper into it.",
-            'This needs Python 3.10+ on PATH (download from python.org).',
-            'First run of a transcription will download the model (~150 MB for turbo).',
+            'Python 3.10+ must be on PATH (download from python.org if missing).',
+            "We'll create <code>.venv-whisper\\</code> in the app directory — no admin needed.",
+            'openai-whisper installs into the venv via pip (live progress shown below).',
+            'First transcription downloads the <code>turbo</code> model (~150 MB).',
           ],
         };
       case 'darwin':
         return {
-          title: 'Install via Homebrew or pip3',
+          title: 'Install via a project-local Python venv',
           steps: [
-            "We'll run `pip3 install --user openai-whisper`.",
-            'If you prefer Homebrew: `brew install openai-whisper ffmpeg`.',
-            'FFmpeg is required for non-WAV audio (also installed if missing).',
+            'Uses your existing Python 3 (install via Homebrew if missing).',
+            "We'll create <code>.venv-whisper/</code> in the app directory.",
+            'openai-whisper installs into the venv — no <code>sudo</code> required.',
+            'First transcription downloads the <code>turbo</code> model (~150 MB).',
           ],
         };
       default:
         return {
-          title: 'Install via pip',
+          title: 'Install via a project-local Python venv',
           steps: [
-            "We'll run `pip3 install --user openai-whisper`.",
-            'You may also need `sudo apt install ffmpeg` (Debian/Ubuntu).',
-            'First run of a transcription will download the model (~150 MB for turbo).',
+            'Uses your system Python 3.',
+            "We'll create <code>.venv-whisper/</code> in the app directory.",
+            'This avoids the "externally-managed-environment" pip error on Ubuntu 23.04+, Debian 12+, Fedora 38+.',
+            'First transcription downloads the <code>turbo</code> model (~150 MB).',
           ],
         };
     }
@@ -210,47 +339,42 @@ class WhisperInstaller {
   // Internals
   // ─────────────────────────────────────────────────────────────────
 
+  /**
+   * List of [cmd, ...args] candidates to probe. Always uses array form
+   * so paths with spaces survive intact.
+   */
   _candidateCommands() {
+    const vp = this.venvPaths;
+    const out = [
+      // Project-local venv — the canonical location we install into.
+      [vp.whisper],
+      [vp.python, '-m', 'whisper'],
+    ];
+
     if (this.platform === 'win32') {
-      const venvWhisper = path.join(this.cwd, '.venv-whisper', 'Scripts', 'whisper.exe');
-      const venvPython = path.join(this.cwd, '.venv-whisper', 'Scripts', 'python.exe');
-      return [
-        // Plain `whisper` on PATH — respects PATHEXT, picks up `whisper.exe`
+      out.push(
         ['whisper'],
         ['whisper.exe'],
-        // Project-local venv direct path — works even when venv's Scripts
-        // folder isn't on PATH. path.join keeps backslashes intact.
-        [venvWhisper],
-        // Run whisper as a Python module through the venv's python.exe.
-        // Using array form (not string concat) so paths-with-spaces work.
-        [venvPython, '-m', 'whisper'],
-        // System Python via the launcher `py` (the canonical Windows
-        // invocation), then bare `python`, then `python3`.
+        // System Python via the launcher `py` (canonical Windows invocation)
         ['py', '-m', 'whisper'],
         ['python', '-m', 'whisper'],
-        ['python3', '-m', 'whisper'],
-      ];
-    }
-    if (this.platform === 'darwin') {
-      const homebrew = '/opt/homebrew/bin/whisper';
-      const usrLocal = '/usr/local/bin/whisper';
-      const venvWhisper = path.join(this.cwd, '.venv-whisper', 'bin', 'whisper');
-      return [
-        [homebrew],
-        [usrLocal],
+      );
+    } else if (this.platform === 'darwin') {
+      out.push(
+        ['/opt/homebrew/bin/whisper'],
+        ['/usr/local/bin/whisper'],
         ['whisper'],
         ['python3', '-m', 'whisper'],
-        [venvWhisper],
-      ];
+      );
+    } else {
+      out.push(
+        ['whisper'],
+        ['/usr/local/bin/whisper'],
+        ['/usr/bin/whisper'],
+        ['python3', '-m', 'whisper'],
+      );
     }
-    const localVenvBin = path.join(this.cwd, '.venv-whisper', 'bin', 'whisper');
-    return [
-      ['whisper'],
-      ['/usr/local/bin/whisper'],
-      ['/usr/bin/whisper'],
-      [localVenvBin],
-      ['python3', '-m', 'whisper'],
-    ];
+    return out;
   }
 
   /**
@@ -267,8 +391,6 @@ class WhisperInstaller {
   }
 
   async _probe(candidate) {
-    // Candidate is now always `[cmd, ...args]`. We append `--help` to
-    // confirm the binary actually runs without surfacing a usage error.
     const cmd = candidate[0];
     const args = [...candidate.slice(1), '--help'];
     const r = await this.runExec(cmd, args);
@@ -282,54 +404,25 @@ class WhisperInstaller {
     return m ? m[1] : null;
   }
 
-  _pickInstallStrategy() {
-    if (this.platform === 'win32') {
-      // Create a project-local venv and pip-install openai-whisper into
-      // it. This avoids needing admin rights on Windows.
-      const python = this._detectPython() || 'python';
-      const venvPath = path.join(this.cwd, '.venv-whisper');
-      return {
-        name: 'Windows venv (project-local)',
-        cmd: python,
-        args: ['-m', 'venv', venvPath],
-        // We do pip install in a follow-up step so error reporting is
-        // cleaner if venv creation fails.
-      };
-    }
-    if (this.platform === 'darwin') {
-      return {
-        name: 'pip3 user install (macOS)',
-        cmd: 'pip3',
-        args: ['install', '--user', 'openai-whisper'],
-      };
-    }
-    return {
-      name: 'pip3 user install (Linux)',
-      cmd: 'pip3',
-      args: ['install', '--user', 'openai-whisper'],
-    };
-  }
-
+  /**
+   * Find a Python interpreter. Returns the resolved command name (which
+   * may be a full path) or null if nothing usable is on PATH.
+   */
   _detectPython() {
-    // On Windows, `py` (the Python Launcher) is almost always on PATH
-    // when Python is installed — `python` and `python3` are optional.
-    // On macOS/Linux, prefer `python3` since `python` may point at Py2.
     const candidates = this.platform === 'win32'
       ? ['py', 'python', 'python3']
       : ['python3', 'python'];
-    // Sync probe — just check existence. We don't have an async probe
-    // here without breaking the install flow; fall back to first candidate.
     for (const c of candidates) {
       try {
-        // `which`/`where` are universally available on the runners we
-        // care about, and we're in the main process so this is fine.
-        // eslint-disable-next-line no-undef
         const which = require('child_process').spawnSync(
           this.platform === 'win32' ? 'where' : 'which',
           [c],
           { windowsHide: true },
         );
-        if (which.status === 0) return c;
+        if (which.status === 0) {
+          const stdout = (which.stdout || '').toString().split(/\r?\n/)[0].trim();
+          return stdout || c;
+        }
       } catch (_) { /* ignore */ }
     }
     return null;
@@ -338,3 +431,4 @@ class WhisperInstaller {
 
 module.exports = WhisperInstaller;
 module.exports.WhisperInstaller = WhisperInstaller;
+module.exports.runExec = runExec;

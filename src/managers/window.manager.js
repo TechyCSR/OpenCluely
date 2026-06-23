@@ -111,7 +111,9 @@ class WindowManager {
     logger.info('Initializing application windows', { showMainWindow });
     
     try {
-      await this.createMainWindow();
+      // Pass autoShow so the main window doesn't flash visible during
+      // first-run onboarding before the user has configured API keys.
+      await this.createMainWindow({ autoShow: showMainWindow });
       await this.createChatWindow();
       await this.createLLMResponseWindow();
       await this.createSettingsWindow();
@@ -175,15 +177,16 @@ class WindowManager {
     logger.info('Main window displayed');
   }
 
-  async createMainWindow() {
+  async createMainWindow(options = {}) {
+    const { autoShow = true } = options;
     if (this.windows.has('main')) {
       return this.windows.get('main');
     }
     const window = await this.createWindow('main', false); // Don't show during creation
     this.windows.set('main', window);
-    this.isVisible = true;
-    
-    // Immediate always-on-top enforcement for main window
+
+    // Always-on-top must be set even when we're deferring the visual
+    // show — it persists into the future showOnCurrentDesktop call.
     if (process.platform === 'darwin') {
       try {
         window.setAlwaysOnTop(true, 'screen-saver', 2);
@@ -193,30 +196,31 @@ class WindowManager {
     } else {
       window.setAlwaysOnTop(true);
     }
-    
-    // DevTools can be opened manually if needed for debugging
-    // window.webContents.openDevTools({ mode: 'detach' });
-    
-    // Wait for app to fully initialize and detect current desktop
-    setTimeout(() => {
-      this.showOnCurrentDesktop(window);
-      
-      // Additional enforcement after showing
+
+    // Only auto-show when explicitly allowed (e.g. not during first-run
+    // onboarding). The single entry point for showing the overlay is
+    // `showMainWindow()` — callers control timing via the flag below.
+    if (autoShow) {
+      // Wait for app to fully initialize and detect current desktop
       setTimeout(() => {
-        if (!window.isDestroyed()) {
-          if (process.platform === 'darwin') {
-            try {
-              window.setAlwaysOnTop(true, 'screen-saver', 2);
-            } catch (error) {
-              window.setAlwaysOnTop(true, 'floating', 2);
+        this.showOnCurrentDesktop(window);
+        // Additional enforcement after showing
+        setTimeout(() => {
+          if (!window.isDestroyed()) {
+            if (process.platform === 'darwin') {
+              try {
+                window.setAlwaysOnTop(true, 'screen-saver', 2);
+              } catch (error) {
+                window.setAlwaysOnTop(true, 'floating', 2);
+              }
+            } else {
+              window.setAlwaysOnTop(true);
             }
-          } else {
-            window.setAlwaysOnTop(true);
           }
-        }
-      }, 200);
-    }, 100);
-    
+        }, 200);
+      }, 100);
+    }
+
     return window;
   }
 

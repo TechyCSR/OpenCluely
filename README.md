@@ -277,7 +277,7 @@ For the local Whisper path, `./setup.sh` now handles the full repo-local setup:
    WHISPER_SEGMENT_MS=4000
    ```
 
-4. Restart the app - microphone buttons will now appear automatically
+4. The app picks up changes immediately — no restart needed. The microphone buttons appear as soon as the config is valid.
 
 ## 🎮 How to Use
 
