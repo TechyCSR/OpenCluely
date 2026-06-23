@@ -60,6 +60,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateActiveSkill: (skill) => ipcRenderer.invoke('update-active-skill', skill),
   restartAppForStealth: () => ipcRenderer.invoke('restart-app-for-stealth'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
+  notifyMainWindowReady: () => {
+    try {
+      ipcRenderer.send('main-window-ready');
+    } catch (error) {
+      console.error('Error notifying main window ready:', error);
+    }
+  },
   quit: () => {
     try {
       ipcRenderer.send('quit-app');

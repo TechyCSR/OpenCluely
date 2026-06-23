@@ -407,6 +407,20 @@ class ApplicationController {
       }, 1000);
     });
 
+    ipcMain.on("main-window-ready", () => {
+      // Re-check availability whenever the main overlay finishes loading;
+      // this covers first-run where the window was hidden during onboarding.
+      this.speechAvailable = speechService.isAvailable
+        ? speechService.isAvailable()
+        : false;
+      const { BrowserWindow } = require("electron");
+      BrowserWindow.getAllWindows().forEach((win) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send("speech-availability", { available: this.speechAvailable });
+        }
+      });
+    });
+
     ipcMain.on("test-chat-window", () => {
       windowManager.broadcastToAllWindows("transcription-received", {
         text: "🧪 IMMEDIATE TEST: Chat window IPC communication test successful!",
@@ -628,13 +642,16 @@ class ApplicationController {
       try {
         this.firstRunManager.markCompleted();
         this.isFirstRun = false;
+        // Reinitialize speech service with the latest persisted settings
+        // so the mic button reflects the provider/command set during onboarding.
+        speechService.initializeClient();
+        this.speechAvailable = speechService.isAvailable
+          ? speechService.isAvailable()
+          : false;
         // Show the main overlay window now that onboarding is done
         // and API keys are configured.
         await windowManager.showMainWindow();
         // Broadcast speech availability so the mic button appears
-        this.speechAvailable = speechService.isAvailable
-          ? speechService.isAvailable()
-          : false;
         const { BrowserWindow } = require("electron");
         BrowserWindow.getAllWindows().forEach((win) => {
           if (!win.isDestroyed()) {
@@ -1284,8 +1301,10 @@ class ApplicationController {
   getWhisperInstaller() {
     if (!this._whisperInstaller) {
       const WhisperInstaller = require("./src/core/whisper-installer");
+      const { app } = require("electron");
       this._whisperInstaller = new WhisperInstaller({
         cwd: process.cwd(),
+        dataDir: app.getPath("userData"),
         platform: process.platform,
       });
     }

@@ -992,12 +992,39 @@ class SpeechService extends EventEmitter {
     return value === '' ? null : value;
   }
 
+  /**
+   * Build a whisper candidate pointing at the app-local venv inside
+   * Electron's userData directory. This is where the onboarding installer
+   * creates the venv in packaged builds.
+   */
+  _getUserDataWhisperCandidate() {
+    try {
+      const { app } = require('electron');
+      const userData = app.getPath('userData');
+      const binDir = process.platform === 'win32' ? 'Scripts' : 'bin';
+      const ext = process.platform === 'win32' ? '.exe' : '';
+      const python = path.join(userData, '.venv-whisper', binDir, `python${ext}`);
+      if (fs.existsSync(python)) {
+        return { command: python, baseArgs: ['-m', 'whisper'] };
+      }
+    } catch (_) {
+      // electron may not be available in unit tests
+    }
+    return null;
+  }
+
   _resolveWhisperCommand() {
     const configured = this._getSetting('whisperCommand') || process.env.WHISPER_COMMAND;
     const candidates = [];
 
     if (configured) {
       candidates.push(...this._expandConfiguredWhisperCandidates(configured));
+    }
+
+    // Persistent app venv (highest priority after explicit config)
+    const userDataVenv = this._getUserDataWhisperCandidate();
+    if (userDataVenv) {
+      candidates.push({ ...userDataVenv, source: 'app userData venv' });
     }
 
     // Platform-aware fallback candidates (higher priority = tried first)

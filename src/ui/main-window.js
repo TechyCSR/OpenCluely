@@ -49,6 +49,12 @@ class MainWindowUI {
                 skill: this.currentSkill,
                 interactive: this.isInteractive
             });
+
+            // Notify the main process that the overlay renderer is ready
+            // so it can push the latest speech availability state.
+            if (window.electronAPI && window.electronAPI.notifyMainWindowReady) {
+                window.electronAPI.notifyMainWindowReady();
+            }
             
         } catch (error) {
             logger.error('Failed to initialize main window UI', {
@@ -301,12 +307,17 @@ class MainWindowUI {
 
         // Add click handler for microphone
         this.micButton.addEventListener('click', () => {
-            if (this.isInteractive) {
+            if (this.isInteractive && this.speechAvailable) {
                 if (this.isRecording) {
                     window.electronAPI.stopSpeechRecognition();
                 } else {
                     window.electronAPI.startSpeechRecognition();
                 }
+            } else if (this.isInteractive && !this.speechAvailable) {
+                logger.warn('Mic clicked but speech recognition is not available', {
+                    component: 'MainWindowUI'
+                });
+                this.loadSpeechAvailability();
             }
         });
 

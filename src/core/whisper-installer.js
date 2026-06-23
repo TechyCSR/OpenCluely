@@ -126,6 +126,10 @@ function runExec(cmd, args, { timeout = PROBE_TIMEOUT_MS, onProgress } = {}) {
 class WhisperInstaller {
   constructor(options = {}) {
     this.cwd = options.cwd || process.cwd();
+    // Persistent data directory for the virtual environment. In packaged
+    // builds process.cwd() is not stable (AppImage mount dirs change,
+    // system install dirs may be read-only), so we default to userData.
+    this.dataDir = options.dataDir || this.cwd;
     this.platform = options.platform || process.platform;
     this.runExec = options.runExec || runExec;
   }
@@ -135,7 +139,7 @@ class WhisperInstaller {
   // ─────────────────────────────────────────────────────────────────
 
   get venvPath() {
-    return path.join(this.cwd, '.venv-whisper');
+    return path.join(this.dataDir, '.venv-whisper');
   }
 
   /**
