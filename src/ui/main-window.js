@@ -10,7 +10,7 @@ class MainWindowUI {
     constructor() {
         this.isInteractive = false;
         this.isHidden = false;
-        this.currentSkill = 'dsa'; // Default, will be updated from settings
+        this.currentSkill = 'general';
         this.statusDot = null;
         this.skillIndicator = null;
         this.micButton = null;
@@ -18,9 +18,10 @@ class MainWindowUI {
         this.speechAvailable = false; // track availability
     this._popoverHideTimeout = null;
         
-        // Define available skills for navigation
         this.availableSkills = [
-            'dsa'
+            'general',
+            'coding',
+            'meeting'
         ];
         
         this.init();
@@ -283,17 +284,10 @@ class MainWindowUI {
             }
         });
 
-        // Skill indicator click handler toggles DSA skill
+        // Skill indicator click handler cycles to next skill
         this.skillIndicator.addEventListener('click', () => {
             if (!this.isInteractive) return;
-            const newSkill = 'dsa';
-            if (window.electronAPI && window.electronAPI.updateActiveSkill) {
-                window.electronAPI.updateActiveSkill(newSkill).then(() => {
-                    this.handleSkillActivated(newSkill);
-                });
-            } else {
-                this.handleSkillActivated(newSkill);
-            }
+            this.navigateSkill(1);
         });
 
         // Check for required elements (settingsIndicator is optional)
@@ -505,15 +499,9 @@ class MainWindowUI {
     handleLLMResponse(data) {
         const skill = data.skill || data.metadata?.skill || 'General';
         const skillNames = {
-            'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
-            'sales': 'Sales',
-            'presentation': 'Presentation',
-            'data-science': 'Data Science',
-            'programming': 'Programming',
-            'devops': 'DevOps',
-            'system-design': 'System Design',
-            'negotiation': 'Negotiation'
+            'general': 'General',
+            'coding': 'Coding',
+            'meeting': 'Meeting'
         };
         
         const displaySkill = skillNames[skill] || skill.toUpperCase();
@@ -645,15 +633,9 @@ class MainWindowUI {
 
     updateSkillIndicator() {
         const skillNames = {
-            'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
-            'sales': 'Sales',
-            'presentation': 'Presentation',
-            'data-science': 'Data Science',
-            'programming': 'Programming',
-            'devops': 'DevOps',
-            'system-design': 'System Design',
-            'negotiation': 'Negotiation'
+            'general': 'General',
+            'coding': 'Coding',
+            'meeting': 'Meeting'
         };
         
         logger.info('Updating skill indicator', {
@@ -669,12 +651,34 @@ class MainWindowUI {
         
         const skillName = skillNames[this.currentSkill] || this.currentSkill.toUpperCase();
         const skillSpan = this.skillIndicator.querySelector('span');
+        const skillIcon = this.skillIndicator.querySelector('i');
         
         logger.info('Looking for skill span element', {
             component: 'MainWindowUI',
             spanExists: !!skillSpan,
             skillName: skillName
         });
+        
+        // Update the icon based on skill
+        const skillIcons = {
+            'general': 'fa-brain',
+            'coding': 'fa-code',
+            'meeting': 'fa-users'
+        };
+        if (skillIcon) {
+            // Remove all existing fa-* classes except fa-solid
+            skillIcon.className = skillIcon.className
+                .split(' ')
+                .filter(c => c === 'fas' || c === 'fa-solid')
+                .join(' ');
+            skillIcon.classList.add(skillIcons[this.currentSkill] || 'fa-brain');
+        }
+        
+        // Show/hide language selector based on skill
+        const languageSelector = document.getElementById('languageSelector');
+        if (languageSelector) {
+            languageSelector.style.display = this.currentSkill === 'coding' ? '' : 'none';
+        }
         
         if (skillSpan) {
             const oldText = skillSpan.textContent;
@@ -758,15 +762,9 @@ class MainWindowUI {
 
     showSkillChangeNotification(skill, direction) {
         const skillNames = {
-            'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
-            'sales': 'Sales',
-            'presentation': 'Presentation',
-            'data-science': 'Data Science',
-            'programming': 'Programming',
-            'devops': 'DevOps',
-            'system-design': 'System Design',
-            'negotiation': 'Negotiation'
+            'general': 'General',
+            'coding': 'Coding',
+            'meeting': 'Meeting'
         };
         
         const displayName = skillNames[skill] || skill.toUpperCase();

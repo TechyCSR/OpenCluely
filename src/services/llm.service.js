@@ -535,7 +535,7 @@ class LLMService {
    * For image-based queries, we include the skill prompt (e.g., DSA) as systemInstruction.
    * @param {Buffer} imageBuffer - PNG/JPEG image bytes
    * @param {string} mimeType - e.g., 'image/png' or 'image/jpeg'
-   * @param {string} activeSkill - current skill (e.g. 'dsa')
+   * @param {string} activeSkill - current skill (e.g. 'coding')
    * @param {Array} sessionMemory - optional (not required for image)
    * @param {string|null} programmingLanguage - optional language context for skills that need it
    * @returns {Promise<{response: string, metadata: object}>}
@@ -633,7 +633,10 @@ class LLMService {
 
   formatImageInstruction(activeSkill, programmingLanguage) {
     const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
-    return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
+    const modePrefix = activeSkill === 'meeting'
+      ? 'Analyze this image from a meeting or presentation.'
+      : `Analyze this image for a ${activeSkill.toUpperCase()} question.`;
+    return `${modePrefix} Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
   }
 
   async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
@@ -1059,6 +1062,12 @@ Always respond to the point, do not repeat the question or unnecessary informati
 
 ## Response Rules:
 
+### If in MEETING mode:
+- Detect if the speaker is asking a question
+- If a question is detected, provide a concise, direct answer
+- If no question is detected, respond with a brief acknowledgment or stay silent
+- Do NOT respond to statements, chit-chat, or agenda items — only questions
+
 ### If the transcription is casual conversation, greetings, or NOT related to ${activeSkill}:
 - Respond with: "Yeah, I'm listening. Ask your question relevant to ${activeSkill}."
 - Or similar brief acknowledgments like: "I'm here, what's your ${activeSkill} question?"
@@ -1087,7 +1096,7 @@ Always respond to the point, do not repeat the question or unnecessary informati
 - Be encouraging and helpful
 - Stay focused on ${activeSkill}
 
-If the user's input is a coding or DSA problem statement and contains no code, produce a complete, runnable solution in the selected programming language without asking for more details. Always include the final implementation in a properly tagged code block.
+If the user's input is a coding problem statement and contains no code, produce a complete, runnable solution in the selected programming language without asking for more details. Always include the final implementation in a properly tagged code block.
 
 Remember: Be intelligent about filtering - only provide detailed responses when the user actually needs help with ${activeSkill}.`;
 
@@ -1095,6 +1104,9 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   }
 
   formatUserMessage(text, activeSkill) {
+    if (activeSkill === 'meeting') {
+      return `Context: Meeting conversation\n\nDetected speech:\n${text}`;
+    }
     return `Context: ${activeSkill.toUpperCase()} analysis request\n\nText to analyze:\n${text}`;
   }
 
@@ -1373,10 +1385,10 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     logger.info('Generating fallback response', { activeSkill });
 
     const fallbackResponses = {
-      'dsa': 'This appears to be a data structures and algorithms problem. Consider breaking it down into smaller components and identifying the appropriate algorithm or data structure to use.',
-      'system-design': 'For this system design question, consider scalability, reliability, and the trade-offs between different architectural approaches.',
-      'programming': 'This looks like a programming challenge. Focus on understanding the requirements, edge cases, and optimal time/space complexity.',
-      'default': 'I can help analyze this content. Please ensure your Gemini API key is properly configured for detailed analysis.'
+      'general': 'I can help analyze this content. Here are my thoughts on the matter.',
+      'coding': 'This looks like a coding challenge. Focus on understanding the requirements, edge cases, and optimal time/space complexity.',
+      'meeting': 'I heard a question in the meeting. Here is my response based on the context.',
+      'default': 'I can help analyze this content. Please ensure your API key is properly configured for detailed analysis.'
     };
 
     const response = fallbackResponses[activeSkill] || fallbackResponses.default;
@@ -1397,15 +1409,9 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
 
     // Simple heuristic to determine if message seems skill-related
     const skillKeywords = {
-      'dsa': ['algorithm', 'data structure', 'array', 'tree', 'graph', 'sort', 'search', 'complexity', 'big o'],
-      'programming': ['code', 'function', 'variable', 'class', 'method', 'bug', 'debug', 'syntax'],
-      'system-design': ['scalability', 'database', 'architecture', 'microservice', 'load balancer', 'cache'],
-      'behavioral': ['interview', 'experience', 'situation', 'leadership', 'conflict', 'team'],
-      'sales': ['customer', 'deal', 'negotiation', 'price', 'revenue', 'prospect'],
-      'presentation': ['slide', 'audience', 'public speaking', 'presentation', 'nervous'],
-      'data-science': ['data', 'model', 'machine learning', 'statistics', 'analytics', 'python', 'pandas'],
-      'devops': ['deployment', 'ci/cd', 'docker', 'kubernetes', 'infrastructure', 'monitoring'],
-      'negotiation': ['negotiate', 'compromise', 'agreement', 'terms', 'conflict resolution']
+      'general': ['help', 'question', 'explain', 'what', 'how', 'why', 'tell me', 'can you'],
+      'coding': ['code', 'function', 'variable', 'class', 'method', 'bug', 'debug', 'syntax', 'algorithm', 'array', 'sort'],
+      'meeting': ['question', 'how', 'what', 'why', 'could you', 'can you', 'suggestion', 'recommend']
     };
 
     const textLower = text.toLowerCase();

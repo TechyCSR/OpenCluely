@@ -4,7 +4,7 @@ class LLMResponseWindowUI {
   constructor() {
     this.currentLayout = "split";
     this.hasCode = false;
-    this.currentSkill = "dsa";
+    this.currentSkill = "general";
     this.isInteractive = false;
     this.scrollableElements = [];
 

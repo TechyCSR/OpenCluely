@@ -7,7 +7,7 @@ class PromptLoader {
     this.promptsLoaded = false;
     this.skillPromptSent = new Set();
     // Focus only on DSA
-    this.skillsRequiringProgrammingLanguage = ['dsa'];
+    this.skillsRequiringProgrammingLanguage = ['coding'];
   }
 
   /**
@@ -28,7 +28,7 @@ class PromptLoader {
       for (const file of files) {
         if (file.endsWith('.md')) {
           const skillName = path.basename(file, '.md');
-          if (skillName !== 'dsa') continue; // only keep DSA
+          if (!['general', 'coding', 'meeting'].includes(skillName)) continue;
           const filePath = path.join(promptsDir, file);
           const promptContent = fs.readFileSync(filePath, 'utf8');
           
@@ -88,7 +88,7 @@ class PromptLoader {
     let languageInjection = '';
     
     switch (skillName) {
-      case 'dsa':
+      case 'coding':
         languageInjection = `\n\n## IMPLEMENTATION LANGUAGE: ${languageUpper}
 STRICT REQUIREMENTS:
 - Respond ONLY in ${languageTitle}. Do not include any snippets or alternatives in other languages.
@@ -322,39 +322,23 @@ STRICT REQUIREMENTS:
     // Convert to lowercase and handle common variations
     const normalized = skillName.toLowerCase().trim();
     
-    // Map common variations to standard names
+    // Map common variations to canonical skill names
     const skillMap = {
-      'dsa': 'dsa',
-      'data-structures': 'dsa',
-      'algorithms': 'dsa',
-      'data-structures-algorithms': 'dsa',
-      'behavioral': 'behavioral',
-      'behavioral-interview': 'behavioral',
-      'behavior': 'behavioral',
-      'sales': 'sales',
-      'selling': 'sales',
-      'business-development': 'sales',
-      'presentation': 'presentation',
-      'presentations': 'presentation',
-      'public-speaking': 'presentation',
-      'data-science': 'data-science',
-      'datascience': 'data-science',
-      'machine-learning': 'data-science',
-      'ml': 'data-science',
-      'programming': 'programming',
-      'coding': 'programming',
-      'software-development': 'programming',
-      'development': 'programming',
-      'devops': 'devops',
-      'dev-ops': 'devops',
-      'infrastructure': 'devops',
-      'system-design': 'system-design',
-      'systems-design': 'system-design',
-      'architecture': 'system-design',
-      'distributed-systems': 'system-design',
-      'negotiation': 'negotiation',
-      'negotiating': 'negotiation',
-      'conflict-resolution': 'negotiation'
+      'general': 'general',
+      'gen': 'general',
+      'default': 'general',
+      'coding': 'coding',
+      'code': 'coding',
+      'programming': 'coding',
+      'software': 'coding',
+      'development': 'coding',
+      'dsa': 'coding',
+      'algorithms': 'coding',
+      'data-structures': 'coding',
+      'meeting': 'meeting',
+      'meetings': 'meeting',
+      'conference': 'meeting',
+      'call': 'meeting'
     };
 
     return skillMap[normalized] || normalized;
@@ -368,7 +352,7 @@ STRICT REQUIREMENTS:
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
-    return ['dsa'];
+    return ['general', 'coding', 'meeting'];
   }
 
   /**
