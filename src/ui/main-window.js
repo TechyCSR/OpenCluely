@@ -646,12 +646,17 @@ class MainWindowUI {
         if (this.micButton) {
             this.micButton.classList.add('recording');
         }
-        // On Windows, Whisper audio is captured in the renderer because the
-        // main-process recorder depends on Unix-only sox/rec/arecord tools.
-        const isWindows = typeof navigator !== 'undefined' &&
-          navigator.platform &&
-          navigator.platform.toLowerCase().includes('win');
-        if (isWindows) {
+        // On Windows and macOS, Whisper audio is captured here in the renderer
+        // (Web Audio API) rather than the main process: Windows lacks sox/rec/
+        // arecord, and macOS avoids an unbundled Homebrew `sox`. Must match the
+        // main process's useRendererCapture gate (speech.service.js). Linux uses
+        // the native recorder. navigator.userAgentData is preferred when present
+        // since navigator.platform is deprecated.
+        const platform = (typeof navigator !== 'undefined' &&
+          ((navigator.userAgentData && navigator.userAgentData.platform) ||
+            navigator.platform || '')).toLowerCase();
+        const useRendererCapture = platform.includes('win') || platform.includes('mac');
+        if (useRendererCapture) {
             this._startRendererAudioCapture();
         }
         logger.debug('Recording started', { component: 'MainWindowUI' });

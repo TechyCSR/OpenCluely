@@ -676,9 +676,13 @@ class SpeechService extends EventEmitter {
     this.emit('recording-started');
     this.emit('status', 'Local Whisper recording started');
 
-    // On Windows we capture microphone audio in the renderer via Web Audio API
-    // because node-record-lpcm16 depends on Unix-only tools (sox/rec/arecord).
-    this.useRendererCapture = process.platform === 'win32';
+    // Capture microphone audio in the renderer via the Web Audio API on Windows
+    // and macOS. Windows lacks the Unix sox/rec/arecord tools node-record-lpcm16
+    // needs; macOS would otherwise require a Homebrew `sox` install (not bundled)
+    // and a child-process mic that the system TCC prompt can't attribute. The
+    // renderer path uses getUserMedia, which macOS prompts for cleanly via the
+    // app's NSMicrophoneUsageDescription. Linux keeps the native recorder path.
+    this.useRendererCapture = process.platform === 'win32' || process.platform === 'darwin';
     if (this.useRendererCapture) {
       this.emit('status', 'Waiting for microphone audio…');
       // The renderer starts sending chunks once it receives the recording-started event.
@@ -1125,11 +1129,15 @@ class SpeechService extends EventEmitter {
     const pyArgs = candidate.baseArgs.slice(0, mIdx);
     const script = 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("whisper") else 1)';
     try {
+      // No shell: an absolute .exe runs directly. shell:true on Windows does
+      // NOT quote args, so a spaced path like
+      //   C:\Users\CANDAN SINGH\...\python.exe
+      // would be split at the space and the probe would wrongly fail —
+      // hiding the mic for any user whose profile name contains a space.
       const probe = spawnSync(candidate.command, [...pyArgs, '-c', script], {
         encoding: 'utf8',
         timeout: 8000,
         windowsHide: true,
-        shell: process.platform === 'win32' && (candidate.command.includes('/') || candidate.command.includes('\\')),
       });
       if (!probe.error && probe.status === 0) {
         return candidate;
@@ -1178,8 +1186,9 @@ class SpeechService extends EventEmitter {
         encoding: 'utf8',
         // First `import whisper` (torch/numba) can be slow on a cold cache.
         timeout: 30000,
-        // On Windows, some relative paths with forward slashes need shell:true
-        shell: process.platform === 'win32' && (cmd.includes('/') || cmd.includes('\\'))
+        windowsHide: true,
+        // No shell — see _probeWhisperModuleFast: shell:true on Windows splits
+        // spaced paths (e.g. "C:\Users\CANDAN SINGH\...") and breaks the probe.
       });
     } catch (spawnErr) {
       logger.debug('Whisper probe spawn error', {

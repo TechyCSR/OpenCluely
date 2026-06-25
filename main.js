@@ -1459,6 +1459,12 @@ class ApplicationController {
         envUpdates.GEMINI_API_KEY = settings.geminiKey;
       }
 
+      // Capture the previous whisper command BEFORE persisting — persistEnvUpdates
+      // mutates process.env in place, so comparing afterwards would always read
+      // equal and skip the speech re-init below (the exact stale-mic-after-install
+      // bug the re-init guards against).
+      const prevWhisperCommand = process.env.WHISPER_COMMAND || '';
+
       const persistedKeys = this.persistEnvUpdates(envUpdates);
 
       // If the Gemini key was just saved, reinitialize the LLM service
@@ -1485,7 +1491,7 @@ class ApplicationController {
       // would stay hidden / non-functional.
       const providerChanged = settings.speechProvider && speechService.provider !== settings.speechProvider;
       const whisperCommandChanged = settings.whisperCommand !== undefined &&
-        (process.env.WHISPER_COMMAND || '') !== String(settings.whisperCommand || '');
+        prevWhisperCommand !== String(settings.whisperCommand || '');
       if (providerChanged || whisperCommandChanged) {
         try {
           speechService.initializeClient();

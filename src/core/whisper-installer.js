@@ -269,6 +269,21 @@ class WhisperInstaller {
 
     // Step 2: create venv if needed
     if (!venvExists) {
+      // Preflight: on Debian/Ubuntu (and minimal systems / AppImage hosts)
+      // python3 exists but the stdlib `venv`/`ensurepip` modules ship
+      // separately as python3-venv. Detect this explicitly so the user gets an
+      // actionable apt hint instead of a cryptic "ensurepip is not available".
+      const preflight = await this.runExec(python, ['-c', 'import ensurepip, venv'], {
+        timeout: 15000,
+      });
+      if (!preflight.ok) {
+        const msg = this.platform === 'linux'
+          ? 'Python is missing the venv module. Install it with `sudo apt install python3-venv` (or your distro\'s equivalent) and retry.'
+          : 'Python is missing the venv/ensurepip module. Reinstall Python (python.org) with the standard library included and retry.';
+        log(`! ${msg}`);
+        return { ok: false, command: null, message: msg, logs: preflight.stderr || msg };
+      }
+
       log(`→ Creating venv at ${this.venvPath}…`);
       const venvResult = await this.runExec(python, ['-m', 'venv', this.venvPath], {
         timeout: 60000,
@@ -488,11 +503,23 @@ class WhisperInstaller {
         const which = require('child_process').spawnSync(
           this.platform === 'win32' ? 'where' : 'which',
           [c],
-          { windowsHide: true },
+          { windowsHide: true, encoding: 'utf8' },
         );
         if (which.status === 0) {
-          const stdout = (which.stdout || '').toString().split(/\r?\n/)[0].trim();
-          return stdout || c;
+          const lines = (which.stdout || '')
+            .toString()
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter(Boolean)
+            // Skip the Microsoft Store python stub (…\WindowsApps\python.exe):
+            // it's a launcher that opens the Store and fails `-m venv` with a
+            // cryptic error, so prefer any real interpreter instead.
+            .filter((l) => !/WindowsApps/i.test(l));
+          if (lines.length > 0) {
+            return lines[0];
+          }
+          // `py` is a valid launcher even when `where` prints no usable path.
+          if (c === 'py') return c;
         }
       } catch (_) { /* ignore */ }
     }
