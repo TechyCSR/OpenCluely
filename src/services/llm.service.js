@@ -1603,13 +1603,14 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
    * wins. If both fail, throw the error from the primary (SDK) method.
    */
   async _raceGeminiMethods(request) {
-    const results = await Promise.allSettled([
-      this.executeRequest(request),
-      this.executeAlternativeRequest(request)
-    ]);
-    const fulfilled = results.find(r => r.status === 'fulfilled');
-    if (fulfilled) return fulfilled.value;
-    throw results[0].reason || new Error('Both Gemini request methods failed');
+    try {
+      return await Promise.any([
+        this.executeRequest(request),
+        this.executeAlternativeRequest(request)
+      ]);
+    } catch (err) {
+      throw err.errors?.[0] || new Error('Both Gemini request methods failed');
+    }
   }
 
   async executeAlternativeRequest(geminiRequest) {
