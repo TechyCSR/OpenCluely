@@ -261,6 +261,10 @@
             width: 100%;
         }
 
+        .settings-group {
+            /* Groups provider-specific fields for show/hide toggling */
+        }
+
         .settings-note {
             font-size: 11px;
             color: rgba(255, 255, 255, 0.65);
@@ -427,15 +431,52 @@
             <div class="settings-section">
                 <div class="settings-section-title">
                     <i class="fas fa-robot"></i>
-                    Gemini Settings
+                    LLM Provider
                 </div>
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Google API Key</div>
-                            <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            <div class="settings-item-label">Provider</div>
+                            <div class="settings-item-description">Choose your AI backend</div>
                         </div>
-                        <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        <select class="input-field" id="llmProvider">
+                            <option value="gemini">Google Gemini</option>
+                            <option value="openrouter">OpenRouter</option>
+                        </select>
+                    </div>
+
+                    <div id="geminiLlmFields" class="settings-group">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Gemini API Key</div>
+                                <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            </div>
+                            <input type="password" class="input-field" id="geminiKey" placeholder="AIza...">
+                        </div>
+                    </div>
+
+                    <div id="openrouterLlmFields" class="settings-group" style="display:none;">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">OpenRouter API Key</div>
+                                <div class="settings-item-description">Get a key at <code>openrouter.ai/keys</code></div>
+                            </div>
+                            <input type="password" class="input-field" id="openrouterKey" placeholder="sk-or-v1-...">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Model</div>
+                                <div class="settings-item-description">
+                                    Use <code>openrouter/free</code> for automatic free model routing, or a specific model slug
+                                </div>
+                            </div>
+                            <input type="text" class="input-field" id="openrouterModel" placeholder="openrouter/free">
+                        </div>
+                    </div>
+
+                    <div class="settings-note" id="openrouterNote" style="display:none;">
+                        OpenRouter automatically routes image requests to free vision-capable models.
+                        No charges apply for free models. See <a href="https://openrouter.ai" target="_blank" style="color: inherit;">openrouter.ai</a> for details.
                     </div>
                 </div>
             </div>

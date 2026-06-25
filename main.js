@@ -1,7 +1,14 @@
-require("dotenv").config();
-
 const path = require("path");
 const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
+
+// .env lives in app.getPath("userData") (~/Library/Application Support/OpenCluely/)
+// so settings survive re-launches when the app is installed in /Applications.
+// For development, .env in process.cwd() is also loaded but userData takes priority
+// so saved settings persist across restarts.
+const userDataPath = app.getPath("userData");
+const userDataEnv = path.join(userDataPath, ".env");
+require("dotenv").config({ path: userDataEnv });
+require("dotenv").config();
 
 // ── Linux GPU process crash workaround ──
 // On many Linux setups (Wayland, X11 without GPU drivers, Docker, headless,
@@ -55,14 +62,16 @@ class ApplicationController {
   this.codingLanguage = "cpp";
     this.speechAvailable = false;
 
+    // .env lives in userData so settings survive re-launches from /Applications
+    this.envPath = path.join(app.getPath("userData"), ".env");
+
     // First-run onboarding: detects missing .env / API key and triggers
     // a settings-window prompt on first launch so users don't have to
     // dig through docs to figure out they need a Gemini API key.
     this.firstRunManager = new FirstRunManager({
       logger: logger,
-      // Sentinel lives in userData so it survives cwd changes
-      // (the app may be launched from any directory).
       sentinelPath: path.join(app.getPath("userData"), ".opencluely-firstrun-completed"),
+      envPath: this.envPath,
     });
     // Lazily-initialised in getWhisperInstaller() so tests can mock
     // the constructor without polluting main-process startup.
@@ -267,6 +276,41 @@ class ApplicationController {
     );
   }
 
+  async _ensureMicrophonePermission() {
+    // On macOS 14+ the first microphone hardware access via a spawned
+    // subprocess (sox/rec) can crash the app if permission hasn't been
+    // granted yet. Use the programmatic API to trigger the dialog safely.
+    if (process.platform !== "darwin") return;
+
+    const { systemPreferences } = require("electron");
+    if (!systemPreferences.getMediaAccessStatus) return;
+
+    const status = systemPreferences.getMediaAccessStatus("microphone");
+    logger.debug("Microphone permission status", { status });
+
+    if (status === "granted") return;
+
+    if (status === "denied") {
+      throw new Error(
+        "Microphone permission denied. " +
+        "Go to System Settings → Privacy & Security → Microphone, " +
+        "find OpenCluely in the list and check the box, then restart the app."
+      );
+    }
+
+    // status === "not-determined" — first time; ask safely via the API
+    if (status === "not-determined" && systemPreferences.askForMediaAccess) {
+      const granted = await systemPreferences.askForMediaAccess("microphone");
+      if (!granted) {
+        throw new Error(
+          "Microphone permission was not granted. " +
+          "Go to System Settings → Privacy & Security → Microphone " +
+          "to enable access."
+        );
+      }
+    }
+  }
+
   setupGlobalShortcuts() {
     const shortcuts = {
       "CommandOrControl+Shift+S": () => this.triggerScreenshotOCR(),
@@ -329,7 +373,7 @@ class ApplicationController {
             text: text.substring(0, 100)
           });
         }
-      }, 500);
+      }, 50);
     });
 
     speechService.on("interim-transcription", (text) => {
@@ -379,8 +423,17 @@ class ApplicationController {
       return speechService.isAvailable ? speechService.isAvailable() : false;
     });
 
-    ipcMain.handle("start-speech-recognition", () => {
-      speechService.startRecording();
+    ipcMain.handle("start-speech-recognition", async () => {
+      try {
+        await this._ensureMicrophonePermission();
+        speechService.startRecording();
+      } catch (e) {
+        logger.warn("Microphone permission check failed", { error: e.message });
+        windowManager.broadcastToAllWindows("speech-status", {
+          status: e.message,
+          available: false,
+        });
+      }
       return speechService.getStatus();
     });
 
@@ -390,8 +443,13 @@ class ApplicationController {
     });
 
     // Also handle direct send events for fallback
-    ipcMain.on("start-speech-recognition", () => {
-      speechService.startRecording();
+    ipcMain.on("start-speech-recognition", async () => {
+      try {
+        await this._ensureMicrophonePermission();
+        speechService.startRecording();
+      } catch (e) {
+        logger.warn("Microphone permission check failed", { error: e.message });
+      }
     });
 
     ipcMain.on("stop-speech-recognition", () => {
@@ -532,7 +590,7 @@ class ApplicationController {
             text: text.substring(0, 100)
           });
         }
-      }, 500);
+      }, 50);
 
       return { success: true };
     });
@@ -642,9 +700,10 @@ class ApplicationController {
       try {
         this.firstRunManager.markCompleted();
         this.isFirstRun = false;
-        // Reinitialize speech service with the latest persisted settings
-        // so the mic button reflects the provider/command set during onboarding.
+        // Reinitialize services with the latest persisted settings
+        // so the mic button and AI calls reflect onboarding choices.
         speechService.initializeClient();
+        llmService.initializeClient();
         this.speechAvailable = speechService.isAvailable
           ? speechService.isAvailable()
           : false;
@@ -840,7 +899,7 @@ class ApplicationController {
     });
   }
 
-  toggleSpeechRecognition() {
+  async toggleSpeechRecognition() {
     const isAvailable = typeof speechService.isAvailable === 'function' ? speechService.isAvailable() : !!speechService.getStatus?.().isInitialized;
     if (!isAvailable) {
       logger.warn("Speech recognition unavailable; toggle ignored");
@@ -861,11 +920,18 @@ class ApplicationController {
       }
     } else {
       try {
+        await this._ensureMicrophonePermission();
         speechService.startRecording();
         windowManager.showChatWindow();
         logger.info("Speech recognition started via global shortcut");
       } catch (error) {
         logger.error("Error starting speech recognition:", error);
+        try {
+          windowManager.broadcastToAllWindows("speech-status", {
+            status: error.message,
+            available: false,
+          });
+        } catch (_) {}
       }
     }
   }
@@ -1323,6 +1389,10 @@ class ApplicationController {
       selectedIcon: this.appIcon || "terminal",
       windowGap: windowManager.windowGap,
 
+      llmProvider: process.env.LLM_PROVIDER || "gemini",
+      openrouterKey: process.env.OPENROUTER_API_KEY || "",
+      openrouterModel: process.env.OPENROUTER_MODEL || "openrouter/free",
+
       speechProvider: speechService.provider || "whisper",
       azureKey: process.env.AZURE_SPEECH_KEY || "",
       azureRegion: process.env.AZURE_SPEECH_REGION || "",
@@ -1390,23 +1460,38 @@ class ApplicationController {
       if (settings.whisperSegmentMs !== undefined) {
         envUpdates.WHISPER_SEGMENT_MS = String(settings.whisperSegmentMs);
       }
+      if (settings.llmProvider !== undefined) {
+        envUpdates.LLM_PROVIDER = settings.llmProvider;
+      }
+      if (settings.openrouterKey !== undefined) {
+        envUpdates.OPENROUTER_API_KEY = settings.openrouterKey;
+      }
+      if (settings.openrouterModel !== undefined) {
+        envUpdates.OPENROUTER_MODEL = settings.openrouterModel;
+      }
       if (settings.geminiKey !== undefined) {
         envUpdates.GEMINI_API_KEY = settings.geminiKey;
       }
 
       const persistedKeys = this.persistEnvUpdates(envUpdates);
 
-      // If the Gemini key was just saved, reinitialize the LLM service
-      // so the new client picks up the key. Without this, the test-
-      // connection button in the onboarding wizard fails with
-      // "Service not initialized" because the client was first created
-      // at app startup, before any key was set.
-      if (settings.geminiKey !== undefined && envUpdates.GEMINI_API_KEY !== undefined) {
+      // Reinitialize LLM service when provider, API key, or model changes.
+      // Without this the test-connection button and all AI calls would
+      // use stale credentials or the wrong provider.
+      const llmProviderChanged = settings.llmProvider !== undefined &&
+        (process.env.LLM_PROVIDER || "gemini") !== settings.llmProvider;
+      const llmKeyChanged = settings.geminiKey !== undefined || settings.openrouterKey !== undefined;
+      const llmModelChanged = settings.openrouterModel !== undefined;
+      if (llmProviderChanged || llmKeyChanged || llmModelChanged) {
         try {
           llmService.initializeClient();
-          logger.info("LLM service reinitialized after Gemini key update");
+          logger.info("LLM service reinitialized after settings change", {
+            providerChanged: llmProviderChanged,
+            keyChanged: llmKeyChanged,
+            modelChanged: llmModelChanged
+          });
         } catch (e) {
-          logger.warn("Failed to reinitialize LLM service after Gemini key update", {
+          logger.warn("Failed to reinitialize LLM service", {
             error: e.message
           });
         }
@@ -1448,8 +1533,12 @@ class ApplicationController {
         }
       }
 
+      const redacted = { ...settings };
+      if (redacted.geminiKey) redacted.geminiKey = redacted.geminiKey.substring(0, 4) + "…";
+      if (redacted.openrouterKey) redacted.openrouterKey = redacted.openrouterKey.substring(0, 4) + "…";
+      if (redacted.azureKey) redacted.azureKey = redacted.azureKey.substring(0, 4) + "…";
       logger.info("Settings saved successfully", {
-        ...settings,
+        ...redacted,
         persistedEnvKeys: persistedKeys
       });
       return { success: true, persistedEnvKeys: persistedKeys };
@@ -1481,7 +1570,13 @@ class ApplicationController {
 
     const fs = require("fs");
     const path = require("path");
-    const envPath = path.join(process.cwd(), ".env");
+    const envPath = this.envPath;
+
+    // Ensure the parent directory exists (userData is usually pre-created,
+    // but guard against edge cases like a sandboxed fresh install).
+    try {
+      fs.mkdirSync(path.dirname(envPath), { recursive: true });
+    } catch (_) { /* best effort */ }
 
     let existing = "";
     try {

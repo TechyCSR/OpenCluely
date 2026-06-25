@@ -72,6 +72,10 @@
             flex-shrink: 0;
             position: relative;
             z-index: 1;
+            -webkit-app-region: drag;
+        }
+        .header > * {
+            -webkit-app-region: no-drag;
         }
         .brand {
             display: flex;
@@ -713,6 +717,8 @@
             <div class="step-dot"></div>
             <div class="step-dot"></div>
             <div class="step-dot"></div>
+            <div class="step-dot"></div>
+            <div class="step-dot"></div>
         </div>
 
         <!-- ── Content ── -->
@@ -740,37 +746,104 @@
 
             <!-- SCREEN 2: API Key -->
             <section class="screen" data-screen="apikey">
-                <h1>Connect Google Gemini</h1>
+                <h1>Choose your AI Provider</h1>
                 <p class="subtitle">
-                    OpenCluely uses Google's Gemini to generate answers. You'll need a free API key.
+                    Pick the AI backend OpenCluely will use to generate answers. You can change this later in Settings.
                 </p>
 
-                <div class="field">
-                    <label for="geminiKey">Gemini API Key</label>
-                    <div class="input-wrap">
-                        <i class="fas fa-key icon"></i>
-                        <input
-                            type="password"
-                            id="geminiKey"
-                            class="input"
-                            placeholder="AIza…"
-                            autocomplete="off"
-                            spellcheck="false"
-                        >
-                        <button class="toggle-vis" id="toggleVis" type="button" title="Show / hide">
-                            <i class="fas fa-eye"></i>
-                        </button>
+                <div class="choice-list" id="llmProviderChoices">
+                    <div class="choice-card" data-value="gemini">
+                        <div class="choice-icon"><i class="fas fa-key"></i></div>
+                        <div class="choice-text">
+                            <div class="choice-title">Google Gemini</div>
+                            <div class="choice-desc">
+                                Free API key from Google. Reliable image understanding and fast responses.
+                            </div>
+                        </div>
+                        <div class="choice-radio"></div>
                     </div>
-                    <div class="hint">
-                        Don't have one? Get a free key at
-                        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
-                            aistudio.google.com/apikey
-                        </a>.
-                        It's stored locally in <code>.env</code> — never sent anywhere except Google.
+                    <div class="choice-card" data-value="openrouter">
+                        <div class="choice-icon"><i class="fas fa-random"></i></div>
+                        <div class="choice-text">
+                            <div class="choice-title">OpenRouter (Free models)</div>
+                            <div class="choice-desc">
+                                Access many free vision-capable models through one API. The <code>openrouter/free</code> router auto-selects the best available model.
+                            </div>
+                        </div>
+                        <div class="choice-radio"></div>
                     </div>
-                    <div id="keyStatus" class="status-pill idle" style="display:none;">
-                        <i class="fas fa-circle-info"></i>
-                        <span class="text">Enter your key above</span>
+                </div>
+
+                <!-- Gemini key fields -->
+                <div id="onboardingGeminiFields" style="display:block;">
+                    <div class="field" style="margin-top: 20px;">
+                        <label for="geminiKey">Gemini API Key</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-key icon"></i>
+                            <input
+                                type="password"
+                                id="geminiKey"
+                                class="input"
+                                placeholder="AIza…"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                            <button class="toggle-vis" id="toggleVis" type="button" title="Show / hide">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="hint">
+                            Don't have one? Get a free key at
+                            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
+                                aistudio.google.com/apikey
+                            </a>.
+                        </div>
+                        <div id="keyStatus" class="status-pill idle" style="display:none;">
+                            <i class="fas fa-circle-info"></i>
+                            <span class="text">Enter your key above</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OpenRouter key fields -->
+                <div id="onboardingOpenrouterFields" style="display:none;">
+                    <div class="field" style="margin-top: 20px;">
+                        <label for="onboardingOpenrouterKey">OpenRouter API Key</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-key icon"></i>
+                            <input
+                                type="password"
+                                id="onboardingOpenrouterKey"
+                                class="input"
+                                placeholder="sk-or-v1-…"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                        </div>
+                        <div class="hint">
+                            Get a free key at
+                            <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">
+                                openrouter.ai/keys
+                            </a>.
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="onboardingOpenrouterModel">Model</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-cube icon"></i>
+                            <input
+                                type="text"
+                                id="onboardingOpenrouterModel"
+                                class="input"
+                                value="openrouter/free"
+                                placeholder="openrouter/free"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                        </div>
+                        <div class="hint">
+                            Use <code>openrouter/free</code> to auto-select free vision-capable models, or enter a specific model slug like <code>google/gemma-4-9b-it:free</code>.
+                        </div>
                     </div>
                 </div>
 

@@ -935,6 +935,9 @@ class WindowManager {
     const previousAvailability = this.screenCaptureStatus.available;
     const checkedAt = new Date().toISOString();
 
+    // Wrap in try-catch because desktopCapturer.getSources() can crash
+    // the Electron helper process on macOS 14+ when screen recording
+    // permission hasn't been granted.
     try {
       await desktopCapturer.getSources({
         types: ['screen', 'window'],
@@ -1292,7 +1295,7 @@ class WindowManager {
     }
 
     const llmWindow = this.windows.get('llmResponse');
-    if (llmWindow) {
+    if (llmWindow && !llmWindow.isDestroyed()) {
       logger.debug('Showing LLM loading state');
       llmWindow.webContents.send('show-loading');
       this.showOnCurrentDesktop(llmWindow);
@@ -1303,6 +1306,9 @@ class WindowManager {
       }
       
       logger.debug('LLM loading window shown');
+    } else if (llmWindow && llmWindow.isDestroyed()) {
+      logger.error('LLM response window was destroyed; removing from window map');
+      this.windows.delete('llmResponse');
     } else {
       logger.error('LLM window not available for loading state');
     }

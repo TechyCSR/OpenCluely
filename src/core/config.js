@@ -39,20 +39,28 @@ class ConfigManager {
       },
 
       llm: {
+        provider: 'gemini',
         gemini: {
-          // 'gemini-3.5-flash' is Google's current stable Flash model.
-          // 'gemini-3-flash-preview' is the fallback because it also has a
-          // free tier and is less likely to hit demand spikes.
           model: 'gemini-3.5-flash',
           fallbackModels: ['gemini-3-flash-preview', 'gemini-2.5-flash'],
-          maxRetries: 3,
-          timeout: 60000,
+          maxRetries: 1,
+          timeout: 30000,
           fallbackEnabled: true,
           enableFallbackMethod: true,
           generation: {
             temperature: 0.7,
             topK: 32,
             topP: 0.9,
+            maxOutputTokens: 4096
+          }
+        },
+        openrouter: {
+          baseUrl: 'https://openrouter.ai/api/v1',
+          model: 'openrouter/free',
+          maxRetries: 1,
+          timeout: 30000,
+          generation: {
+            temperature: 0.7,
             maxOutputTokens: 4096
           }
         }

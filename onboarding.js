@@ -30,7 +30,10 @@
   // ── State ─────────────────────────────────────────────────────────
   const state = {
     step: 0,
+    llmProvider: 'gemini', // 'gemini' | 'openrouter'
     geminiKey: '',
+    openrouterKey: '',
+    openrouterModel: 'openrouter/free',
     speechProvider: null, // 'whisper' | 'azure' | 'skip'
     azureKey: '',
     azureRegion: '',
@@ -122,6 +125,9 @@
       case 'welcome':
         return true;
       case 'apikey':
+        if (state.llmProvider === 'openrouter') {
+          return !!state.openrouterKey.trim();
+        }
         return !!state.geminiKey.trim();
       case 'speech':
         if (state.speechProvider === 'azure') {
@@ -180,6 +186,45 @@
       ? '<i class="fas fa-eye"></i>'
       : '<i class="fas fa-eye-slash"></i>';
   });
+
+  // ── Wire up: LLM provider choices ───────────────────────────────
+  const llmProviderChoices = document.getElementById('llmProviderChoices');
+  const onboardingGeminiFields = document.getElementById('onboardingGeminiFields');
+  const onboardingOpenrouterFields = document.getElementById('onboardingOpenrouterFields');
+
+  if (llmProviderChoices) {
+    llmProviderChoices.querySelectorAll('.choice-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const value = card.dataset.value;
+        state.llmProvider = value;
+        llmProviderChoices.querySelectorAll('.choice-card').forEach((c) => c.classList.remove('selected'));
+        card.classList.add('selected');
+        if (onboardingGeminiFields) {
+          onboardingGeminiFields.style.display = value === 'gemini' ? 'block' : 'none';
+        }
+        if (onboardingOpenrouterFields) {
+          onboardingOpenrouterFields.style.display = value === 'openrouter' ? 'block' : 'none';
+        }
+        // Reset the key status when switching providers
+        if (keyStatus) keyStatus.style.display = 'none';
+      });
+    });
+  }
+
+  // Wire up OpenRouter key and model inputs
+  const onboardingOpenrouterKey = document.getElementById('onboardingOpenrouterKey');
+  const onboardingOpenrouterModel = document.getElementById('onboardingOpenrouterModel');
+
+  if (onboardingOpenrouterKey) {
+    onboardingOpenrouterKey.addEventListener('input', () => {
+      state.openrouterKey = onboardingOpenrouterKey.value.trim();
+    });
+  }
+  if (onboardingOpenrouterModel) {
+    onboardingOpenrouterModel.addEventListener('input', () => {
+      state.openrouterModel = onboardingOpenrouterModel.value.trim() || 'openrouter/free';
+    });
+  }
 
   // ── Wire up: Speech choices ───────────────────────────────────────
   $$('#speechChoices .choice-card').forEach((card) => {
@@ -436,11 +481,29 @@
   // ── Wire up: Finish screen ────────────────────────────────────────
   function populateSummary() {
     const rows = [];
-    rows.push({
-      label: '<i class="fas fa-key"></i> Gemini API',
-      value: state.geminiKey ? 'Configured' : 'Missing',
-      cls: state.geminiKey ? 'ok' : 'skip',
-    });
+    if (state.llmProvider === 'openrouter') {
+      rows.push({
+        label: '<i class="fas fa-random"></i> LLM Provider',
+        value: 'OpenRouter',
+        cls: 'ok',
+      });
+      rows.push({
+        label: '<i class="fas fa-key"></i> OpenRouter Key',
+        value: state.openrouterKey ? 'Configured' : 'Missing',
+        cls: state.openrouterKey ? 'ok' : 'skip',
+      });
+      rows.push({
+        label: '<i class="fas fa-cube"></i> Model',
+        value: state.openrouterModel,
+        cls: 'ok',
+      });
+    } else {
+      rows.push({
+        label: '<i class="fas fa-key"></i> Gemini API',
+        value: state.geminiKey ? 'Configured' : 'Missing',
+        cls: state.geminiKey ? 'ok' : 'skip',
+      });
+    }
     if (state.speechProvider === 'whisper') {
       rows.push({
         label: '<i class="fas fa-microphone"></i> Speech',
@@ -500,16 +563,26 @@
     const name = currentScreenName();
     if (!canAdvance()) {
       // Lightly nudge the user
-      if (name === 'apikey') setKeyStatus('error', 'Enter a Gemini API key');
+      if (name === 'apikey') {
+        const msg = state.llmProvider === 'openrouter'
+          ? 'Enter your OpenRouter API key'
+          : 'Enter your Gemini API key';
+        setKeyStatus('error', msg);
+      }
       return;
     }
 
-    // Persist settings on speech selection (Azure path), since we
-    // already saved geminiKey on test; do it here too if user skipped
-    // testing.
-    if (name === 'apikey' && state.geminiKey && window.electronAPI) {
+    // Persist settings on API key step — saves provider, key, and model
+    if (name === 'apikey' && window.electronAPI) {
       try {
-        await window.electronAPI.saveSettings({ geminiKey: state.geminiKey });
+        const payload = { llmProvider: state.llmProvider };
+        if (state.llmProvider === 'openrouter') {
+          if (state.openrouterKey) payload.openrouterKey = state.openrouterKey;
+          payload.openrouterModel = state.openrouterModel;
+        } else if (state.geminiKey) {
+          payload.geminiKey = state.geminiKey;
+        }
+        await window.electronAPI.saveSettings(payload);
       } catch (_) { /* surfaced elsewhere */ }
     }
     if (name === 'speech' && window.electronAPI) {
@@ -641,16 +714,28 @@
   // ── Boot ──────────────────────────────────────────────────────────
   showScreen('welcome');
 
-  // Pre-populate Gemini key from existing .env (if any) so users with
+  // Pre-populate provider and key from existing .env (if any) so users with
   // a partial config don't have to retype.
-  if (window.electronAPI && window.electronAPI.getFirstRunStatus) {
-    window.electronAPI.getFirstRunStatus().then((s) => {
-      if (s && s.geminiConfigured) {
-        // We can't read the key back (settings returns empty for keys),
-        // but we can mark status as success if the env file already has one.
+  (async function restoreExistingConfig() {
+    if (!window.electronAPI || !window.electronAPI.getFirstRunStatus) return;
+    try {
+      const s = await window.electronAPI.getFirstRunStatus();
+      if (!s) return;
+
+      // Restore provider choice
+      if (s.llmProvider === 'openrouter') {
+        state.llmProvider = 'openrouter';
+        const orCard = llmProviderChoices?.querySelector('[data-value="openrouter"]');
+        if (orCard) orCard.click();
+        if (onboardingOpenrouterKey) onboardingOpenrouterKey.placeholder = '•••••••••••••••• (already set)';
+        if (onboardingOpenrouterModel) onboardingOpenrouterModel.value = s.openrouterModel || 'openrouter/free';
+        state.openrouterModel = s.openrouterModel || 'openrouter/free';
+      } else if (s.geminiConfigured) {
+        const geminiCard = llmProviderChoices?.querySelector('[data-value="gemini"]');
+        if (geminiCard) geminiCard.click();
         setKeyStatus('success', 'Already configured — click Continue');
         geminiInput.placeholder = '•••••••••••••••• (already set)';
       }
-    }).catch(() => {});
-  }
+    } catch (_) { /* ignore */ }
+  })();
 })();

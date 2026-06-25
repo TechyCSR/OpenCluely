@@ -92,10 +92,7 @@ class LLMResponseWindowUI {
         timestamp: new Date().toISOString(),
       });
 
-      // Add a small delay to ensure DOM is ready
-      setTimeout(() => {
-        this.handleDisplayResponse(data);
-      }, 50);
+      this.handleDisplayResponse(data);
     });
 
     // Interaction state handlers
@@ -247,8 +244,6 @@ class LLMResponseWindowUI {
         result,
       });
 
-      // Use a more reliable delay mechanism
-      await new Promise((resolve) => setTimeout(resolve, 200));
       this.displayResponseContent(data);
     } catch (error) {
       logger.error("Failed to expand window", {
@@ -345,29 +340,27 @@ class LLMResponseWindowUI {
       this.requestWindowResize(contentMetrics);
 
       // Final verification
-      setTimeout(() => {
-        const isLoadingHidden = this.elements.loading
-          ? this.elements.loading.classList.contains("hidden")
-          : true;
-        const isContentVisible = this.elements.responseContent
-          ? !this.elements.responseContent.classList.contains("hidden")
-          : false;
+      const isLoadingHidden = this.elements.loading
+        ? this.elements.loading.classList.contains("hidden")
+        : true;
+      const isContentVisible = this.elements.responseContent
+        ? !this.elements.responseContent.classList.contains("hidden")
+        : false;
 
-        logger.info("Display state verification", {
+      logger.info("Display state verification", {
+        component: "LLMResponseWindowUI",
+        loadingHidden: isLoadingHidden,
+        contentVisible: isContentVisible,
+        windowVisible: !document.hidden,
+      });
+
+      if (!isLoadingHidden || !isContentVisible) {
+        logger.warn("Display state inconsistent - forcing correction", {
           component: "LLMResponseWindowUI",
-          loadingHidden: isLoadingHidden,
-          contentVisible: isContentVisible,
-          windowVisible: !document.hidden,
         });
-
-        if (!isLoadingHidden || !isContentVisible) {
-          logger.warn("Display state inconsistent - forcing correction", {
-            component: "LLMResponseWindowUI",
-          });
-          this.hideLoadingState();
-          this.showResponseContent();
-        }
-      }, 100);
+        this.hideLoadingState();
+        this.showResponseContent();
+      }
 
       logger.debug("displayResponseContent completed - END");
     } catch (error) {
@@ -400,23 +393,21 @@ class LLMResponseWindowUI {
 
   async requestWindowResize(contentMetrics) {
     try {
-      setTimeout(async () => {
-        logger.debug("Requesting window resize based on content metrics", {
-          component: "LLMResponseWindowUI",
-          metrics: contentMetrics,
-        });
+      logger.debug("Requesting window resize based on content metrics", {
+        component: "LLMResponseWindowUI",
+        metrics: contentMetrics,
+      });
 
-        const { ipcRenderer } = require("electron");
-        const result = await ipcRenderer.invoke(
-          "resize-llm-window-for-content",
-          contentMetrics
-        );
+      const { ipcRenderer } = require("electron");
+      const result = await ipcRenderer.invoke(
+        "resize-llm-window-for-content",
+        contentMetrics
+      );
 
-        logger.debug("Window resize result", {
-          component: "LLMResponseWindowUI",
-          result,
-        });
-      }, 200);
+      logger.debug("Window resize result", {
+        component: "LLMResponseWindowUI",
+        result,
+      });
     } catch (error) {
       logger.error("Failed to resize window", {
         component: "LLMResponseWindowUI",

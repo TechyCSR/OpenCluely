@@ -10,11 +10,18 @@ class LLMService {
     this.isInitialized = false;
     this.requestCount = 0;
     this.errorCount = 0;
+    this.provider = 'gemini';
     
     this.initializeClient();
   }
 
   initializeClient() {
+    this.provider = (process.env.LLM_PROVIDER || 'gemini').toLowerCase();
+
+    if (this.provider === 'openrouter') {
+      return this._openrouterInit();
+    }
+
     const apiKey = config.getApiKey('GEMINI');
     
     if (!apiKey || apiKey === 'your-api-key-here') {
@@ -39,6 +46,419 @@ class LLMService {
       logger.error('Failed to initialize Gemini client', { 
         error: error.message 
       });
+    }
+  }
+
+  _openrouterInit() {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey || apiKey.trim().length === 0) {
+      logger.warn('OpenRouter API key not configured');
+      return;
+    }
+    this.model = config.get('llm.openrouter.model') || 'openrouter/free';
+    this.isInitialized = true;
+    logger.info('OpenRouter client initialized successfully', {
+      model: this.model
+    });
+  }
+
+  _openrouterIsAvailable() {
+    const key = process.env.OPENROUTER_API_KEY;
+    return !!key && key.trim().length > 0;
+  }
+
+  _openrouterGetModel() {
+    return process.env.OPENROUTER_MODEL || config.get('llm.openrouter.model') || 'openrouter/free';
+  }
+
+  _openrouterBuildMessages({ systemInstruction, contents }) {
+    const messages = [];
+    if (systemInstruction) {
+      const text = typeof systemInstruction === 'string'
+        ? systemInstruction
+        : systemInstruction.parts?.[0]?.text || '';
+      if (text) {
+        messages.push({ role: 'system', content: text });
+      }
+    }
+    if (contents && Array.isArray(contents)) {
+      for (const entry of contents) {
+        const role = entry.role === 'model' ? 'assistant' : 'user';
+        const parts = entry.parts || [];
+        const contentParts = [];
+        for (const part of parts) {
+          if (part.text !== undefined) {
+            contentParts.push({ type: 'text', text: part.text });
+          } else if (part.inlineData) {
+            const { data, mimeType } = part.inlineData;
+            contentParts.push({
+              type: 'image_url',
+              image_url: { url: `data:${mimeType || 'image/png'};base64,${data}` }
+            });
+          }
+        }
+        if (contentParts.length === 1 && contentParts[0].type === 'text') {
+          messages.push({ role, content: contentParts[0].text });
+        } else if (contentParts.length > 0) {
+          messages.push({ role, content: contentParts });
+        }
+      }
+    }
+    return messages;
+  }
+
+  _openrouterBuildRequestBody(text, activeSkill, programmingLanguage, systemPrompt, conversationHistory) {
+    const messages = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    if (conversationHistory && conversationHistory.length > 0) {
+      for (const event of conversationHistory) {
+        if (event.role === 'system') continue;
+        if (!event.content || typeof event.content !== 'string') continue;
+        const role = event.role === 'model' ? 'assistant' : 'user';
+        messages.push({ role, content: event.content.trim() });
+      }
+    }
+    const formattedMessage = conversationHistory && conversationHistory.length > 0
+      ? text
+      : this.formatUserMessage(text, activeSkill);
+    messages.push({ role: 'user', content: formattedMessage });
+    return messages;
+  }
+
+  _openrouterBuildImageBody(imageBuffer, mimeType, activeSkill, programmingLanguage, skillPrompt) {
+    const messages = [];
+    if (skillPrompt) {
+      messages.push({ role: 'system', content: skillPrompt });
+    }
+    const base64 = imageBuffer.toString('base64');
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'text', text: this.formatImageInstruction(activeSkill, programmingLanguage) },
+        { type: 'image_url', image_url: { url: `data:${mimeType || 'image/png'};base64,${base64}` } }
+      ]
+    });
+    return messages;
+  }
+
+  _openrouterBuildTranscriptionBody(text, activeSkill, programmingLanguage, conversationHistory) {
+    const messages = [];
+    const systemPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    if (conversationHistory && conversationHistory.length > 0) {
+      for (const event of conversationHistory) {
+        if (event.role === 'system') continue;
+        if (!event.content || typeof event.content !== 'string') continue;
+        const role = event.role === 'model' ? 'assistant' : 'user';
+        messages.push({ role, content: event.content.trim() });
+      }
+    }
+    messages.push({ role: 'user', content: text.trim() });
+    return messages;
+  }
+
+  async _openrouterExecute(messages, overrides = {}) {
+    const https = require('https');
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error('OpenRouter API key not configured');
+    }
+
+    const baseUrl = config.get('llm.openrouter.baseUrl') || 'https://openrouter.ai/api/v1';
+    const model = overrides.model || this._openrouterGetModel();
+    const timeout = overrides.timeout || config.get('llm.openrouter.timeout') || 60000;
+    const genConfig = { ...config.get('llm.openrouter.generation'), ...overrides.generation };
+
+    const url = `${baseUrl}/chat/completions`;
+    const body = {
+      model,
+      messages,
+      temperature: genConfig.temperature,
+      max_tokens: genConfig.maxOutputTokens
+    };
+    if (genConfig.topP !== undefined) body.top_p = genConfig.topP;
+
+    const postData = JSON.stringify(body);
+    const maxRetries = overrides.maxRetries || config.get('llm.openrouter.maxRetries') || 3;
+
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const options = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://opencluely.app',
+            'X-Title': 'OpenCluely',
+            'Content-Length': Buffer.byteLength(postData),
+            'User-Agent': this.getUserAgent()
+          },
+          timeout
+        };
+
+        const response = await new Promise((resolve, reject) => {
+          const req = https.request(url, options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  resolve({ status: res.statusCode, data: JSON.parse(data) });
+                } catch (e) {
+                  reject(new Error(`Failed to parse OpenRouter response: ${e.message}`));
+                }
+              } else {
+                reject(new Error(`OpenRouter HTTP ${res.statusCode}: ${data.substring(0, 500)}`));
+              }
+            });
+          });
+          req.on('error', (e) => reject(new Error(`OpenRouter request failed: ${e.message}`)));
+          req.on('timeout', () => { req.destroy(); reject(new Error('OpenRouter request timeout')); });
+          req.write(postData);
+          req.end();
+        });
+
+        const text = this._openrouterExtractResponse(response.data);
+        return text;
+
+      } catch (error) {
+        lastError = error;
+        logger.warn(`OpenRouter attempt ${attempt}/${maxRetries} failed`, {
+          error: error.message,
+          model,
+          attempt
+        });
+
+        if (attempt < maxRetries) {
+          const delay = 1500 * attempt + Math.random() * 1000;
+          await this.delay(delay);
+        }
+      }
+    }
+
+    throw lastError || new Error('OpenRouter request failed after all retries');
+  }
+
+  _openrouterExtractResponse(response) {
+    if (!response) {
+      throw new Error('Empty response from OpenRouter');
+    }
+    if (!response.choices || !Array.isArray(response.choices) || response.choices.length === 0) {
+      throw new Error('No choices in OpenRouter response');
+    }
+    const choice = response.choices[0];
+    if (!choice.message || typeof choice.message.content !== 'string') {
+      throw new Error('No message content in OpenRouter response choice');
+    }
+    if (choice.finish_reason === 'length') {
+      logger.warn('OpenRouter response reached max tokens limit', {
+        finishReason: choice.finish_reason
+      });
+    }
+    return choice.message.content.trim();
+  }
+
+  async _openrouterProcessImage(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage) {
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const { promptLoader } = require('../../prompt-loader');
+      const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+      const messages = this._openrouterBuildImageBody(imageBuffer, mimeType, activeSkill, programmingLanguage, skillPrompt);
+
+      const responseText = await this._openrouterExecute(messages);
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
+        : responseText;
+
+      logger.logPerformance('OpenRouter image processing', startTime, {
+        activeSkill,
+        imageSize: imageBuffer.length,
+        responseLength: finalResponse.length,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: {
+          provider: 'openrouter',
+          model: this._openrouterGetModel(),
+          skill: activeSkill,
+          programmingLanguage,
+          processingTime: Date.now() - startTime,
+          requestId: this.requestCount,
+          usedFallback: false,
+          isImageAnalysis: true,
+          mimeType
+        }
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('OpenRouter image processing failed', {
+        error: error.message,
+        activeSkill,
+        requestId: this.requestCount
+      });
+      return this.generateFallbackResponse('[image]', activeSkill);
+    }
+  }
+
+  async _openrouterProcessText(text, activeSkill, sessionMemory, programmingLanguage) {
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const { promptLoader } = require('../../prompt-loader');
+      const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+      const sessionManager = require('../managers/session.manager');
+      const conversationHistory = sessionManager && typeof sessionManager.getConversationHistory === 'function'
+        ? sessionManager.getConversationHistory(15)
+        : [];
+
+      const messages = this._openrouterBuildRequestBody(text, activeSkill, programmingLanguage, skillPrompt, conversationHistory);
+
+      const responseText = await this._openrouterExecute(messages);
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
+        : responseText;
+
+      logger.logPerformance('OpenRouter text processing', startTime, {
+        activeSkill,
+        textLength: text.length,
+        responseLength: finalResponse.length,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: {
+          provider: 'openrouter',
+          model: this._openrouterGetModel(),
+          skill: activeSkill,
+          programmingLanguage,
+          processingTime: Date.now() - startTime,
+          requestId: this.requestCount,
+          usedFallback: false
+        }
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('OpenRouter text processing failed', {
+        error: error.message,
+        activeSkill,
+        requestId: this.requestCount
+      });
+      return this.generateFallbackResponse(text, activeSkill);
+    }
+  }
+
+  async _openrouterProcessTranscription(text, activeSkill, sessionMemory, programmingLanguage) {
+    if (!text || typeof text !== 'string' || text.trim().length < 2) {
+      logger.warn('Skipping transcription for empty or very short input');
+      return {
+        response: '',
+        metadata: { provider: 'openrouter', skill: activeSkill, processingTime: 0, usedFallback: true, isTranscriptionResponse: true }
+      };
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const sessionManager = require('../managers/session.manager');
+      const conversationHistory = sessionManager && typeof sessionManager.getConversationHistory === 'function'
+        ? sessionManager.getConversationHistory(10)
+        : [];
+
+      const messages = this._openrouterBuildTranscriptionBody(text.trim(), activeSkill, programmingLanguage, conversationHistory);
+
+      const responseText = await this._openrouterExecute(messages);
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
+        : responseText;
+
+      logger.logPerformance('OpenRouter transcription processing', startTime, {
+        activeSkill,
+        textLength: text.length,
+        responseLength: finalResponse.length,
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: {
+          provider: 'openrouter',
+          model: this._openrouterGetModel(),
+          skill: activeSkill,
+          programmingLanguage,
+          processingTime: Date.now() - startTime,
+          requestId: this.requestCount,
+          usedFallback: false,
+          isTranscriptionResponse: true
+        }
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('OpenRouter transcription processing failed', {
+        error: error.message,
+        activeSkill,
+        requestId: this.requestCount
+      });
+      return this.generateIntelligentFallbackResponse(text, activeSkill);
+    }
+  }
+
+  async _openrouterTestConnection() {
+    try {
+      const messages = [{ role: 'user', content: 'Test connection. Please respond with "OK".' }];
+      const startTime = Date.now();
+      const text = await this._openrouterExecute(messages, { maxRetries: 1, generation: { temperature: 0, maxOutputTokens: 64 } });
+      const latency = Date.now() - startTime;
+
+      logger.info('OpenRouter connection test successful', {
+        response: text,
+        latency,
+        model: this._openrouterGetModel()
+      });
+
+      return {
+        success: true,
+        response: text,
+        latency,
+        model: this._openrouterGetModel()
+      };
+    } catch (error) {
+      const errMsg = error.message || '';
+      let friendlyError;
+      if (errMsg.includes('401') || errMsg.includes('unauthorized')) {
+        friendlyError = 'Invalid OpenRouter API key. Get one at openrouter.ai/keys.';
+      } else if (errMsg.includes('402')) {
+        friendlyError = 'OpenRouter account needs credits or free model is unavailable.';
+      } else if (errMsg.includes('429')) {
+        friendlyError = 'OpenRouter rate limit exceeded. Wait a moment and try again.';
+      } else if (errMsg.includes('timeout') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
+        friendlyError = 'Cannot reach OpenRouter servers. Check your internet connection.';
+      } else {
+        friendlyError = `OpenRouter error: ${errMsg.substring(0, 200)}`;
+      }
+
+      return {
+        success: false,
+        error: friendlyError,
+        errorType: 'OPENROUTER_ERROR'
+      };
     }
   }
 
@@ -122,11 +542,15 @@ class LLMService {
    */
   async processImageWithSkill(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null) {
     if (!this.isInitialized) {
-      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+      throw new Error('LLM service not initialized. Check API key configuration.');
     }
 
     if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
       throw new Error('Invalid image buffer provided to processImageWithSkill');
+    }
+
+    if (this.provider === 'openrouter') {
+      return this._openrouterProcessImage(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage);
     }
 
     const startTime = Date.now();
@@ -158,30 +582,13 @@ class LLMService {
         request.systemInstruction = { parts: [{ text: skillPrompt }] };
       }
 
-      // Execute with retries/timeout - try alternative method first for network reliability
+      // Race SDK and HTTPS methods in parallel — faster one wins
       let responseText;
-      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
       try {
-        if (preferAlternative) {
-          logger.debug('Attempting alternative HTTPS method first for reliability');
-          responseText = await this.executeAlternativeRequest(request);
-        } else {
-          responseText = await this.executeRequest(request);
-        }
+        responseText = await this._raceGeminiMethods(request);
       } catch (error) {
-        const secondaryLabel = preferAlternative ? 'primary SDK method' : 'alternative HTTPS method';
-        logger.warn(`${preferAlternative ? 'Alternative' : 'Primary'} method failed, trying ${secondaryLabel}`, { error: error.message });
-        const secondaryFn = preferAlternative ? this.executeRequest.bind(this) : this.executeAlternativeRequest.bind(this);
-
-        try {
-          responseText = await secondaryFn(request);
-        } catch (secondaryError) {
-          logger.error('Both Gemini request methods failed', {
-            firstError: error.message,
-            secondError: secondaryError.message
-          });
-          throw secondaryError;
-        }
+        logger.error('Both Gemini request methods failed', { error: error.message });
+        throw error;
       }
 
       // Enforce language in code fences if provided
@@ -231,7 +638,11 @@ class LLMService {
 
   async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
     if (!this.isInitialized) {
-      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+      throw new Error('LLM service not initialized. Check API key configuration.');
+    }
+
+    if (this.provider === 'openrouter') {
+      return this._openrouterProcessText(text, activeSkill, sessionMemory, programmingLanguage);
     }
 
     const startTime = Date.now();
@@ -248,32 +659,15 @@ class LLMService {
 
       const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage);
 
-      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
       let response;
       try {
-        if (preferAlternative) {
-          logger.debug('Attempting alternative HTTPS method first for text processing');
-          response = await this.executeAlternativeRequest(geminiRequest);
-        } else {
-          response = await this.executeRequest(geminiRequest);
-        }
+        response = await this._raceGeminiMethods(geminiRequest);
       } catch (error) {
-        const secondaryLabel = preferAlternative ? 'primary SDK method' : 'alternative HTTPS method';
-        logger.warn(`${preferAlternative ? 'Alternative' : 'Primary'} method failed, trying ${secondaryLabel}`, {
+        logger.error('Both Gemini request methods failed for text processing', {
           error: error.message,
           requestId: this.requestCount
         });
-        const secondaryFn = preferAlternative ? this.executeRequest.bind(this) : this.executeAlternativeRequest.bind(this);
-        try {
-          response = await secondaryFn(geminiRequest);
-        } catch (secondaryError) {
-          logger.error('Both Gemini request methods failed for text processing', {
-            firstError: error.message,
-            secondError: secondaryError.message,
-            requestId: this.requestCount
-          });
-          throw secondaryError;
-        }
+        throw error;
       }
       
       // Enforce language in code fences if programmingLanguage specified
@@ -318,7 +712,11 @@ class LLMService {
 
   async processTranscriptionWithIntelligentResponse(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
     if (!this.isInitialized) {
-      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+      throw new Error('LLM service not initialized. Check API key configuration.');
+    }
+
+    if (this.provider === 'openrouter') {
+      return this._openrouterProcessTranscription(text, activeSkill, sessionMemory, programmingLanguage);
     }
 
     const startTime = Date.now();
@@ -335,32 +733,15 @@ class LLMService {
 
       const geminiRequest = this.buildIntelligentTranscriptionRequest(text, activeSkill, sessionMemory, programmingLanguage);
 
-      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
       let response;
       try {
-        if (preferAlternative) {
-          logger.debug('Attempting alternative HTTPS method first for transcription processing');
-          response = await this.executeAlternativeRequest(geminiRequest);
-        } else {
-          response = await this.executeRequest(geminiRequest);
-        }
+        response = await this._raceGeminiMethods(geminiRequest);
       } catch (error) {
-        const secondaryLabel = preferAlternative ? 'primary SDK method' : 'alternative HTTPS method';
-        logger.warn(`${preferAlternative ? 'Alternative' : 'Primary'} method failed, trying ${secondaryLabel}`, {
+        logger.error('Both Gemini request methods failed for transcription processing', {
           error: error.message,
           requestId: this.requestCount
         });
-        const secondaryFn = preferAlternative ? this.executeRequest.bind(this) : this.executeAlternativeRequest.bind(this);
-        try {
-          response = await secondaryFn(geminiRequest);
-        } catch (secondaryError) {
-          logger.error('Both Gemini request methods failed for transcription processing', {
-            firstError: error.message,
-            secondError: secondaryError.message,
-            requestId: this.requestCount
-          });
-          throw secondaryError;
-        }
+        throw error;
       }
       
       // Enforce language in code fences if programmingLanguage specified
@@ -1059,6 +1440,10 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
       return { success: false, error: 'Service not initialized' };
     }
 
+    if (this.provider === 'openrouter') {
+      return this._openrouterTestConnection();
+    }
+
     try {
       // First check network connectivity
       const networkCheck = await this.checkNetworkConnectivity();
@@ -1175,25 +1560,56 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   }
 
   updateApiKey(newApiKey) {
-    process.env.GEMINI_API_KEY = newApiKey;
+    if (this.provider === 'openrouter') {
+      process.env.OPENROUTER_API_KEY = newApiKey;
+    } else {
+      process.env.GEMINI_API_KEY = newApiKey;
+    }
     this.isInitialized = false;
     this.initializeClient();
     
-    logger.info('API key updated and client reinitialized');
+    logger.info('API key updated and client reinitialized', { provider: this.provider });
   }
 
   getStats() {
+    if (this.provider === 'openrouter') {
+      return {
+        provider: 'openrouter',
+        isInitialized: this.isInitialized,
+        requestCount: this.requestCount,
+        errorCount: this.errorCount,
+        successRate: this.requestCount > 0 ? ((this.requestCount - this.errorCount) / this.requestCount) * 100 : 0,
+        model: this._openrouterGetModel(),
+        config: config.get('llm.openrouter')
+      };
+    }
     return {
+      provider: 'gemini',
       isInitialized: this.isInitialized,
       requestCount: this.requestCount,
       errorCount: this.errorCount,
       successRate: this.requestCount > 0 ? ((this.requestCount - this.errorCount) / this.requestCount) * 100 : 0,
+      model: this.model,
       config: config.get('llm.gemini')
     };
   }
 
   delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Race the SDK and HTTPS methods in parallel. The first to succeed
+   * wins. If both fail, throw the error from the primary (SDK) method.
+   */
+  async _raceGeminiMethods(request) {
+    const results = await Promise.allSettled([
+      this.executeRequest(request),
+      this.executeAlternativeRequest(request)
+    ]);
+    const fulfilled = results.find(r => r.status === 'fulfilled');
+    if (fulfilled) return fulfilled.value;
+    throw results[0].reason || new Error('Both Gemini request methods failed');
   }
 
   async executeAlternativeRequest(geminiRequest) {
@@ -1238,7 +1654,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
 
     const postData = JSON.stringify(geminiRequest);
 
-    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+    const agent = new https.Agent({ keepAlive: true, maxSockets: 4 });
 
     const options = {
       method: 'POST',

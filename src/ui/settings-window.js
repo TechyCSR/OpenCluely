@@ -19,6 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeSkillSelect = document.getElementById('activeSkill');
     const iconGrid = document.getElementById('iconGrid');
 
+    // LLM provider fields
+    const llmProviderSelect = document.getElementById('llmProvider');
+    const openrouterKeyInput = document.getElementById('openrouterKey');
+    const openrouterModelInput = document.getElementById('openrouterModel');
+
     // Check if window.api exists
     if (!window.api) {
         console.error('window.api not available');
@@ -83,6 +88,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
         if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
+        if (llmProviderSelect) llmProviderSelect.value = settings.llmProvider || 'gemini';
+        if (openrouterKeyInput) openrouterKeyInput.value = settings.openrouterKey || '';
+        if (openrouterModelInput) openrouterModelInput.value = settings.openrouterModel || 'openrouter/free';
+        updateLLMFieldStates();
 
         // Set C++ as default if no coding language is specified
         if (codingLanguageSelect) {
@@ -127,6 +136,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     }
 
+    const updateLLMFieldStates = () => {
+        const provider = llmProviderSelect ? llmProviderSelect.value : 'gemini';
+        const geminiGroup = document.getElementById('geminiLlmFields');
+        const openrouterGroup = document.getElementById('openrouterLlmFields');
+        const openrouterNote = document.getElementById('openrouterNote');
+
+        if (geminiGroup) geminiGroup.style.display = provider === 'gemini' ? '' : 'none';
+        if (openrouterGroup) openrouterGroup.style.display = provider === 'openrouter' ? '' : 'none';
+        if (openrouterNote) openrouterNote.style.display = provider === 'openrouter' ? '' : 'none';
+
+        if (geminiKeyInput) geminiKeyInput.disabled = provider !== 'gemini';
+        if (openrouterKeyInput) openrouterKeyInput.disabled = provider !== 'openrouter';
+        if (openrouterModelInput) openrouterModelInput.disabled = provider !== 'openrouter';
+    };
+
     // Save settings helper function
     const saveSettings = () => {
         const settings = {};
@@ -141,6 +165,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
+        if (llmProviderSelect) settings.llmProvider = llmProviderSelect.value;
+        if (openrouterKeyInput) settings.openrouterKey = openrouterKeyInput.value;
+        if (openrouterModelInput) settings.openrouterModel = openrouterModelInput.value;
         
         window.api.send('save-settings', settings);
     };
@@ -184,7 +211,10 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperLanguageInput,
         whisperSegmentMsInput,
         geminiKeyInput,
-        windowGapInput
+        windowGapInput,
+        llmProviderSelect,
+        openrouterKeyInput,
+        openrouterModelInput
     ];
 
     inputs.forEach(input => {
@@ -197,6 +227,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (speechProviderSelect) {
         speechProviderSelect.addEventListener('change', () => {
             updateSpeechFieldStates();
+            saveSettings();
+        });
+    }
+
+    if (llmProviderSelect) {
+        llmProviderSelect.addEventListener('change', () => {
+            updateLLMFieldStates();
             saveSettings();
         });
     }

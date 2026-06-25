@@ -85,7 +85,12 @@
       ],
       "darkModeSupport": true,
       "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "OpenCluely needs microphone access to capture audio for speech-to-text transcription.",
+        "NSCameraUsageDescription": "OpenCluely needs screen capture access to analyse your screen content.",
+        "NSScreenCaptureDescription": "OpenCluely needs screen recording permission to capture and analyse your screen."
+      }
     },
     "win": {
       "target": [
@@ -160,5 +165,10 @@
         "height": 400
       }
     }
+  },
+  "allowScripts": {
+    "electron@29.4.6": true,
+    "@google/genai@2.9.0": true,
+    "protobufjs@7.6.4": true
   }
 }
