@@ -16,7 +16,12 @@ class MainWindowUI {
         this.micButton = null;
         this.isRecording = false;
         this.speechAvailable = false; // track availability
-    this._popoverHideTimeout = null;
+        this._popoverHideTimeout = null;
+        // Renderer-side audio capture state (used for Whisper on Windows)
+        this._audioContext = null;
+        this._mediaStream = null;
+        this._scriptNode = null;
+        this._captureInterval = null;
         
         // Define available skills for navigation
         this.availableSkills = [
@@ -306,12 +311,21 @@ class MainWindowUI {
         }
 
         // Add click handler for microphone
-        this.micButton.addEventListener('click', () => {
+        this.micButton.addEventListener('click', async () => {
             if (this.isInteractive && this.speechAvailable) {
-                if (this.isRecording) {
-                    window.electronAPI.stopSpeechRecognition();
-                } else {
-                    window.electronAPI.startSpeechRecognition();
+                try {
+                    if (this.isRecording) {
+                        await window.electronAPI.stopSpeechRecognition();
+                    } else {
+                        await window.electronAPI.startSpeechRecognition();
+                    }
+                } catch (error) {
+                    logger.error('Speech recognition toggle failed', {
+                        component: 'MainWindowUI',
+                        error: error.message
+                    });
+                    this.isRecording = false;
+                    this.updateMicButtonState();
                 }
             } else if (this.isInteractive && !this.speechAvailable) {
                 logger.warn('Mic clicked but speech recognition is not available', {
@@ -632,6 +646,14 @@ class MainWindowUI {
         if (this.micButton) {
             this.micButton.classList.add('recording');
         }
+        // On Windows, Whisper audio is captured in the renderer because the
+        // main-process recorder depends on Unix-only sox/rec/arecord tools.
+        const isWindows = typeof navigator !== 'undefined' &&
+          navigator.platform &&
+          navigator.platform.toLowerCase().includes('win');
+        if (isWindows) {
+            this._startRendererAudioCapture();
+        }
         logger.debug('Recording started', { component: 'MainWindowUI' });
     }
 
@@ -640,7 +662,93 @@ class MainWindowUI {
         if (this.micButton) {
             this.micButton.classList.remove('recording');
         }
+        this._stopRendererAudioCapture();
         logger.debug('Recording stopped', { component: 'MainWindowUI' });
+    }
+
+    /**
+     * Capture microphone audio in the renderer using the Web Audio API.
+     * This is used for Whisper on Windows where node-record-lpcm16's sox/rec
+     * dependencies are unavailable.
+     */
+    async _startRendererAudioCapture() {
+        try {
+            this._stopRendererAudioCapture();
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: { ideal: 16000 }
+                }
+            });
+            this._mediaStream = stream;
+
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 16000
+            });
+            this._audioContext = audioContext;
+
+            const source = audioContext.createMediaStreamSource(stream);
+            const bufferSize = 4096;
+            const scriptNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
+            this._scriptNode = scriptNode;
+
+            scriptNode.onaudioprocess = (event) => {
+                if (!this.isRecording || !window.electronAPI || !window.electronAPI.sendAudioChunk) {
+                    return;
+                }
+                const inputData = event.inputBuffer.getChannelData(0);
+                const pcm16 = new Int16Array(inputData.length);
+                for (let i = 0; i < inputData.length; i++) {
+                    const s = Math.max(-1, Math.min(1, inputData[i]));
+                    pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+                window.electronAPI.sendAudioChunk(pcm16.buffer);
+            };
+
+            source.connect(scriptNode);
+            scriptNode.connect(audioContext.destination);
+
+            logger.info('Renderer audio capture started', { component: 'MainWindowUI' });
+        } catch (error) {
+            logger.error('Failed to start renderer audio capture', {
+                component: 'MainWindowUI',
+                error: error.message
+            });
+            // Notify main process so it can stop the recording state
+            try {
+                await window.electronAPI.stopSpeechRecognition();
+            } catch (_) { /* ignore */ }
+        }
+    }
+
+    _stopRendererAudioCapture() {
+        try {
+            if (this._scriptNode) {
+                this._scriptNode.disconnect();
+                this._scriptNode.onaudioprocess = null;
+                this._scriptNode = null;
+            }
+            if (this._mediaStream) {
+                this._mediaStream.getTracks().forEach((track) => track.stop());
+                this._mediaStream = null;
+            }
+            if (this._audioContext) {
+                this._audioContext.close().catch(() => {});
+                this._audioContext = null;
+            }
+            if (this._captureInterval) {
+                clearInterval(this._captureInterval);
+                this._captureInterval = null;
+            }
+        } catch (error) {
+            logger.error('Error stopping renderer audio capture', {
+                component: 'MainWindowUI',
+                error: error.message
+            });
+        }
     }
 
     updateSkillIndicator() {

@@ -21,7 +21,7 @@ const { execFile, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const PROBE_TIMEOUT_MS = 8000;
+const PROBE_TIMEOUT_MS = 30000; // first `import whisper` (torch) is slow on a cold cache
 const INSTALL_TIMEOUT_MS = 300000; // pip downloads can be slow on cold cache
 
 /**
@@ -143,6 +143,17 @@ class WhisperInstaller {
   }
 
   /**
+   * Stable, absolute directory for downloaded model weights. Lives alongside
+   * the venv under the persistent data dir (userData in packaged builds) so
+   * the download location and the transcription `--model_dir` always agree.
+   * A relative WHISPER_MODEL_DIR resolved against an unstable cwd was the
+   * cause of models being "downloaded" but not found at transcribe time.
+   */
+  get modelDir() {
+    return path.join(this.dataDir, '.whisper-models');
+  }
+
+  /**
    * Inside the venv:
    *   - macOS/Linux: bin/whisper, bin/python, bin/pip
    *   - Windows:     Scripts\whisper.exe, Scripts\python.exe, Scripts\pip.exe
@@ -188,9 +199,12 @@ class WhisperInstaller {
       // eslint-disable-next-line no-await-in-loop
       const probe = await this._probe(candidate);
       if (probe.ok) {
+        const joined = candidate.join(' ');
         return {
           found: true,
-          command: candidate.join(' '),
+          command: joined.includes(' ') && !joined.startsWith('"')
+            ? `"${candidate[0]}" ${candidate.slice(1).join(' ')}`
+            : joined,
           version: probe.version,
           source: 'probe',
         };
@@ -313,15 +327,17 @@ class WhisperInstaller {
       log(`✓ ffmpeg detected (${ffmpeg.path})`);
     } else {
       const ffmpegMsg = this.platform === 'win32'
-        ? 'ffmpeg not found — install with `winget install ffmpeg` or download from gyan.dev. Required for non-WAV audio.'
+        ? 'ffmpeg not found — optional for OpenCluely (we always pass WAV audio to Whisper). Install later with `winget install ffmpeg` only if you need other formats.'
         : this.platform === 'darwin'
-          ? 'ffmpeg not found — install with `brew install ffmpeg`. Required for non-WAV audio.'
-          : 'ffmpeg not found — install with `sudo apt install ffmpeg` (Debian/Ubuntu). Required for non-WAV audio.';
+          ? 'ffmpeg not found — optional for OpenCluely (we always pass WAV audio to Whisper). Install later with `brew install ffmpeg` only if you need other formats.'
+          : 'ffmpeg not found — optional for OpenCluely (we always pass WAV audio to Whisper). Install later with `sudo apt install ffmpeg` only if you need other formats.';
       log(`! ${ffmpegMsg}`);
-      log('  (Whisper will work for WAV files; install ffmpeg later for other formats)');
     }
 
-    const commandStr = `${vp.python} -m whisper`;
+    // Quote the python path if it contains spaces (common on Windows
+    // user profiles like "C:\Users\CANDAN SINGH\...").
+    const pythonPath = vp.python.includes(' ') ? `"${vp.python}"` : vp.python;
+    const commandStr = `${pythonPath} -m whisper`;
     log(`✓ Whisper CLI ready: ${commandStr} (v${verify.version || '?'})`);
 
     return {
@@ -552,10 +568,15 @@ class WhisperInstaller {
 
     // whisper.load_model() downloads the weights lazily and prints progress
     // to stderr. We capture that output and relay it via onProgress.
-    log(`→ Downloading ${modelName} weights (this may take a minute)…`);
+    // download_root pins the weights to our stable model dir so transcription
+    // (which passes the same dir via --model_dir) finds them instead of
+    // re-downloading on the first segment.
+    const downloadRoot = this.modelDir;
+    try { fs.mkdirSync(downloadRoot, { recursive: true }); } catch (_) { /* best effort */ }
+    log(`→ Downloading ${modelName} weights to ${downloadRoot} (this may take a minute)…`);
     const loadResult = await this.runExec(pythonCmd, [
       '-c',
-      `import whisper; whisper.load_model('${modelName}'); print('model_loaded')`
+      `import whisper; whisper.load_model(${JSON.stringify(modelName)}, download_root=${JSON.stringify(downloadRoot)}); print('model_loaded')`
     ], {
       timeout: 600000,
       onProgress: log,
@@ -571,11 +592,10 @@ class WhisperInstaller {
   }
 
   /**
-   * Get the expected model cache path.
+   * Get the expected model cache path inside our unified model dir.
    */
   _getModelPath(modelName) {
-    const homeDir = require('os').homedir();
-    return path.join(homeDir, '.cache', 'whisper', `${modelName}.pt`);
+    return path.join(this.modelDir, `${modelName}.pt`);
   }
 }
 

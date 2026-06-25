@@ -1,7 +1,43 @@
-require("dotenv").config();
-
 const path = require("path");
+const fs = require("fs");
 const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
+
+// ── Resolve a stable .env location ──
+// In packaged builds process.cwd() is unstable and frequently read-only
+// (NSIS install dir, AppImage mount, .app bundle), so the canonical config
+// lives in Electron's userData directory. We still prefer an existing
+// project-local .env in development (npm start) so the dev workflow is
+// unchanged. Both onboarding (FirstRunManager) and persistEnvUpdates() write
+// to this same path so settings survive restarts on every platform.
+function resolveEnvPath() {
+  try {
+    const userDataEnv = path.join(app.getPath("userData"), ".env");
+    const projectEnv = path.join(process.cwd(), ".env");
+    // Prefer a project .env only when it already exists and userData has none
+    // (i.e. a developer running from the repo). Otherwise use userData.
+    if (!fs.existsSync(userDataEnv) && fs.existsSync(projectEnv)) {
+      return projectEnv;
+    }
+    return userDataEnv;
+  } catch (_) {
+    return path.join(process.cwd(), ".env");
+  }
+}
+const ENV_PATH = resolveEnvPath();
+require("dotenv").config({ path: ENV_PATH });
+
+// Format a value for a single .env line. Newlines are collapsed to spaces and
+// backslashes are kept verbatim (doubling them corrupts Windows paths on the
+// next load). Values containing whitespace, a double-quote, or a leading '#'
+// are wrapped in single quotes so dotenv parses them as one token — essential
+// for Whisper commands like:  "C:\Users\Jane Doe\...\python.exe" -m whisper
+function formatEnvValue(raw) {
+  const v = String(raw).replace(/[\r\n]+/g, " ").trim();
+  if (!/[\s"#]/.test(v)) return v;
+  if (!v.includes("'")) return `'${v}'`;
+  // Rare: value already contains a single quote — fall back to double quotes.
+  return `"${v.replace(/"/g, '\\"')}"`;
+}
 
 // ── Linux GPU process crash workaround ──
 // On many Linux setups (Wayland, X11 without GPU drivers, Docker, headless,
@@ -36,6 +72,25 @@ const logger = require("./src/core/logger").createServiceLogger("MAIN");
 const config = require("./src/core/config");
 const FirstRunManager = require("./src/core/first-run");
 
+// ── Global crash guard ──
+// The speech path spawns external processes (Whisper CLI, and on macOS/Linux
+// the sox/rec/arecord recorders via node-record-lpcm16). A missing recorder
+// binary makes that library emit an 'error' on its child process with no
+// listener, which would otherwise become an uncaughtException and quit the
+// entire app the moment the user clicks the mic. We log and stay alive — the
+// speech service surfaces a friendly status to the UI instead.
+process.on("uncaughtException", (err) => {
+  logger.error("Uncaught exception (kept alive)", {
+    error: err && err.message,
+    stack: err && err.stack,
+  });
+});
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled rejection (kept alive)", {
+    reason: String((reason && reason.message) || reason),
+  });
+});
+
 // Services
 // Screen capture (image-based)
 const captureService = require("./src/services/capture.service");
@@ -60,8 +115,11 @@ class ApplicationController {
     // dig through docs to figure out they need a Gemini API key.
     this.firstRunManager = new FirstRunManager({
       logger: logger,
-      // Sentinel lives in userData so it survives cwd changes
-      // (the app may be launched from any directory).
+      // .env and the sentinel both live in userData so they survive cwd
+      // changes and read-only install dirs (the app may be launched from
+      // any directory). ENV_PATH is the same file dotenv loaded at startup
+      // and that persistEnvUpdates() writes to.
+      envPath: ENV_PATH,
       sentinelPath: path.join(app.getPath("userData"), ".opencluely-firstrun-completed"),
     });
     // Lazily-initialised in getWhisperInstaller() so tests can mock
@@ -387,6 +445,13 @@ class ApplicationController {
     ipcMain.handle("stop-speech-recognition", () => {
       speechService.stopRecording();
       return speechService.getStatus();
+    });
+
+    // Raw PCM audio captured by the renderer's Web Audio API (Windows Whisper path)
+    ipcMain.on("audio-chunk", (_event, data) => {
+      if (data && data.buffer) {
+        speechService.handleAudioChunkFromRenderer(Buffer.from(data.buffer));
+      }
     });
 
     // Also handle direct send events for fallback
@@ -1480,8 +1545,10 @@ class ApplicationController {
     if (keys.length === 0) return [];
 
     const fs = require("fs");
-    const path = require("path");
-    const envPath = path.join(process.cwd(), ".env");
+    // Single source of truth — the same file dotenv loaded at startup and that
+    // FirstRunManager reads/writes (userData in packaged builds, project .env
+    // in dev). Writing to process.cwd() here would silently diverge.
+    const envPath = ENV_PATH;
 
     let existing = "";
     try {
@@ -1500,10 +1567,7 @@ class ApplicationController {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=/);
       if (m && Object.prototype.hasOwnProperty.call(updates, m[1])) {
         const key = m[1];
-        // Escape any embedded newlines/backslashes in the value so the
-        // resulting .env line is single-line and parseable.
-        const value = String(updates[key]).replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
-        outLines.push(`${key}=${value}`);
+        outLines.push(`${key}=${formatEnvValue(updates[key])}`);
         updated.add(key);
       } else {
         outLines.push(line);
@@ -1513,8 +1577,7 @@ class ApplicationController {
     // Append any keys that weren't already present
     for (const key of keys) {
       if (!updated.has(key)) {
-        const value = String(updates[key]).replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
-        outLines.push(`${key}=${value}`);
+        outLines.push(`${key}=${formatEnvValue(updates[key])}`);
         updated.add(key);
       }
     }

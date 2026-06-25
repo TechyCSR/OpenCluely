@@ -19,6 +19,18 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
+  // Quote the executable portion of a command string if it contains spaces.
+  // This keeps Windows user profile paths (e.g. C:\Users\CANDAN SINGH\...) intact.
+  function quoteCommandIfNeeded(cmd) {
+    if (!cmd) return cmd;
+    const firstSpace = cmd.indexOf(' ');
+    if (firstSpace === -1) return cmd;
+    const exe = cmd.slice(0, firstSpace);
+    const rest = cmd.slice(firstSpace + 1);
+    if (exe.startsWith('"') || rest.startsWith('"')) return cmd;
+    return `"${exe}" ${rest}`;
+  }
+
   const screens = $$('.screen');
   const stepperDots = $$('.step-dot');
   const stepBadge = $('#stepBadge');
@@ -523,7 +535,7 @@
           payload.azureRegion = state.azureRegion;
         }
         if (state.speechProvider === 'whisper' && state.whisperCmd) {
-          payload.whisperCommand = state.whisperCmd;
+          payload.whisperCommand = quoteCommandIfNeeded(state.whisperCmd);
         }
         await window.electronAPI.saveSettings(payload);
       } catch (_) { /* surfaced elsewhere */ }
@@ -539,7 +551,7 @@
       // Persist whatever whisper command we found (could be empty if skipped)
       if (window.electronAPI && state.whisperCmd) {
         try {
-          await window.electronAPI.saveSettings({ whisperCommand: state.whisperCmd });
+          await window.electronAPI.saveSettings({ whisperCommand: quoteCommandIfNeeded(state.whisperCmd) });
         } catch (_) { /* ignore */ }
       }
     }
