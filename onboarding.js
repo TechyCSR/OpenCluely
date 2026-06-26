@@ -334,20 +334,20 @@
         ],
       },
       darwin: {
-        title: "We'll install openai-whisper via pip3 --user",
+        title: "We'll create a project-local venv and install openai-whisper",
         steps: [
           'Uses your existing Python 3 (install via Homebrew if missing).',
-          'Installs into your user site-packages — no <code>sudo</code> required.',
-          'FFmpeg may also be installed automatically if missing.',
+          'A new <code>.venv-whisper/</code> folder is created in the app data directory.',
+          'Whisper installs into that venv — no <code>sudo</code> required.',
           'First transcription downloads the <code>turbo</code> model (~150 MB).',
         ],
       },
       other: {
-        title: "We'll install openai-whisper via pip3 --user",
+        title: "We'll create a project-local venv and install openai-whisper",
         steps: [
-          'Uses your system Python 3.',
-          'Installs into your user site-packages — no <code>sudo</code> required.',
-          'FFmpeg may need to be installed separately (<code>sudo apt install ffmpeg</code>).',
+          'Uses your system Python 3 (needs <code>python3-venv</code> on Debian/Ubuntu).',
+          'A new <code>.venv-whisper/</code> folder is created in the app data directory.',
+          'Whisper installs into that venv — avoids the externally-managed-environment error.',
           'First transcription downloads the <code>turbo</code> model (~150 MB).',
         ],
       },
