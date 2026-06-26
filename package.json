@@ -141,7 +141,9 @@
         "libgbm1",
         "python3 (>= 3.10)",
         "python3-venv",
-        "python3-pip",
+        "python3-pip"
+      ],
+      "recommends": [
         "ffmpeg"
       ],
       "fpm": [
