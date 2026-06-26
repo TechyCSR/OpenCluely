@@ -553,51 +553,22 @@ class WhisperInstaller {
     return false;
   }
 
-  /**
-   * Download a Whisper model using the installed CLI.
-   * Models: tiny, base, small, medium, large, turbo
-   */
   async downloadModel(modelName = 'turbo', { onProgress } = {}) {
     const log = (line) => {
       if (typeof onProgress === 'function' && line) {
-        try { onProgress(line); } catch (_) { /* swallow handler errors */ }
+        try { onProgress(line); } catch (_) { /* ignore */ }
       }
     };
 
-    // Get the whisper command
-    const detectResult = await this.detect();
-    if (!detectResult.found) {
-      return { ok: false, message: 'Whisper CLI not found. Install Whisper first.' };
-    }
-
-    const command = detectResult.command;
-    log(`→ Preparing to download ${modelName} model…`);
-
-    // Parse the command to get the python executable that owns the whisper module.
-    let pythonCmd;
-    if (command.includes(' -m ')) {
-      pythonCmd = command.split(' -m ')[0].trim();
-    } else if (command.endsWith(' -m whisper')) {
-      pythonCmd = command.replace(' -m whisper', '').trim();
-    } else {
-      // The command is a whisper binary (likely inside the venv). Derive the
-      // sibling python interpreter from the venv layout.
-      const binDir = path.dirname(command);
-      const isWin = this.platform === 'win32';
-      const pythonExe = isWin ? 'python.exe' : 'python';
-      const candidate = path.join(binDir, pythonExe);
-      if (fs.existsSync(candidate)) {
-        pythonCmd = candidate;
-      } else {
-        pythonCmd = isWin ? 'python' : 'python3';
+    let pythonCmd = this._resolveWhisperPython();
+    if (!pythonCmd) {
+      const detectResult = await this.detect();
+      if (!detectResult.found) {
+        return { ok: false, message: 'Whisper CLI not found. Install Whisper first.' };
       }
+      pythonCmd = this._pythonFromCommand(detectResult.command);
     }
 
-    // whisper.load_model() downloads the weights lazily and prints progress
-    // to stderr. We capture that output and relay it via onProgress.
-    // download_root pins the weights to our stable model dir so transcription
-    // (which passes the same dir via --model_dir) finds them instead of
-    // re-downloading on the first segment.
     const downloadRoot = this.modelDir;
     try { fs.mkdirSync(downloadRoot, { recursive: true }); } catch (_) { /* best effort */ }
     log(`→ Downloading ${modelName} weights to ${downloadRoot} (this may take a minute)…`);
@@ -616,6 +587,30 @@ class WhisperInstaller {
     const modelPath = this._getModelPath(modelName);
     log(`✓ Model ${modelName} ready at ${modelPath}`);
     return { ok: true, message: `Model ${modelName} downloaded successfully`, path: modelPath };
+  }
+
+  _resolveWhisperPython() {
+    const vp = this.venvPaths;
+    if (fs.existsSync(vp.python)) return vp.python;
+
+    const configured = (process.env.WHISPER_COMMAND || '').trim();
+    if (configured) return this._pythonFromCommand(configured);
+    return null;
+  }
+
+  _pythonFromCommand(command) {
+    if (!command) return this.platform === 'win32' ? 'python' : 'python3';
+    const tokens = (String(command).match(/(?:[^\s"]+|"[^"]*")+/g) || [])
+      .map((p) => p.replace(/^"|"$/g, ''))
+      .filter(Boolean);
+    if (!tokens.length) return this.platform === 'win32' ? 'python' : 'python3';
+
+    if (tokens.indexOf('-m') > 0) return tokens[0];
+
+    const binDir = path.dirname(tokens[0]);
+    const sibling = path.join(binDir, this.platform === 'win32' ? 'python.exe' : 'python');
+    if (fs.existsSync(sibling)) return sibling;
+    return this.platform === 'win32' ? 'python' : 'python3';
   }
 
   /**
