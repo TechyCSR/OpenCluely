@@ -98,6 +98,19 @@ class LLMResponseWindowUI {
       }, 50);
     });
 
+    // Streaming transcription response: render tokens live, then the final
+    // display-llm-response replaces it with the fully formatted layout.
+    ipcRenderer.on("transcription-llm-response-start", (event, data) => {
+      if (data && data.messageId) {
+        this.beginStreaming(data.messageId);
+      }
+    });
+    ipcRenderer.on("transcription-llm-response-chunk", (event, data) => {
+      if (data && data.messageId) {
+        this.appendStreaming(data.messageId, data.delta || "");
+      }
+    });
+
     // Interaction state handlers
     ipcRenderer.on("interaction-enabled", () => {
       logger.debug("interaction-enabled event received", {
@@ -510,6 +523,35 @@ class LLMResponseWindowUI {
           behavior: "smooth",
         });
         break;
+    }
+  }
+
+  beginStreaming(messageId) {
+    this._streamId = messageId;
+    this._streamText = "";
+    this.hideLoadingState();
+    this.showResponseContent();
+    // Use the full (text-only) layout as the live streaming target.
+    this.elements.splitLayout?.classList.add("hidden");
+    this.elements.fullContent?.classList.remove("hidden");
+    if (this.elements.fullMarkdown) {
+      this.elements.fullMarkdown.textContent = "";
+    }
+  }
+
+  appendStreaming(messageId, delta) {
+    if (!delta) return;
+    if (this._streamId !== messageId) {
+      this.beginStreaming(messageId);
+    }
+    this._streamText = (this._streamText || "") + delta;
+    if (this.elements.fullMarkdown) {
+      // Plain text while streaming; the final render formats markdown + code.
+      this.elements.fullMarkdown.textContent = this._streamText;
+      const scroller = this.elements.fullContent || this.elements.responseContent;
+      if (scroller) {
+        scroller.scrollTop = scroller.scrollHeight;
+      }
     }
   }
 

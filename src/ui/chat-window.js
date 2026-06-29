@@ -149,10 +149,28 @@ class ChatWindowUI {
                 if (data && data.response) {
                     // Hide thinking indicator
                     this.hideThinkingIndicator();
-                    // Add assistant response (text + snippets)
-                    this.renderAssistantResponse(data.response);
+                    // Finalize the streaming bubble (if any) with fully formatted
+                    // markdown + code snippets; otherwise render fresh.
+                    this.finalizeStreamingResponse(data.messageId, data.response);
                 }
             });
+
+            // Streaming response lifecycle: a bubble is created on start, grows
+            // as chunks arrive, then is replaced with the formatted final render.
+            if (window.electronAPI.onTranscriptionLlmResponseStart) {
+                window.electronAPI.onTranscriptionLlmResponseStart((event, data) => {
+                    if (data && data.messageId) {
+                        this.beginStreamingResponse(data.messageId);
+                    }
+                });
+            }
+            if (window.electronAPI.onTranscriptionLlmResponseChunk) {
+                window.electronAPI.onTranscriptionLlmResponseChunk((event, data) => {
+                    if (data && data.messageId) {
+                        this.appendStreamingChunk(data.messageId, data.delta || '');
+                    }
+                });
+            }
         }
         
         // UI event handlers
@@ -355,6 +373,71 @@ class ChatWindowUI {
         
         // Auto-scroll to bottom
         this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+    }
+
+    // Create a live, growing assistant bubble for a streaming response.
+    beginStreamingResponse(messageId) {
+        this.hideThinkingIndicator();
+        if (!this.elements.chatMessages) return;
+        // Guard against a duplicate start for the same id.
+        if (this.elements.chatMessages.querySelector(`[data-stream-id="${messageId}"]`)) {
+            return;
+        }
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant streaming';
+        messageDiv.setAttribute('data-stream-id', messageId);
+
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = new Date().toLocaleTimeString();
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'message-text';
+        textDiv.textContent = '';
+
+        messageDiv.appendChild(timeDiv);
+        messageDiv.appendChild(textDiv);
+        this.elements.chatMessages.appendChild(messageDiv);
+        this._streamBuffers = this._streamBuffers || {};
+        this._streamBuffers[messageId] = '';
+        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+    }
+
+    appendStreamingChunk(messageId, delta) {
+        if (!delta) return;
+        const messageDiv = this.elements.chatMessages &&
+            this.elements.chatMessages.querySelector(`[data-stream-id="${messageId}"]`);
+        if (!messageDiv) {
+            // No start seen (e.g. very fast final) — create the bubble lazily.
+            this.beginStreamingResponse(messageId);
+            return this.appendStreamingChunk(messageId, delta);
+        }
+        this._streamBuffers = this._streamBuffers || {};
+        this._streamBuffers[messageId] = (this._streamBuffers[messageId] || '') + delta;
+        const textDiv = messageDiv.querySelector('.message-text');
+        if (textDiv) {
+            // Plain text while streaming keeps it fast and avoids half-parsed
+            // markdown flicker; the final render formats it properly.
+            textDiv.textContent = this._streamBuffers[messageId];
+        }
+        const atBottom = true;
+        if (atBottom) {
+            this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+        }
+    }
+
+    // Replace the streaming bubble with the formatted final response (markdown
+    // text + extracted code snippets), matching non-streaming rendering.
+    finalizeStreamingResponse(messageId, response) {
+        const messageDiv = messageId && this.elements.chatMessages &&
+            this.elements.chatMessages.querySelector(`[data-stream-id="${messageId}"]`);
+        if (messageDiv) {
+            messageDiv.remove();
+        }
+        if (this._streamBuffers && messageId) {
+            delete this._streamBuffers[messageId];
+        }
+        this.renderAssistantResponse(response);
     }
 
     // Split AI response into plain text and code snippets and append to chat
