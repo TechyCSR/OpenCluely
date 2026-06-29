@@ -114,6 +114,70 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout (full history for changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate commit changelog
+        id: changelog
+        shell: bash
+        run: |
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          # Find the most recent tag that is not the current one
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -1)
+
+          if [ -z "$PREV_TAG" ]; then
+            # First ever release — include all commits
+            COMMIT_LOG=$(git log --pretty=format:"- \`%h\` %s" --reverse)
+            RANGE_LABEL="Initial release"
+          else
+            COMMIT_LOG=$(git log "${PREV_TAG}..${CURRENT_TAG}" --pretty=format:"- \`%h\` %s" --reverse)
+            RANGE_LABEL="[\`${PREV_TAG}..${CURRENT_TAG}\`](https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG})"
+          fi
+
+          # Write combined body to file (multiline-safe)
+          cat > RELEASE_BODY.md << 'BODY_EOF'
+          ## Installation
+
+          Choose the artifact for your platform:
+
+          | Platform | File | Notes |
+          |---|---|---|
+          | **Windows** | `OpenCluely-Setup-*.exe` | NSIS installer — installs app + adds to Start Menu |
+          | **macOS (Apple Silicon)** | `*-arm64.dmg` | M1/M2/M3/M4 Macs |
+          | **macOS (Intel)** | `*-x64.dmg` | Older Intel Macs |
+          | **Linux** | `*.deb` | Debian/Ubuntu — auto-pulls system deps (Python, ffmpeg, GTK) |
+          | **Linux** | `*.AppImage` | Universal — no install, just `chmod +x` and run |
+
+          ## First Run
+
+          On first launch, OpenCluely opens the **Settings** window automatically for your **Google Gemini API key**.
+          Get a free key from [Google AI Studio](https://aistudio.google.com/). You can also edit `.env` directly.
+
+          ## Optional: Local Whisper (offline speech)
+
+          Install **Python 3.10+** and **ffmpeg**, then run:
+          ```bash
+          ./setup.sh --skip-install-system-deps
+          ```
+
+          ## Checksums
+
+          See `SHA256SUMS.txt` attached to this release.
+
+          BODY_EOF
+
+          # Append the changelog section
+          {
+            echo ""
+            echo "## What's Changed"
+            echo ""
+            echo "**Full Changelog**: ${RANGE_LABEL}"
+            echo ""
+            echo "${COMMIT_LOG}"
+          } >> RELEASE_BODY.md
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -157,37 +221,7 @@ jobs:
           name: OpenCluely ${{ github.ref_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
-          body: |
-            ## Installation
-
-            Choose the artifact for your platform:
-
-            | Platform | File | Notes |
-            |---|---|---|
-            | **Windows** | `OpenCluely-Setup-*.exe` | NSIS installer — installs app + adds to Start Menu |
-            | **macOS (Apple Silicon)** | `*-arm64.dmg` | M1/M2/M3 Macs |
-            | **macOS (Intel)** | `*-x64.dmg` | Older Intel Macs |
-            | **Linux** | `*.deb` | Debian/Ubuntu — auto-pulls system deps (Python, ffmpeg, GTK) |
-            | **Linux** | `*.AppImage` | Universal — no install, just chmod +x and run |
-
-            ## First Run
-
-            On first launch, OpenCluely will create `.env` and open the **Settings** window for you to enter your **Google Gemini API key**. You can paste it in the Settings UI or edit `.env` directly.
-
-            ## Optional: Local Whisper
-
-            For offline speech recognition, install **Python 3.10+** and **ffmpeg** on your system, then run from the project folder:
-
-            ```bash
-            ./setup.sh --skip-install-system-deps
-            ```
-
-            See [README.md](https://github.com/TechyCSR/OpenCluely) for full setup details.
-
-            ## Checksums
-
-            See `SHA256SUMS.txt` attached to this release.
+          body_path: RELEASE_BODY.md
           files: |
             release/*
           fail_on_unmatched_files: false
