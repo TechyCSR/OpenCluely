@@ -853,6 +853,170 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     throw finalError;
   }
 
+  /**
+   * Streaming sibling of processTranscriptionWithIntelligentResponse. Emits
+   * incremental text via onDelta so the UI can render the answer as it is
+   * generated (much faster perceived latency). Returns the same
+   * {response, metadata} shape. Falls back to the non-streaming path on any
+   * streaming failure so reliability is never worse than before.
+   */
+  async processTranscriptionWithIntelligentResponseStream(text, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
+    if (!this.isInitialized) {
+      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const geminiRequest = this.buildIntelligentTranscriptionRequest(text, activeSkill, sessionMemory, programmingLanguage);
+
+      const fullText = await this.executeStreamingRequest(geminiRequest, (delta) => {
+        if (typeof onDelta === 'function' && delta) {
+          onDelta(delta);
+        }
+      });
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(fullText, programmingLanguage)
+        : fullText;
+
+      logger.logPerformance('LLM transcription streaming', startTime, {
+        activeSkill,
+        textLength: text.length,
+        responseLength: finalResponse.length,
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: {
+          skill: activeSkill,
+          programmingLanguage,
+          processingTime: Date.now() - startTime,
+          requestId: this.requestCount,
+          usedFallback: false,
+          streamed: true,
+          isTranscriptionResponse: true
+        }
+      };
+    } catch (error) {
+      logger.warn('Streaming transcription failed, falling back to non-streaming', {
+        error: error.message,
+        requestId: this.requestCount
+      });
+      // Non-streaming path returns the same shape; the caller renders it as a
+      // single final response.
+      return this.processTranscriptionWithIntelligentResponse(text, activeSkill, sessionMemory, programmingLanguage);
+    }
+  }
+
+  /** Safely pull the text delta out of a streamed Gemini chunk. */
+  _extractChunkText(chunk) {
+    try {
+      const t = chunk && chunk.text;
+      if (typeof t === 'string') {
+        return t;
+      }
+    } catch (_) {
+      // `.text` getter can throw on non-text parts; fall through to manual read.
+    }
+    try {
+      const parts = (chunk && chunk.candidates && chunk.candidates[0] &&
+        chunk.candidates[0].content && chunk.candidates[0].content.parts) || [];
+      return parts.map((p) => (p && typeof p.text === 'string' ? p.text : '')).join('');
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /**
+   * Run a streaming Gemini request with the same model-fallback + retry policy
+   * as executeRequest. Accumulates and returns the full text; invokes onDelta
+   * for each chunk.
+   */
+  async executeStreamingRequest(geminiRequest, onDelta) {
+    const maxRetries = config.get('llm.gemini.maxRetries');
+    const timeout = config.get('llm.gemini.timeout');
+    const primaryModel = this.model;
+    const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
+    const modelsToTry = [primaryModel, ...fallbackModels];
+
+    let lastError = null;
+
+    for (const modelName of modelsToTry) {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await this.performPreflightCheck();
+
+          let fullText = '';
+          const consume = (async () => {
+            const stream = await this.client.models.generateContentStream({
+              model: modelName,
+              contents: geminiRequest.contents,
+              config: geminiRequest.generationConfig,
+              systemInstruction: geminiRequest.systemInstruction
+            });
+            for await (const chunk of stream) {
+              const piece = this._extractChunkText(chunk);
+              if (piece) {
+                fullText += piece;
+                onDelta(piece);
+              }
+            }
+          })();
+
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Request timeout')), timeout)
+          );
+
+          await Promise.race([consume, timeoutPromise]);
+
+          if (!fullText) {
+            throw new Error('Empty streamed response from Gemini API');
+          }
+
+          logger.debug('Gemini streaming request successful', {
+            attempt,
+            model: modelName,
+            responseLength: fullText.length
+          });
+
+          return fullText;
+        } catch (error) {
+          const errorInfo = this.analyzeError(error);
+          lastError = error;
+
+          logger.warn(`Gemini streaming attempt ${attempt} failed for model ${modelName}`, {
+            error: error.message,
+            errorType: errorInfo.type,
+            remainingAttempts: maxRetries - attempt,
+            model: modelName
+          });
+
+          const isModelUnavailable = errorInfo.type === 'RATE_LIMIT_ERROR' ||
+            error.message.includes('503') ||
+            error.message.includes('UNAVAILABLE') ||
+            error.message.includes('high demand');
+
+          if (isModelUnavailable && modelName !== modelsToTry[modelsToTry.length - 1]) {
+            break; // try next fallback model
+          }
+
+          if (attempt === maxRetries) {
+            break;
+          }
+
+          const baseDelay = errorInfo.isNetworkError ? 2500 : 1500;
+          const delay = baseDelay * attempt + Math.random() * 1000;
+          await this.delay(delay);
+        }
+      }
+    }
+
+    throw lastError || new Error('Gemini streaming request failed');
+  }
+
   async performPreflightCheck() {
     // Quick connectivity check
     try {

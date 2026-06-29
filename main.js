@@ -110,6 +110,15 @@ class ApplicationController {
   this.codingLanguage = "cpp";
     this.speechAvailable = false;
 
+    // Utterance coalescing: VAD emits a transcript per natural pause, but a
+    // single spoken question can still arrive as a few fragments (mid-thought
+    // pauses). We buffer fragments and debounce so one question yields one LLM
+    // call instead of several slow, half-answered ones.
+    this._utteranceBuffer = "";
+    this._utteranceTimer = null;
+    this._utteranceDispatchInFlight = false;
+    this._utteranceCoalesceMs = 800;
+
     // First-run onboarding: detects missing .env / API key and triggers
     // a settings-window prompt on first launch so users don't have to
     // dig through docs to figure out they need a Gemini API key.
@@ -366,28 +375,8 @@ class ApplicationController {
       });
     });
 
-    speechService.on("transcription", (text) => {      
-      // Add transcription to session memory
-      sessionManager.addUserInput(text, 'speech');
-      
-      const windows = BrowserWindow.getAllWindows();
-      
-      windows.forEach((window) => {
-        window.webContents.send("transcription-received", { text });
-      });
-      
-      // Automatically process transcription with LLM for intelligent response
-      setTimeout(async () => {
-        try {
-          const sessionHistory = sessionManager.getOptimizedHistory();
-          await this.processTranscriptionWithLLM(text, sessionHistory);
-        } catch (error) {
-          logger.error("Failed to process transcription with LLM", {
-            error: error.message,
-            text: text.substring(0, 100)
-          });
-        }
-      }, 500);
+    speechService.on("transcription", (text) => {
+      this.handleTranscriptionFragment(text);
     });
 
     speechService.on("interim-transcription", (text) => {
@@ -1155,6 +1144,70 @@ class ApplicationController {
     }
   }
 
+  /**
+   * Buffer a transcribed fragment and (re)arm the coalesce debounce. Fragments
+   * are shown in the UI immediately so speech feels live, but the LLM is only
+   * asked once the speaker has actually paused — this is what stops one spoken
+   * line from producing two separate, slow answers.
+   */
+  handleTranscriptionFragment(text) {
+    const fragment = (text || "").trim();
+    if (!fragment) {
+      return;
+    }
+
+    // Show the live transcript right away in all windows.
+    sessionManager.addUserInput(fragment, 'speech');
+    BrowserWindow.getAllWindows().forEach((window) => {
+      window.webContents.send("transcription-received", { text: fragment });
+    });
+
+    this._utteranceBuffer = this._utteranceBuffer
+      ? `${this._utteranceBuffer} ${fragment}`
+      : fragment;
+
+    if (this._utteranceTimer) {
+      clearTimeout(this._utteranceTimer);
+    }
+    this._utteranceTimer = setTimeout(() => {
+      this._utteranceTimer = null;
+      this.dispatchCoalescedUtterance();
+    }, this._utteranceCoalesceMs);
+  }
+
+  /**
+   * Send the coalesced utterance to the LLM. If a previous dispatch is still
+   * running, leave the buffer intact and let that dispatch's completion pick it
+   * up — so we never pile up overlapping requests for the same person talking.
+   */
+  async dispatchCoalescedUtterance() {
+    if (this._utteranceDispatchInFlight) {
+      return;
+    }
+    const combined = this._utteranceBuffer.trim();
+    if (!combined) {
+      return;
+    }
+    this._utteranceBuffer = "";
+    this._utteranceDispatchInFlight = true;
+
+    try {
+      const sessionHistory = sessionManager.getOptimizedHistory();
+      await this.processTranscriptionWithLLM(combined, sessionHistory);
+    } catch (error) {
+      logger.error("Failed to process transcription with LLM", {
+        error: error.message,
+        text: combined.substring(0, 100)
+      });
+    } finally {
+      this._utteranceDispatchInFlight = false;
+      // Anything that arrived while we were busy gets answered now.
+      if (this._utteranceBuffer.trim()) {
+        this.dispatchCoalescedUtterance();
+      }
+    }
+  }
+
   async processTranscriptionWithLLM(text, sessionHistory) {
     try {
       // Validate input text
@@ -1184,12 +1237,32 @@ class ApplicationController {
       const skillsRequiringProgrammingLanguage = ['dsa'];
       const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
 
-      const llmResult = await llmService.processTranscriptionWithIntelligentResponse(
+      // Stream the answer so it renders progressively in the chat + overlay.
+      // A unique messageId ties the start/chunk/final events to one bubble so
+      // the UI never duplicates or interleaves concurrent responses.
+      this._responseSeq = (this._responseSeq || 0) + 1;
+      const messageId = `tr-${Date.now()}-${this._responseSeq}`;
+      windowManager.broadcastToAllWindows("transcription-llm-response-start", {
+        messageId,
+        skill: this.activeSkill
+      });
+      // Surface the overlay immediately so streamed tokens are visible there
+      // too, instead of the overlay only appearing once the full answer lands.
+      windowManager.showLLMLoading();
+
+      const llmResult = await llmService.processTranscriptionWithIntelligentResponseStream(
         cleanText,
         this.activeSkill,
         sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null
+        needsProgrammingLanguage ? this.codingLanguage : null,
+        (delta) => {
+          windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
+            messageId,
+            delta
+          });
+        }
       );
+      llmResult.metadata = { ...llmResult.metadata, messageId };
 
       // Add LLM response to session memory
       sessionManager.addModelResponse(llmResult.response, {
@@ -1312,6 +1385,7 @@ class ApplicationController {
     const broadcastData = {
       response: llmResult.response,
       metadata: llmResult.metadata,
+      messageId: llmResult.metadata && llmResult.metadata.messageId,
       skill: this.activeSkill,
       isTranscriptionResponse: true
     };
