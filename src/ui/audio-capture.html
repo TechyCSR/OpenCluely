@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Audio Capture</title></head>
+<body>
+<script>
+  (async function startCapture() {
+    console.log('[AudioCapture] startCapture IIFE running');
+    try {
+      console.log('[AudioCapture] Requesting getUserMedia...');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
+      console.log('[AudioCapture] getUserMedia succeeded, stream tracks:', stream.getTracks().length);
+
+      if (window.electronAPI && window.electronAPI.audioCaptureReady) {
+        window.electronAPI.audioCaptureReady();
+      }
+
+      const audioCtx = new AudioContext({ sampleRate: 16000 });
+      console.log('[AudioCapture] AudioContext state:', audioCtx.state);
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+        console.log('[AudioCapture] AudioContext resumed, state now:', audioCtx.state);
+      }
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+      source.connect(processor);
+      // Do NOT connect processor to destination - that would route mic audio to speakers
+
+      let chunkCount = 0;
+      processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+        const int16 = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        chunkCount++;
+        if (chunkCount % 50 === 1) {
+          console.log('[AudioCapture] Sending chunk #', chunkCount, 'size:', int16.buffer.byteLength);
+        }
+        if (window.electronAPI && window.electronAPI.sendAudioChunk) {
+          window.electronAPI.sendAudioChunk(int16.buffer);
+        }
+      };
+
+      console.log('[AudioCapture] ScriptProcessor connected, waiting for audio...');
+      window.__audioStream = stream;
+      window.__audioCtx = audioCtx;
+      window.__processor = processor;
+
+      if (window.electronAPI && window.electronAPI.onStopAudioCapture) {
+        window.electronAPI.onStopAudioCapture(() => {
+          processor.disconnect();
+          source.disconnect();
+          audioCtx.close();
+          stream.getTracks().forEach(t => t.stop());
+        });
+      }
+    } catch (err) {
+      console.error('[AudioCapture] getUserMedia failed:', err.message, err.name);
+      if (window.electronAPI && window.electronAPI.sendAudioCaptureError) {
+        window.electronAPI.sendAudioCaptureError(err.message);
+      }
+    }
+  })();
+</script>
+</body>
+</html>

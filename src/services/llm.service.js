@@ -22,8 +22,12 @@ class LLMService {
       return this._openrouterInit();
     }
 
+    if (this.provider === 'groq') {
+      return this._groqInit();
+    }
+
     const apiKey = config.getApiKey('GEMINI');
-    
+
     if (!apiKey || apiKey === 'your-api-key-here') {
       logger.warn('Gemini API key not configured', { 
         keyExists: !!apiKey,
@@ -69,6 +73,107 @@ class LLMService {
 
   _openrouterGetModel() {
     return process.env.OPENROUTER_MODEL || config.get('llm.openrouter.model') || 'openrouter/free';
+  }
+
+  // ── Groq initialisation & helpers ─────────────────────────────────
+
+  _groqInit() {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey || apiKey.trim().length === 0) {
+      logger.warn('Groq API key not configured');
+      return;
+    }
+    this.model = config.get('llm.groq.model') || 'llama-3.3-70b-versatile';
+    this.isInitialized = true;
+    logger.info('Groq client initialized successfully', {
+      model: this.model
+    });
+  }
+
+  _groqIsAvailable() {
+    const key = process.env.GROQ_API_KEY;
+    return !!key && key.trim().length > 0;
+  }
+
+  _groqGetModel() {
+    return process.env.GROQ_MODEL || config.get('llm.groq.model') || 'llama-3.3-70b-versatile';
+  }
+
+  // ── Shared OpenAI-compatible HTTPS executor ───────────────────────
+  // Used by both OpenRouter and Groq (and any future OpenAI-compatible provider).
+
+  async _executeChatCompletion({ apiKey, baseUrl, model, messages, extraHeaders = {}, overrides = {} }) {
+    const https = require('https');
+    if (!apiKey) {
+      throw new Error('API key not configured');
+    }
+
+    const timeout = overrides.timeout || 30000;
+    const genConfig = { ...overrides.generation };
+
+    const url = `${baseUrl}/chat/completions`;
+    const body = {
+      model,
+      messages,
+      temperature: genConfig.temperature,
+      max_tokens: genConfig.maxOutputTokens
+    };
+    if (genConfig.topP !== undefined) body.top_p = genConfig.topP;
+
+    const postData = JSON.stringify(body);
+    const maxRetries = overrides.maxRetries || 1;
+
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const options = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Length': Buffer.byteLength(postData),
+            'User-Agent': this.getUserAgent(),
+            ...extraHeaders
+          },
+          timeout
+        };
+
+        const response = await new Promise((resolve, reject) => {
+          const req = https.request(url, options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  resolve({ status: res.statusCode, data: JSON.parse(data) });
+                } catch (e) {
+                  reject(new Error(`Failed to parse response: ${e.message}`));
+                }
+              } else {
+                reject(new Error(`HTTP ${res.statusCode}: ${data.substring(0, 500)}`));
+              }
+            });
+          });
+          req.on('error', (e) => reject(new Error(`Request failed: ${e.message}`)));
+          req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+          req.write(postData);
+          req.end();
+        });
+
+        const text = this._openrouterExtractResponse(response.data);
+        return text;
+
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries) {
+          const delay = 1500 * attempt + Math.random() * 1000;
+          await this.delay(delay);
+        }
+      }
+    }
+
+    throw lastError || new Error('Request failed after all retries');
   }
 
   _openrouterBuildMessages({ systemInstruction, contents }) {
@@ -162,87 +267,43 @@ class LLMService {
   }
 
   async _openrouterExecute(messages, overrides = {}) {
-    const https = require('https');
     const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      throw new Error('OpenRouter API key not configured');
-    }
-
+    if (!apiKey) throw new Error('OpenRouter API key not configured');
     const baseUrl = config.get('llm.openrouter.baseUrl') || 'https://openrouter.ai/api/v1';
     const model = overrides.model || this._openrouterGetModel();
-    const timeout = overrides.timeout || config.get('llm.openrouter.timeout') || 60000;
-    const genConfig = { ...config.get('llm.openrouter.generation'), ...overrides.generation };
+    const timeout = overrides.timeout || config.get('llm.openrouter.timeout') || 30000;
+    const maxRetries = overrides.maxRetries || config.get('llm.openrouter.maxRetries') || 1;
+    const generation = { ...config.get('llm.openrouter.generation'), ...overrides.generation };
 
-    const url = `${baseUrl}/chat/completions`;
-    const body = {
+    return this._executeChatCompletion({
+      apiKey,
+      baseUrl,
       model,
       messages,
-      temperature: genConfig.temperature,
-      max_tokens: genConfig.maxOutputTokens
-    };
-    if (genConfig.topP !== undefined) body.top_p = genConfig.topP;
+      extraHeaders: {
+        'HTTP-Referer': 'https://opencluely.app',
+        'X-Title': 'OpenCluely',
+      },
+      overrides: { timeout, maxRetries, generation }
+    });
+  }
 
-    const postData = JSON.stringify(body);
-    const maxRetries = overrides.maxRetries || config.get('llm.openrouter.maxRetries') || 3;
+  async _groqExecute(messages, overrides = {}) {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error('Groq API key not configured');
+    const baseUrl = config.get('llm.groq.baseUrl') || 'https://api.groq.com/openai/v1';
+    const model = overrides.model || this._groqGetModel();
+    const timeout = overrides.timeout || config.get('llm.groq.timeout') || 30000;
+    const maxRetries = overrides.maxRetries || config.get('llm.groq.maxRetries') || 1;
+    const generation = { ...config.get('llm.groq.generation'), ...overrides.generation };
 
-    let lastError;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const options = {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': 'https://opencluely.app',
-            'X-Title': 'OpenCluely',
-            'Content-Length': Buffer.byteLength(postData),
-            'User-Agent': this.getUserAgent()
-          },
-          timeout
-        };
-
-        const response = await new Promise((resolve, reject) => {
-          const req = https.request(url, options, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  resolve({ status: res.statusCode, data: JSON.parse(data) });
-                } catch (e) {
-                  reject(new Error(`Failed to parse OpenRouter response: ${e.message}`));
-                }
-              } else {
-                reject(new Error(`OpenRouter HTTP ${res.statusCode}: ${data.substring(0, 500)}`));
-              }
-            });
-          });
-          req.on('error', (e) => reject(new Error(`OpenRouter request failed: ${e.message}`)));
-          req.on('timeout', () => { req.destroy(); reject(new Error('OpenRouter request timeout')); });
-          req.write(postData);
-          req.end();
-        });
-
-        const text = this._openrouterExtractResponse(response.data);
-        return text;
-
-      } catch (error) {
-        lastError = error;
-        logger.warn(`OpenRouter attempt ${attempt}/${maxRetries} failed`, {
-          error: error.message,
-          model,
-          attempt
-        });
-
-        if (attempt < maxRetries) {
-          const delay = 1500 * attempt + Math.random() * 1000;
-          await this.delay(delay);
-        }
-      }
-    }
-
-    throw lastError || new Error('OpenRouter request failed after all retries');
+    return this._executeChatCompletion({
+      apiKey,
+      baseUrl,
+      model,
+      messages,
+      overrides: { timeout, maxRetries, generation }
+    });
   }
 
   _openrouterExtractResponse(response) {
@@ -420,6 +481,204 @@ class LLMService {
     }
   }
 
+  // ── Groq process methods (OpenAI-compatible, reuse build helpers) ─
+
+  async _groqProcessImage(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage) {
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const { promptLoader } = require('../../prompt-loader');
+      const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+      const messages = this._openrouterBuildImageBody(imageBuffer, mimeType, activeSkill, programmingLanguage, skillPrompt);
+
+      const responseText = await this._groqExecute(messages);
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
+        : responseText;
+
+      logger.logPerformance('Groq image processing', startTime, {
+        activeSkill,
+        imageSize: imageBuffer.length,
+        responseLength: finalResponse.length,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: {
+          provider: 'groq',
+          model: this._groqGetModel(),
+          skill: activeSkill,
+          programmingLanguage,
+          processingTime: Date.now() - startTime,
+          requestId: this.requestCount,
+          usedFallback: false,
+          isImageAnalysis: true,
+          mimeType
+        }
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('Groq image processing failed', {
+        error: error.message,
+        activeSkill,
+        requestId: this.requestCount
+      });
+      return this.generateFallbackResponse('[image]', activeSkill);
+    }
+  }
+
+  async _groqProcessText(text, activeSkill, sessionMemory, programmingLanguage) {
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const { promptLoader } = require('../../prompt-loader');
+      const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+      const sessionManager = require('../managers/session.manager');
+      const conversationHistory = sessionManager && typeof sessionManager.getConversationHistory === 'function'
+        ? sessionManager.getConversationHistory(15)
+        : [];
+
+      const messages = this._openrouterBuildRequestBody(text, activeSkill, programmingLanguage, skillPrompt, conversationHistory);
+
+      const responseText = await this._groqExecute(messages);
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
+        : responseText;
+
+      logger.logPerformance('Groq text processing', startTime, {
+        activeSkill,
+        textLength: text.length,
+        responseLength: finalResponse.length,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: {
+          provider: 'groq',
+          model: this._groqGetModel(),
+          skill: activeSkill,
+          programmingLanguage,
+          processingTime: Date.now() - startTime,
+          requestId: this.requestCount,
+          usedFallback: false
+        }
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('Groq text processing failed', {
+        error: error.message,
+        activeSkill,
+        requestId: this.requestCount
+      });
+      return this.generateFallbackResponse(text, activeSkill);
+    }
+  }
+
+  async _groqProcessTranscription(text, activeSkill, sessionMemory, programmingLanguage) {
+    if (!text || typeof text !== 'string' || text.trim().length < 2) {
+      logger.warn('Skipping transcription for empty or very short input');
+      return {
+        response: '',
+        metadata: { provider: 'groq', skill: activeSkill, processingTime: 0, usedFallback: true, isTranscriptionResponse: true }
+      };
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const sessionManager = require('../managers/session.manager');
+      const conversationHistory = sessionManager && typeof sessionManager.getConversationHistory === 'function'
+        ? sessionManager.getConversationHistory(10)
+        : [];
+
+      const messages = this._openrouterBuildTranscriptionBody(text.trim(), activeSkill, programmingLanguage, conversationHistory);
+
+      const responseText = await this._groqExecute(messages);
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
+        : responseText;
+
+      logger.logPerformance('Groq transcription processing', startTime, {
+        activeSkill,
+        textLength: text.length,
+        responseLength: finalResponse.length,
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: {
+          provider: 'groq',
+          model: this._groqGetModel(),
+          skill: activeSkill,
+          programmingLanguage,
+          processingTime: Date.now() - startTime,
+          requestId: this.requestCount,
+          usedFallback: false,
+          isTranscriptionResponse: true
+        }
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('Groq transcription processing failed', {
+        error: error.message,
+        activeSkill,
+        requestId: this.requestCount
+      });
+      return this.generateIntelligentFallbackResponse(text, activeSkill);
+    }
+  }
+
+  async _groqTestConnection() {
+    try {
+      const messages = [{ role: 'user', content: 'Test connection. Please respond with "OK".' }];
+      const startTime = Date.now();
+      const text = await this._groqExecute(messages, { maxRetries: 1, generation: { temperature: 0, maxOutputTokens: 64 } });
+      const latency = Date.now() - startTime;
+
+      logger.info('Groq connection test successful', {
+        response: text,
+        latency,
+        model: this._groqGetModel()
+      });
+
+      return {
+        success: true,
+        response: text,
+        latency,
+        model: this._groqGetModel()
+      };
+    } catch (error) {
+      const errMsg = error.message || '';
+      let friendlyError;
+      if (errMsg.includes('401') || errMsg.includes('unauthorized')) {
+        friendlyError = 'Invalid Groq API key. Get one at console.groq.com/keys.';
+      } else if (errMsg.includes('429')) {
+        friendlyError = 'Groq rate limit exceeded. Wait a moment and try again.';
+      } else if (errMsg.includes('timeout') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
+        friendlyError = 'Cannot reach Groq servers. Check your internet connection.';
+      } else {
+        friendlyError = `Groq error: ${errMsg.substring(0, 200)}`;
+      }
+
+      return {
+        success: false,
+        error: friendlyError,
+        errorType: 'GROQ_ERROR'
+      };
+    }
+  }
+
   async _openrouterTestConnection() {
     try {
       const messages = [{ role: 'user', content: 'Test connection. Please respond with "OK".' }];
@@ -550,7 +809,17 @@ class LLMService {
     }
 
     if (this.provider === 'openrouter') {
-      return this._openrouterProcessImage(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage);
+      // OpenRouter path – wrap with overall timeout to avoid indefinite hangs
+      const timeoutMs = (config.get('llm.openrouter.timeout') || 30000) * 2;
+      const openRouterPromise = this._openrouterProcessImage(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('OpenRouter image processing timed out after ' + timeoutMs + 'ms')), timeoutMs)
+      );
+      return await Promise.race([openRouterPromise, timeoutPromise]);
+    }
+
+    if (this.provider === 'groq') {
+      return this._groqProcessImage(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage);
     }
 
     const startTime = Date.now();
@@ -648,6 +917,10 @@ class LLMService {
       return this._openrouterProcessText(text, activeSkill, sessionMemory, programmingLanguage);
     }
 
+    if (this.provider === 'groq') {
+      return this._groqProcessText(text, activeSkill, sessionMemory, programmingLanguage);
+    }
+
     const startTime = Date.now();
     this.requestCount++;
     
@@ -720,6 +993,10 @@ class LLMService {
 
     if (this.provider === 'openrouter') {
       return this._openrouterProcessTranscription(text, activeSkill, sessionMemory, programmingLanguage);
+    }
+
+    if (this.provider === 'groq') {
+      return this._groqProcessTranscription(text, activeSkill, sessionMemory, programmingLanguage);
     }
 
     const startTime = Date.now();
@@ -1450,6 +1727,10 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
       return this._openrouterTestConnection();
     }
 
+    if (this.provider === 'groq') {
+      return this._groqTestConnection();
+    }
+
     try {
       // First check network connectivity
       const networkCheck = await this.checkNetworkConnectivity();
@@ -1568,6 +1849,8 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   updateApiKey(newApiKey) {
     if (this.provider === 'openrouter') {
       process.env.OPENROUTER_API_KEY = newApiKey;
+    } else if (this.provider === 'groq') {
+      process.env.GROQ_API_KEY = newApiKey;
     } else {
       process.env.GEMINI_API_KEY = newApiKey;
     }
@@ -1587,6 +1870,17 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
         successRate: this.requestCount > 0 ? ((this.requestCount - this.errorCount) / this.requestCount) * 100 : 0,
         model: this._openrouterGetModel(),
         config: config.get('llm.openrouter')
+      };
+    }
+    if (this.provider === 'groq') {
+      return {
+        provider: 'groq',
+        isInitialized: this.isInitialized,
+        requestCount: this.requestCount,
+        errorCount: this.errorCount,
+        successRate: this.requestCount > 0 ? ((this.requestCount - this.errorCount) / this.requestCount) * 100 : 0,
+        model: this._groqGetModel(),
+        config: config.get('llm.groq')
       };
     }
     return {
@@ -1609,13 +1903,20 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
    * wins. If both fail, throw the error from the primary (SDK) method.
    */
   async _raceGeminiMethods(request) {
+    // Use a generous overall timeout (2 minutes) to guarantee the race resolves/rejects
+    const overallTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Gemini race timed out after 120000 ms')), 120000)
+    );
     try {
-      return await Promise.any([
-        this.executeRequest(request),
-        this.executeAlternativeRequest(request)
+      return await Promise.race([
+        Promise.any([
+          this.executeRequest(request),
+          this.executeAlternativeRequest(request)
+        ]),
+        overallTimeout
       ]);
     } catch (err) {
-      throw err.errors?.[0] || new Error('Both Gemini request methods failed');
+      throw err.errors?.[0] || err || new Error('Both Gemini request methods failed');
     }
   }
 

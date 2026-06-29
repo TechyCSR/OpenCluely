@@ -772,6 +772,16 @@
                         </div>
                         <div class="choice-radio"></div>
                     </div>
+                    <div class="choice-card" data-value="groq">
+                        <div class="choice-icon"><i class="fas fa-bolt"></i></div>
+                        <div class="choice-text">
+                            <div class="choice-title">Groq (Fast inference)</div>
+                            <div class="choice-desc">
+                                Ultra-fast inference on Groq's LPU hardware. Free tier available. Supports Llama, Mixtral, and Gemma models.
+                            </div>
+                        </div>
+                        <div class="choice-radio"></div>
+                    </div>
                 </div>
 
                 <!-- Gemini key fields -->
@@ -843,6 +853,48 @@
                         </div>
                         <div class="hint">
                             Use <code>openrouter/free</code> to auto-select free vision-capable models, or enter a specific model slug like <code>google/gemma-4-9b-it:free</code>.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Groq key fields -->
+                <div id="onboardingGroqFields" style="display:none;">
+                    <div class="field" style="margin-top: 20px;">
+                        <label for="onboardingGroqKey">Groq API Key</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-key icon"></i>
+                            <input
+                                type="password"
+                                id="onboardingGroqKey"
+                                class="input"
+                                placeholder="gsk_…"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                        </div>
+                        <div class="hint">
+                            Get a free key at
+                            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">
+                                console.groq.com/keys
+                            </a>.
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="onboardingGroqModel">Model</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-cube icon"></i>
+                            <input
+                                type="text"
+                                id="onboardingGroqModel"
+                                class="input"
+                                value="llama-3.3-70b-versatile"
+                                placeholder="llama-3.3-70b-versatile"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                        </div>
+                        <div class="hint">
+                            Fast inference on Groq hardware. Default: <code>llama-3.3-70b-versatile</code>. See <a href="https://console.groq.com/docs/models" target="_blank" rel="noreferrer">docs/models</a> for more.
                         </div>
                     </div>
                 </div>

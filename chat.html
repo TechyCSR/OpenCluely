@@ -732,6 +732,11 @@
       let listeningTimer = null;
       let speechAvailable = false;
 
+      // Renderer-based audio capture (getUserMedia in chat window)
+      let rendererAudioStream = null;
+      let rendererAudioContext = null;
+      let rendererAudioProcessor = null;
+
       // Chat persistence and deduplication
       const CHAT_HISTORY_KEY = 'opencluely_chat_history_v1';
       let chatHistory = [];
@@ -798,12 +803,15 @@
       }
       
       async function initSpeechAvailability() {
+        console.log('[Chat] initSpeechAvailability() called');
         try {
           if (window.electronAPI && window.electronAPI.getSpeechAvailability) {
             speechAvailable = await window.electronAPI.getSpeechAvailability();
+            console.log('[Chat] Speech availability:', speechAvailable);
             applyMicVisibility();
           }
         } catch (e) {
+          console.error('[Chat] Failed to get speech availability:', e);
           speechAvailable = false;
           applyMicVisibility();
         }
@@ -817,12 +825,58 @@
         });
       }
       
+      // TTS: speak assistant responses aloud
+      let ttsEnabled = true;
+
+      // Load TTS enabled state from settings
+      if (whysperAPI && typeof whysperAPI.getSettings === 'function') {
+        whysperAPI.getSettings().then(settings => {
+          if (settings && settings.ttsEnabled !== undefined) {
+            ttsEnabled = settings.ttsEnabled;
+          }
+        }).catch(() => {});
+      }
+
+      function maybeSpeakResponse(text) {
+        if (!ttsEnabled || !text || !whysperAPI || typeof whysperAPI.synthesizeSpeech !== 'function') return;
+        whysperAPI.synthesizeSpeech(text).catch(() => {});
+      }
+
+      // Listen for TTS events to update UI
+      if (whysperAPI && whysperAPI.onTtsStarted) {
+        whysperAPI.onTtsStarted(() => {
+          const ttsIndicator = document.getElementById('ttsIndicator');
+          if (ttsIndicator) ttsIndicator.style.display = 'inline-block';
+        });
+      }
+      if (whysperAPI && whysperAPI.onTtsCompleted) {
+        whysperAPI.onTtsCompleted(() => {
+          const ttsIndicator = document.getElementById('ttsIndicator');
+          if (ttsIndicator) ttsIndicator.style.display = 'none';
+        });
+      }
+      if (whysperAPI && whysperAPI.onTtsError) {
+        whysperAPI.onTtsError((event, data) => {
+          const ttsIndicator = document.getElementById('ttsIndicator');
+          if (ttsIndicator) ttsIndicator.style.display = 'none';
+          console.warn('TTS error:', data?.error);
+        });
+      }
+      if (whysperAPI && whysperAPI.receive) {
+        whysperAPI.receive('tts-settings-changed', (data) => {
+          if (data && data.ttsEnabled !== undefined) {
+            ttsEnabled = data.ttsEnabled;
+          }
+        });
+      }
+
       // Also capture generic LLM responses (from OCR/screenshot flows)
       if (whysperAPI && whysperAPI.onLlmResponse) {
         whysperAPI.onLlmResponse((event, data) => {
           try { hideThinkingIndicator(); } catch (_) {}
           if (data && data.response) {
             renderAssistantResponse(data.response);
+            maybeSpeakResponse(data.response);
           }
         });
       }
@@ -1173,7 +1227,7 @@
         // Listen for speech errors
         whysperAPI.onSpeechError((event, data) => {
           if (data && data.error) {
-            addMessage(`Error in recognizing speech`, 'error');
+            addMessage(`Speech error: ${data.error}`, 'error');
             handleRecordingStopped();
           }
         });
@@ -1196,6 +1250,60 @@
           if (data && data.response) {
             try { hideThinkingIndicator(); } catch (_) {}
             renderAssistantResponse(data.response);
+            maybeSpeakResponse(data.response);
+          }
+        });
+
+        // Renderer-based audio capture (getUserMedia in chat window)
+        whysperAPI.onStartRendererCapture(() => {
+          console.log('[Chat] Starting renderer audio capture');
+          if (rendererAudioStream) {
+            console.log('[Chat] Renderer capture already active');
+            return;
+          }
+          navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+            console.log('[Chat] getUserMedia succeeded');
+            rendererAudioStream = stream;
+
+            const audioCtx = new AudioContext();
+            rendererAudioContext = audioCtx;
+            const source = audioCtx.createMediaStreamSource(stream);
+            const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+            rendererAudioProcessor = processor;
+
+            source.connect(processor);
+            processor.onaudioprocess = (e) => {
+              const input = e.inputBuffer.getChannelData(0);
+              const int16 = new Int16Array(input.length);
+              for (let i = 0; i < input.length; i++) {
+                const s = Math.max(-1, Math.min(1, input[i]));
+                int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+              }
+              if (whysperAPI && whysperAPI.sendAudioChunk) {
+                whysperAPI.sendAudioChunk(int16.buffer);
+              }
+            };
+          }).catch((err) => {
+            console.error('[Chat] getUserMedia failed:', err.message);
+            if (whysperAPI && whysperAPI.sendAudioCaptureError) {
+              whysperAPI.sendAudioCaptureError(err.message);
+            }
+          });
+        });
+
+        whysperAPI.onStopRendererCapture(() => {
+          console.log('[Chat] Stopping renderer audio capture');
+          if (rendererAudioProcessor) {
+            try { rendererAudioProcessor.disconnect(); } catch (_) {}
+            rendererAudioProcessor = null;
+          }
+          if (rendererAudioContext) {
+            try { rendererAudioContext.close(); } catch (_) {}
+            rendererAudioContext = null;
+          }
+          if (rendererAudioStream) {
+            rendererAudioStream.getTracks().forEach(t => t.stop());
+            rendererAudioStream = null;
           }
         });
       }
@@ -1207,6 +1315,7 @@
 
       if (micButton) {
         micButton.addEventListener('click', async () => {
+          console.log('[Chat] Mic button clicked, isInteractive:', isInteractive, 'speechAvailable:', speechAvailable, 'isRecording:', isRecording);
           if (!isInteractive) {
             addMessage('Window is in non-interactive mode. Press Alt+A to enable interaction.', 'error');
             return;
@@ -1218,16 +1327,21 @@
 
           try {
             if (isRecording) {
+              console.log('[Chat] Stopping speech recognition');
               if (whysperAPI) {
                 const result = await whysperAPI.stopSpeechRecognition();
+                console.log('[Chat] Stop result:', result);
               }
             } else {
+              console.log('[Chat] Starting speech recognition');
               if (whysperAPI) {
                 const result = await whysperAPI.startSpeechRecognition();
+                console.log('[Chat] Start result:', result);
               }
             }
           } catch (error) {
-            addMessage("Error in recognizing speech", 'error');
+            console.error('[Chat] Speech recognition error:', error);
+            addMessage(`Speech error: ${error.message || error}`, 'error');
           }
         });
       }

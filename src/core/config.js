@@ -63,6 +63,16 @@ class ConfigManager {
             temperature: 0.7,
             maxOutputTokens: 4096
           }
+        },
+        groq: {
+          baseUrl: 'https://api.groq.com/openai/v1',
+          model: 'llama-3.3-70b-versatile',
+          maxRetries: 1,
+          timeout: 30000,
+          generation: {
+            temperature: 0.7,
+            maxOutputTokens: 4096
+          }
         }
       },
 
@@ -78,6 +88,12 @@ class ConfigManager {
           model: 'turbo',
           language: 'en',
           segmentMs: 4000
+        },
+        groq: {
+          sttModel: 'whisper-large-v3-turbo',
+          ttsModel: 'orpheus-tts-0.1-ayane',
+          ttsVoice: 'tara',
+          ttsSpeed: 1.0
         }
       },
 

@@ -47,6 +47,7 @@ const FirstRunManager = require("./src/core/first-run");
 // Screen capture (image-based)
 const captureService = require("./src/services/capture.service");
 const speechService = require("./src/services/speech.service");
+const ttsService = require("./src/services/tts.service");
 const llmService = require("./src/services/llm.service");
 
 // Managers
@@ -267,30 +268,45 @@ class ApplicationController {
   setupPermissions() {
     session.defaultSession.setPermissionRequestHandler(
       (webContents, permission, callback) => {
-        const allowedPermissions = ["microphone", "camera", "display-capture"];
+        console.log('[Main] Session permission request:', permission);
+        const allowedPermissions = ["microphone", "camera", "display-capture", "media"];
         const granted = allowedPermissions.includes(permission);
 
         logger.debug("Permission request", { permission, granted });
         callback(granted);
       }
     );
+
+    session.defaultSession.setPermissionCheckHandler(() => true);
   }
 
   async _ensureMicrophonePermission() {
+    console.log('[Main] _ensureMicrophonePermission() called');
     // On macOS 14+ the first microphone hardware access via a spawned
     // subprocess (sox/rec) can crash the app if permission hasn't been
     // granted yet. Use the programmatic API to trigger the dialog safely.
-    if (process.platform !== "darwin") return;
+    if (process.platform !== "darwin") {
+      console.log('[Main] Not macOS, skipping mic permission check');
+      return;
+    }
 
     const { systemPreferences } = require("electron");
-    if (!systemPreferences.getMediaAccessStatus) return;
+    if (!systemPreferences.getMediaAccessStatus) {
+      console.log('[Main] No getMediaAccessStatus API, skipping');
+      return;
+    }
 
     const status = systemPreferences.getMediaAccessStatus("microphone");
     logger.debug("Microphone permission status", { status });
+    console.log('[Main] Microphone permission status:', status);
 
-    if (status === "granted") return;
+    if (status === "granted") {
+      console.log('[Main] Mic permission already granted');
+      return;
+    }
 
     if (status === "denied") {
+      console.log('[Main] Mic permission denied');
       throw new Error(
         "Microphone permission denied. " +
         "Go to System Settings → Privacy & Security → Microphone, " +
@@ -300,7 +316,9 @@ class ApplicationController {
 
     // status === "not-determined" — first time; ask safely via the API
     if (status === "not-determined" && systemPreferences.askForMediaAccess) {
+      console.log('[Main] Asking for mic permission...');
       const granted = await systemPreferences.askForMediaAccess("microphone");
+      console.log('[Main] askForMediaAccess result:', granted);
       if (!granted) {
         throw new Error(
           "Microphone permission was not granted. " +
@@ -424,13 +442,21 @@ class ApplicationController {
     });
 
     ipcMain.handle("start-speech-recognition", async () => {
+      console.log('[Main] start-speech-recognition invoked');
       try {
         await this._ensureMicrophonePermission();
+        console.log('[Main] Mic permission OK, calling speechService.startRecording()');
         speechService.startRecording();
+        console.log('[Main] speechService.startRecording() returned');
       } catch (e) {
+        console.error('[Main] start-speech-recognition failed:', e.message);
         logger.warn("Microphone permission check failed", { error: e.message });
         windowManager.broadcastToAllWindows("speech-status", {
           status: e.message,
+          available: false,
+        });
+        windowManager.broadcastToAllWindows("speech-error", {
+          error: e.message,
           available: false,
         });
       }
@@ -454,6 +480,57 @@ class ApplicationController {
 
     ipcMain.on("stop-speech-recognition", () => {
       speechService.stopRecording();
+    });
+
+    // Audio capture IPC from renderer-based getUserMedia
+    let chunkCount = 0;
+    ipcMain.on("audio-chunk", (_event, buffer) => {
+      chunkCount++;
+      if (chunkCount % 50 === 1) {
+        console.log('[Main] Received audio-chunk #', chunkCount, 'size:', buffer?.length || 0);
+      }
+      speechService._handleRendererAudioChunk(buffer);
+    });
+
+    ipcMain.on("audio-capture-error", (_event, msg) => {
+      logger.error("Renderer audio capture error", { error: msg });
+      speechService.emit("error", `Microphone error: ${msg}`);
+      speechService.stopRecording();
+    });
+
+    ipcMain.on("audio-capture-ready", (event) => {
+      const win = event.sender.getOwnerBrowserWindow();
+      if (win && !win.isDestroyed()) {
+        win.hide();
+      }
+    });
+
+    // TTS (Text-to-Speech) IPC
+    ipcMain.handle("synthesize-speech", async (_event, text, options) => {
+      try {
+        await ttsService.synthesizeSpeech(text, options);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("stop-tts-playback", () => {
+      ttsService.stopPlayback();
+      return { success: true };
+    });
+
+    // Broadcast TTS events to all windows
+    ttsService.on("tts-started", () => {
+      windowManager.broadcastToAllWindows("tts-started");
+    });
+
+    ttsService.on("tts-completed", () => {
+      windowManager.broadcastToAllWindows("tts-completed");
+    });
+
+    ttsService.on("tts-error", (error) => {
+      windowManager.broadcastToAllWindows("tts-error", { error });
     });
 
     ipcMain.on("chat-window-ready", () => {
@@ -1394,6 +1471,8 @@ class ApplicationController {
       llmProvider: process.env.LLM_PROVIDER || "gemini",
       openrouterKey: process.env.OPENROUTER_API_KEY || "",
       openrouterModel: process.env.OPENROUTER_MODEL || "openrouter/free",
+      groqKey: process.env.GROQ_API_KEY || "",
+      groqModel: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
 
       speechProvider: speechService.provider || "whisper",
       azureKey: process.env.AZURE_SPEECH_KEY || "",
@@ -1402,6 +1481,11 @@ class ApplicationController {
       whisperModel: process.env.WHISPER_MODEL || "turbo",
       whisperLanguage: process.env.WHISPER_LANGUAGE || "en",
       whisperSegmentMs: process.env.WHISPER_SEGMENT_MS || "4000",
+      groqSttModel: process.env.GROQ_STT_MODEL || "whisper-large-v3-turbo",
+      ttsEnabled: true,
+      ttsVoice: process.env.GROQ_TTS_VOICE || "tara",
+      ttsModel: process.env.GROQ_TTS_MODEL || "orpheus-tts-0.1-ayane",
+      ttsSpeed: process.env.GROQ_TTS_SPEED || "1.0",
       geminiKey: process.env.GEMINI_API_KEY || "",
 
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
@@ -1441,7 +1525,7 @@ class ApplicationController {
       // Writing to .env ensures they survive app restarts and are picked
       // up the next time the app boots.
       const envUpdates = {};
-      if (settings.speechProvider === "azure" || settings.speechProvider === "whisper") {
+      if (settings.speechProvider === "azure" || settings.speechProvider === "whisper" || settings.speechProvider === "groq") {
         envUpdates.SPEECH_PROVIDER = settings.speechProvider;
       }
       if (settings.azureKey !== undefined) {
@@ -1462,6 +1546,21 @@ class ApplicationController {
       if (settings.whisperSegmentMs !== undefined) {
         envUpdates.WHISPER_SEGMENT_MS = String(settings.whisperSegmentMs);
       }
+      if (settings.groqSttModel !== undefined) {
+        envUpdates.GROQ_STT_MODEL = settings.groqSttModel;
+      }
+      if (settings.ttsVoice !== undefined) {
+        envUpdates.GROQ_TTS_VOICE = settings.ttsVoice;
+      }
+      if (settings.ttsModel !== undefined) {
+        envUpdates.GROQ_TTS_MODEL = settings.ttsModel;
+      }
+      if (settings.ttsSpeed !== undefined) {
+        envUpdates.GROQ_TTS_SPEED = String(settings.ttsSpeed);
+      }
+      if (settings.groqKey !== undefined) {
+        envUpdates.GROQ_API_KEY = settings.groqKey;
+      }
       if (settings.llmProvider !== undefined) {
         envUpdates.LLM_PROVIDER = settings.llmProvider;
       }
@@ -1470,6 +1569,12 @@ class ApplicationController {
       }
       if (settings.openrouterModel !== undefined) {
         envUpdates.OPENROUTER_MODEL = settings.openrouterModel;
+      }
+      if (settings.groqKey !== undefined) {
+        envUpdates.GROQ_API_KEY = settings.groqKey;
+      }
+      if (settings.groqModel !== undefined) {
+        envUpdates.GROQ_MODEL = settings.groqModel;
       }
       if (settings.geminiKey !== undefined) {
         envUpdates.GEMINI_API_KEY = settings.geminiKey;
@@ -1482,8 +1587,8 @@ class ApplicationController {
       // use stale credentials or the wrong provider.
       const llmProviderChanged = settings.llmProvider !== undefined &&
         (process.env.LLM_PROVIDER || "gemini") !== settings.llmProvider;
-      const llmKeyChanged = settings.geminiKey !== undefined || settings.openrouterKey !== undefined;
-      const llmModelChanged = settings.openrouterModel !== undefined;
+      const llmKeyChanged = settings.geminiKey !== undefined || settings.openrouterKey !== undefined || settings.groqKey !== undefined;
+      const llmModelChanged = settings.openrouterModel !== undefined || settings.groqModel !== undefined;
       if (llmProviderChanged || llmKeyChanged || llmModelChanged) {
         try {
           llmService.initializeClient();
@@ -1508,7 +1613,9 @@ class ApplicationController {
       const providerChanged = settings.speechProvider && speechService.provider !== settings.speechProvider;
       const whisperCommandChanged = settings.whisperCommand !== undefined &&
         (process.env.WHISPER_COMMAND || '') !== String(settings.whisperCommand || '');
-      if (providerChanged || whisperCommandChanged) {
+      const groqSttModelChanged = settings.groqSttModel !== undefined &&
+        (process.env.GROQ_STT_MODEL || '') !== String(settings.groqSttModel || '');
+      if (providerChanged || whisperCommandChanged || groqSttModelChanged) {
         try {
           speechService.initializeClient();
           this.speechAvailable = speechService.isAvailable
@@ -1526,6 +1633,7 @@ class ApplicationController {
           logger.info('Speech service reinitialized after settings change', {
             providerChanged,
             whisperCommandChanged,
+            groqSttModelChanged,
             speechAvailable: this.speechAvailable,
           });
         } catch (e) {
@@ -1535,9 +1643,35 @@ class ApplicationController {
         }
       }
 
+      // Reinitialize TTS service when Groq key or TTS settings change
+      const groqKeyChanged = settings.groqKey !== undefined;
+      const ttsSettingsChanged = settings.ttsEnabled !== undefined ||
+        settings.ttsVoice !== undefined ||
+        settings.ttsModel !== undefined ||
+        settings.ttsSpeed !== undefined;
+      if (groqKeyChanged || ttsSettingsChanged) {
+        try {
+          ttsService.updateSettings({
+            groqKey: process.env.GROQ_API_KEY,
+            ttsEnabled: settings.ttsEnabled,
+            ttsVoice: settings.ttsVoice,
+            ttsModel: settings.ttsModel,
+            ttsSpeed: settings.ttsSpeed
+          });
+          logger.info('TTS service reinitialized after settings change');
+          // Broadcast TTS settings to chat windows
+          windowManager.broadcastToAllWindows('tts-settings-changed', {
+            ttsEnabled: settings.ttsEnabled !== false
+          });
+        } catch (e) {
+          logger.warn("Failed to reinitialize TTS service", { error: e.message });
+        }
+      }
+
       const redacted = { ...settings };
       if (redacted.geminiKey) redacted.geminiKey = redacted.geminiKey.substring(0, 4) + "…";
       if (redacted.openrouterKey) redacted.openrouterKey = redacted.openrouterKey.substring(0, 4) + "…";
+      if (redacted.groqKey) redacted.groqKey = redacted.groqKey.substring(0, 4) + "…";
       if (redacted.azureKey) redacted.azureKey = redacted.azureKey.substring(0, 4) + "…";
       logger.info("Settings saved successfully", {
         ...redacted,

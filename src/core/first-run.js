@@ -37,6 +37,10 @@ class FirstRunManager {
       const orKey = (content.OPENROUTER_API_KEY || '').trim();
       return !orKey || orKey === 'your_openrouter_api_key_here';
     }
+    if (provider === 'groq') {
+      const grKey = (content.GROQ_API_KEY || '').trim();
+      return !grKey || grKey === 'your_groq_api_key_here';
+    }
     const gemini = (content.GEMINI_API_KEY || '').trim();
     return !gemini || gemini === 'your_gemini_api_key_here';
   }
@@ -88,6 +92,8 @@ class FirstRunManager {
     const gemini = (env.GEMINI_API_KEY || '').trim();
     const orKey = (env.OPENROUTER_API_KEY || '').trim();
     const orKeyConfigured = !!orKey && orKey !== 'your_openrouter_api_key_here';
+    const grKey = (env.GROQ_API_KEY || '').trim();
+    const grKeyConfigured = !!grKey && grKey !== 'your_groq_api_key_here';
     return {
       envExists: fs.existsSync(this.envPath),
       sentinelExists: fs.existsSync(this.sentinelPath),
@@ -95,6 +101,8 @@ class FirstRunManager {
       geminiConfigured: !!gemini && gemini !== 'your_gemini_api_key_here',
       openrouterConfigured: orKeyConfigured,
       openrouterModel: env.OPENROUTER_MODEL || 'openrouter/free',
+      groqConfigured: grKeyConfigured,
+      groqModel: env.GROQ_MODEL || 'llama-3.3-70b-versatile',
       azureConfigured: !!(env.AZURE_SPEECH_KEY || '').trim() && !!(env.AZURE_SPEECH_REGION || '').trim(),
       whisperConfigured: !!(env.WHISPER_COMMAND || '').trim(),
       needsOnboarding: this.needsOnboarding()

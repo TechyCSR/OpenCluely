@@ -30,10 +30,12 @@
   // ── State ─────────────────────────────────────────────────────────
   const state = {
     step: 0,
-    llmProvider: 'gemini', // 'gemini' | 'openrouter'
+    llmProvider: 'gemini', // 'gemini' | 'openrouter' | 'groq'
     geminiKey: '',
     openrouterKey: '',
     openrouterModel: 'openrouter/free',
+    groqKey: '',
+    groqModel: 'llama-3.3-70b-versatile',
     speechProvider: null, // 'whisper' | 'azure' | 'skip'
     azureKey: '',
     azureRegion: '',
@@ -128,6 +130,9 @@
         if (state.llmProvider === 'openrouter') {
           return !!state.openrouterKey.trim();
         }
+        if (state.llmProvider === 'groq') {
+          return !!state.groqKey.trim();
+        }
         return !!state.geminiKey.trim();
       case 'speech':
         if (state.speechProvider === 'azure') {
@@ -191,6 +196,7 @@
   const llmProviderChoices = document.getElementById('llmProviderChoices');
   const onboardingGeminiFields = document.getElementById('onboardingGeminiFields');
   const onboardingOpenrouterFields = document.getElementById('onboardingOpenrouterFields');
+  const onboardingGroqFields = document.getElementById('onboardingGroqFields');
 
   if (llmProviderChoices) {
     llmProviderChoices.querySelectorAll('.choice-card').forEach((card) => {
@@ -204,6 +210,9 @@
         }
         if (onboardingOpenrouterFields) {
           onboardingOpenrouterFields.style.display = value === 'openrouter' ? 'block' : 'none';
+        }
+        if (onboardingGroqFields) {
+          onboardingGroqFields.style.display = value === 'groq' ? 'block' : 'none';
         }
         // Reset the key status when switching providers
         if (keyStatus) keyStatus.style.display = 'none';
@@ -223,6 +232,21 @@
   if (onboardingOpenrouterModel) {
     onboardingOpenrouterModel.addEventListener('input', () => {
       state.openrouterModel = onboardingOpenrouterModel.value.trim() || 'openrouter/free';
+    });
+  }
+
+  // Wire up Groq key and model inputs
+  const onboardingGroqKey = document.getElementById('onboardingGroqKey');
+  const onboardingGroqModel = document.getElementById('onboardingGroqModel');
+
+  if (onboardingGroqKey) {
+    onboardingGroqKey.addEventListener('input', () => {
+      state.groqKey = onboardingGroqKey.value.trim();
+    });
+  }
+  if (onboardingGroqModel) {
+    onboardingGroqModel.addEventListener('input', () => {
+      state.groqModel = onboardingGroqModel.value.trim() || 'llama-3.3-70b-versatile';
     });
   }
 
@@ -497,6 +521,22 @@
         value: state.openrouterModel,
         cls: 'ok',
       });
+    } else if (state.llmProvider === 'groq') {
+      rows.push({
+        label: '<i class="fas fa-bolt"></i> LLM Provider',
+        value: 'Groq',
+        cls: 'ok',
+      });
+      rows.push({
+        label: '<i class="fas fa-key"></i> Groq Key',
+        value: state.groqKey ? 'Configured' : 'Missing',
+        cls: state.groqKey ? 'ok' : 'skip',
+      });
+      rows.push({
+        label: '<i class="fas fa-cube"></i> Model',
+        value: state.groqModel,
+        cls: 'ok',
+      });
     } else {
       rows.push({
         label: '<i class="fas fa-key"></i> Gemini API',
@@ -566,7 +606,9 @@
       if (name === 'apikey') {
         const msg = state.llmProvider === 'openrouter'
           ? 'Enter your OpenRouter API key'
-          : 'Enter your Gemini API key';
+          : state.llmProvider === 'groq'
+            ? 'Enter your Groq API key'
+            : 'Enter your Gemini API key';
         setKeyStatus('error', msg);
       }
       return;
@@ -579,6 +621,9 @@
         if (state.llmProvider === 'openrouter') {
           if (state.openrouterKey) payload.openrouterKey = state.openrouterKey;
           payload.openrouterModel = state.openrouterModel;
+        } else if (state.llmProvider === 'groq') {
+          if (state.groqKey) payload.groqKey = state.groqKey;
+          payload.groqModel = state.groqModel;
         } else if (state.geminiKey) {
           payload.geminiKey = state.geminiKey;
         }
@@ -730,6 +775,13 @@
         if (onboardingOpenrouterKey) onboardingOpenrouterKey.placeholder = '•••••••••••••••• (already set)';
         if (onboardingOpenrouterModel) onboardingOpenrouterModel.value = s.openrouterModel || 'openrouter/free';
         state.openrouterModel = s.openrouterModel || 'openrouter/free';
+      } else if (s.llmProvider === 'groq') {
+        state.llmProvider = 'groq';
+        const groqCard = llmProviderChoices?.querySelector('[data-value="groq"]');
+        if (groqCard) groqCard.click();
+        if (onboardingGroqKey) onboardingGroqKey.placeholder = '•••••••••••••••• (already set)';
+        if (onboardingGroqModel) onboardingGroqModel.value = s.groqModel || 'llama-3.3-70b-versatile';
+        state.groqModel = s.groqModel || 'llama-3.3-70b-versatile';
       } else if (s.geminiConfigured) {
         const geminiCard = llmProviderChoices?.querySelector('[data-value="gemini"]');
         if (geminiCard) geminiCard.click();

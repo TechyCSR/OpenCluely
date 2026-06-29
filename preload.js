@@ -115,12 +115,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
+
+  // TTS (Text-to-Speech)
+  synthesizeSpeech: (text, options) => ipcRenderer.invoke('synthesize-speech', text, options),
+  stopTtsPlayback: () => ipcRenderer.invoke('stop-tts-playback'),
+  onTtsStarted: (callback) => ipcRenderer.on('tts-started', callback),
+  onTtsCompleted: (callback) => ipcRenderer.on('tts-completed', callback),
+  onTtsError: (callback) => ipcRenderer.on('tts-error', callback),
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),
   
   // Remove listeners
-  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
+  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+
+  // Audio capture (renderer-based microphone via getUserMedia)
+  sendAudioChunk: (buffer) => ipcRenderer.send('audio-chunk', buffer),
+  sendAudioCaptureError: (msg) => ipcRenderer.send('audio-capture-error', msg),
+  audioCaptureReady: () => ipcRenderer.send('audio-capture-ready'),
+  onStartRendererCapture: (callback) => {
+    const wrapped = () => { try { callback(); } catch (e) { console.error('onStartRendererCapture error:', e); } };
+    ipcRenderer.on('start-renderer-capture', wrapped);
+    return () => ipcRenderer.removeListener('start-renderer-capture', wrapped);
+  },
+  onStopRendererCapture: (callback) => {
+    ipcRenderer.on('stop-renderer-capture', callback);
+    return () => ipcRenderer.removeListener('stop-renderer-capture', callback);
+  },
+  onStopAudioCapture: (callback) => {
+    ipcRenderer.on('stop-audio-capture', callback);
+    return () => ipcRenderer.removeListener('stop-audio-capture', callback);
+  }
 })
 
 contextBridge.exposeInMainWorld('api', {

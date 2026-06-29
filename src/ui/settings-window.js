@@ -13,6 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const whisperModelInput = document.getElementById('whisperModel');
     const whisperLanguageInput = document.getElementById('whisperLanguage');
     const whisperSegmentMsInput = document.getElementById('whisperSegmentMs');
+    const groqSttModelInput = document.getElementById('groqSttModel');
+    const ttsEnabledInput = document.getElementById('ttsEnabled');
+    const ttsVoiceInput = document.getElementById('ttsVoice');
+    const ttsSpeedInput = document.getElementById('ttsSpeed');
     const geminiKeyInput = document.getElementById('geminiKey');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
@@ -23,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const llmProviderSelect = document.getElementById('llmProvider');
     const openrouterKeyInput = document.getElementById('openrouterKey');
     const openrouterModelInput = document.getElementById('openrouterModel');
+    const groqKeyInput = document.getElementById('groqKey');
+    const groqModelInput = document.getElementById('groqModel');
 
     // Check if window.api exists
     if (!window.api) {
@@ -86,11 +92,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperModelInput) whisperModelInput.value = settings.whisperModel || '';
         if (whisperLanguageInput) whisperLanguageInput.value = settings.whisperLanguage || '';
         if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
+        if (groqSttModelInput) groqSttModelInput.value = settings.groqSttModel || 'whisper-large-v3-turbo';
+        if (ttsEnabledInput) ttsEnabledInput.checked = settings.ttsEnabled !== false;
+        if (ttsVoiceInput) ttsVoiceInput.value = settings.ttsVoice || 'tara';
+        if (ttsSpeedInput) ttsSpeedInput.value = settings.ttsSpeed || '1.0';
         if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
         if (llmProviderSelect) llmProviderSelect.value = settings.llmProvider || 'gemini';
         if (openrouterKeyInput) openrouterKeyInput.value = settings.openrouterKey || '';
         if (openrouterModelInput) openrouterModelInput.value = settings.openrouterModel || 'openrouter/free';
+        if (groqKeyInput) groqKeyInput.value = settings.groqKey || '';
+        if (groqModelInput) groqModelInput.value = settings.groqModel || 'llama-3.3-70b-versatile';
         updateLLMFieldStates();
 
         // Set C++ as default if no coding language is specified
@@ -141,14 +153,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const geminiGroup = document.getElementById('geminiLlmFields');
         const openrouterGroup = document.getElementById('openrouterLlmFields');
         const openrouterNote = document.getElementById('openrouterNote');
+        const groqGroup = document.getElementById('groqLlmFields');
 
         if (geminiGroup) geminiGroup.style.display = provider === 'gemini' ? '' : 'none';
         if (openrouterGroup) openrouterGroup.style.display = provider === 'openrouter' ? '' : 'none';
         if (openrouterNote) openrouterNote.style.display = provider === 'openrouter' ? '' : 'none';
+        if (groqGroup) groqGroup.style.display = provider === 'groq' ? '' : 'none';
 
         if (geminiKeyInput) geminiKeyInput.disabled = provider !== 'gemini';
         if (openrouterKeyInput) openrouterKeyInput.disabled = provider !== 'openrouter';
         if (openrouterModelInput) openrouterModelInput.disabled = provider !== 'openrouter';
+        if (groqKeyInput) groqKeyInput.disabled = provider !== 'groq';
+        if (groqModelInput) groqModelInput.disabled = provider !== 'groq';
     };
 
     // Save settings helper function
@@ -161,6 +177,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperModelInput) settings.whisperModel = whisperModelInput.value;
         if (whisperLanguageInput) settings.whisperLanguage = whisperLanguageInput.value;
         if (whisperSegmentMsInput) settings.whisperSegmentMs = whisperSegmentMsInput.value;
+        if (groqSttModelInput) settings.groqSttModel = groqSttModelInput.value;
+        if (ttsEnabledInput) settings.ttsEnabled = ttsEnabledInput.checked;
+        if (ttsVoiceInput) settings.ttsVoice = ttsVoiceInput.value;
+        if (ttsSpeedInput) settings.ttsSpeed = ttsSpeedInput.value;
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
@@ -168,6 +188,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (llmProviderSelect) settings.llmProvider = llmProviderSelect.value;
         if (openrouterKeyInput) settings.openrouterKey = openrouterKeyInput.value;
         if (openrouterModelInput) settings.openrouterModel = openrouterModelInput.value;
+        if (groqKeyInput) settings.groqKey = groqKeyInput.value;
+        if (groqModelInput) settings.groqModel = groqModelInput.value;
         
         window.api.send('save-settings', settings);
     };
@@ -181,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const azureGroup = document.getElementById('azureFields');
         const whisperGroup = document.getElementById('whisperFields');
         const azureNote = document.getElementById('azureFieldsNote');
+        const groqSttGroup = document.getElementById('groqSttFields');
 
         if (azureGroup) {
             azureGroup.style.display = provider === 'azure' ? '' : 'none';
@@ -191,6 +214,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (azureNote) {
             azureNote.style.display = provider === 'azure' ? '' : 'none';
         }
+        if (groqSttGroup) {
+            groqSttGroup.style.display = provider === 'groq' ? '' : 'none';
+        }
 
         // Also toggle disabled attribute for any leftover direct field refs
         [azureKeyInput, azureRegionInput].forEach(input => {
@@ -198,6 +224,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         [whisperCommandInput, whisperModelInput, whisperLanguageInput, whisperSegmentMsInput].forEach(input => {
             if (input) input.disabled = provider !== 'whisper';
+        });
+        [groqSttModelInput].forEach(input => {
+            if (input) input.disabled = provider !== 'groq';
         });
     };
 
@@ -210,11 +239,17 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperModelInput,
         whisperLanguageInput,
         whisperSegmentMsInput,
+        groqSttModelInput,
+        ttsEnabledInput,
+        ttsVoiceInput,
+        ttsSpeedInput,
         geminiKeyInput,
         windowGapInput,
         llmProviderSelect,
         openrouterKeyInput,
-        openrouterModelInput
+        openrouterModelInput,
+        groqKeyInput,
+        groqModelInput
     ];
 
     inputs.forEach(input => {

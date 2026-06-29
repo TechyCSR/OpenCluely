@@ -366,6 +366,7 @@
                         <select class="input-field" id="speechProvider">
                             <option value="azure">Azure Speech</option>
                             <option value="whisper">Local Whisper</option>
+                            <option value="groq">Groq (Cloud STT)</option>
                         </select>
                     </div>
 
@@ -424,8 +425,70 @@
                         </div>
                     </div>
 
+                    <!-- Groq STT fields (shown only when Groq is selected) -->
+                    <div id="groqSttFields" class="settings-group">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Groq STT Model</div>
+                                <div class="settings-item-description">Groq's Whisper model for speech-to-text</div>
+                            </div>
+                            <select class="input-field" id="groqSttModel">
+                                <option value="whisper-large-v3-turbo">Whisper Large V3 Turbo</option>
+                                <option value="distil-whisper-large-v3-en">Distil Whisper Large V3 (English)</option>
+                            </select>
+                        </div>
+                        <div class="settings-note">
+                            Uses your <code>GROQ_API_KEY</code> for transcription via Groq's API. No local Whisper CLI required.
+                        </div>
+                    </div>
+
                     <div id="azureFieldsNote" class="settings-note">
                         Azure credentials apply immediately and are also written back to <code>.env</code> so they persist across restarts.
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-volume-up"></i>
+                    Text-to-Speech
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Enable TTS</div>
+                            <div class="settings-item-description">Read AI responses aloud using Groq Orpheus</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="ttsEnabled" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">TTS Voice</div>
+                            <div class="settings-item-description">Orpheus voice for speech synthesis</div>
+                        </div>
+                        <select class="input-field" id="ttsVoice">
+                            <option value="tara">Tara</option>
+                            <option value="leah">Leah</option>
+                            <option value="jess">Jess</option>
+                            <option value="leo">Leo</option>
+                            <option value="dan">Dan</option>
+                            <option value="mia">Mia</option>
+                            <option value="zac">Zac</option>
+                            <option value="zoe">Zoe</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">TTS Speed</div>
+                            <div class="settings-item-description">Playback speed (0.25 – 4.0)</div>
+                        </div>
+                        <input type="number" class="input-field" id="ttsSpeed" placeholder="1.0" min="0.25" max="4.0" step="0.25">
+                    </div>
+                    <div class="settings-note">
+                        Requires <code>GROQ_API_KEY</code>. TTS uses the Orpheus English model via Groq's API.
                     </div>
                 </div>
             </div>
@@ -444,6 +507,7 @@
                         <select class="input-field" id="llmProvider">
                             <option value="gemini">Google Gemini</option>
                             <option value="openrouter">OpenRouter</option>
+                            <option value="groq">Groq</option>
                         </select>
                     </div>
 
@@ -479,6 +543,25 @@
                     <div class="settings-note" id="openrouterNote" style="display:none;">
                         OpenRouter automatically routes image requests to free vision-capable models.
                         No charges apply for free models. See <a href="https://openrouter.ai" target="_blank" style="color: inherit;">openrouter.ai</a> for details.
+                    </div>
+
+                    <div id="groqLlmFields" class="settings-group" style="display:none;">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Groq API Key</div>
+                                <div class="settings-item-description">Get a key at <code>console.groq.com/keys</code></div>
+                            </div>
+                            <input type="password" class="input-field" id="groqKey" placeholder="gsk_...">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Model</div>
+                                <div class="settings-item-description">
+                                    Fast inference on Groq hardware. Default: <code>llama-3.3-70b-versatile</code>
+                                </div>
+                            </div>
+                            <input type="text" class="input-field" id="groqModel" placeholder="llama-3.3-70b-versatile">
+                        </div>
                     </div>
                 </div>
             </div>
