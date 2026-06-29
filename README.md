@@ -137,14 +137,17 @@ https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 - [x] **Multi‑monitor** and area capture APIs
 - [x] **Window binding** and positioning system
 - [x] **Settings management** with app icon/stealth modes
+- [x] **Hidden during screen share** — all windows auto‑hide while screen is being recorded/shared
+- [x] **Real-time voice input** — VAD-driven segmentation replaces blind 4s timer; natural pauses trigger a flush instead of splitting sentences mid-word
+- [x] **Utterance coalescing** — fragments from the same spoken question are merged into one LLM call so one sentence gets one answer
+- [x] **Streaming AI responses** — reply tokens render live word-by-word in chat and overlay (no waiting for full generation)
+- [x] **Whisper hallucination filter** — phantom phrases on silence ("Thank you.", "Thanks for watching.") are dropped before reaching the LLM
 
 ### 🚧 **Planned Features** *(In Development)*
 
-- [ ] **Hidden during screen share** (auto‑hide all windows while screen is being shared)
 - [ ] **Multi‑model support** (OpenAI/Anthropic/Local backends alongside Gemini)
 - [ ] **Auto‑typer for code snippets** (paste or simulate typing into editors/IDEs)
 - [ ] **Export conversation history** (save sessions as markdown/PDF)
-- [ ] **Performance optimizations** (faster startup, reduced memory usage)
 - [ ] **Enhanced stealth modes** (process name randomization, deeper OS integration)
 
 ---
@@ -176,18 +179,31 @@ WHISPER_SEGMENT_MS=4000
 
 ## 📦 Download Pre-Built Installers
 
-Don't want to clone and build? Download a pre-built installer for your platform from the [**Releases page**](https://github.com/TechyCSR/OpenCluely/releases).
+<p align="center">
+  <a href="https://github.com/TechyCSR/OpenCluely/releases/latest">
+    <img src="https://img.shields.io/github/v/release/TechyCSR/OpenCluely?style=for-the-badge&label=Latest%20Release&color=2D9CDB" alt="Latest Release" />
+  </a>
+  &nbsp;
+  <a href="https://github.com/TechyCSR/OpenCluely/releases/latest">
+    <img src="https://img.shields.io/github/release-date/TechyCSR/OpenCluely?style=for-the-badge&color=555" alt="Release Date" />
+  </a>
+  &nbsp;
+  <a href="https://github.com/TechyCSR/OpenCluely/releases">
+    <img src="https://img.shields.io/github/downloads/TechyCSR/OpenCluely/total?style=for-the-badge&color=555" alt="Total Downloads" />
+  </a>
+</p>
 
-| Platform | File | Notes |
+Don't want to clone and build? Download a pre-built installer for your platform directly from the latest release:
+
+| Platform | Download | Notes |
 |---|---|---|
-| **Windows** | `OpenCluely-Setup-*.exe` | NSIS installer; auto-creates Start Menu shortcut |
-| **Windows** | `OpenCluely-*-portable.exe` | Portable, no install required |
-| **macOS (Apple Silicon)** | `OpenCluely-*-arm64.dmg` | M1 / M2 / M3 / M4 Macs |
-| **macOS (Intel)** | `OpenCluely-*-x64.dmg` | Older Intel Macs |
-| **Linux (Debian/Ubuntu)** | `OpenCluely-*.deb` | Auto-pulls system deps: Python 3.10+, ffmpeg, GTK, NSS |
-| **Linux (Universal)** | `OpenCluely-*.AppImage` | No install — `chmod +x` then run |
+| **Windows** | [**↓ OpenCluely-Setup.exe**](https://github.com/TechyCSR/OpenCluely/releases/latest) | NSIS installer; auto-creates Start Menu shortcut |
+| **macOS (Apple Silicon)** | [**↓ arm64.dmg**](https://github.com/TechyCSR/OpenCluely/releases/latest) | M1 / M2 / M3 / M4 Macs |
+| **macOS (Intel)** | [**↓ x64.dmg**](https://github.com/TechyCSR/OpenCluely/releases/latest) | Older Intel Macs |
+| **Linux (Debian/Ubuntu)** | [**↓ .deb package**](https://github.com/TechyCSR/OpenCluely/releases/latest) | Auto-pulls system deps: Python 3.10+, ffmpeg, GTK, NSS |
+| **Linux (Universal)** | [**↓ .AppImage**](https://github.com/TechyCSR/OpenCluely/releases/latest) | No install — `chmod +x` then run |
 
-Every release is built automatically by GitHub Actions across Windows, macOS, and Linux runners in parallel and uploaded with SHA-256 checksums.
+> Links always point to the **latest release**. Every build is produced automatically by GitHub Actions across Windows, macOS, and Linux and uploaded with SHA-256 checksums.
 
 ## 🚀 Quick Start & Installation
 
@@ -323,7 +339,7 @@ For the local Whisper path, `./setup.sh` now handles the full repo-local setup:
 - **Listening Animation**: Visual feedback during recording
 - **Interim Results**: Available with Azure Speech
 - **Auto-processing**: Instant AI responses to voice input
-]
+
 ---
 
 <details markdown="1">
