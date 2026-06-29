@@ -681,3 +681,170 @@ body {
 @media (max-width: 480px) {
 }
 
+/* ── Download Section ───────────────────────────────────────────────────── */
+
+.download-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 3rem 0;
+    color: var(--text-muted);
+}
+
+.loading-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.download-error {
+    text-align: center;
+    padding: 2rem 0;
+    color: var(--text-muted);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.download-version {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+}
+
+.download-version .release-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.35rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--accent);
+}
+
+.download-version .release-date {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+}
+
+.download-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+}
+
+.platform-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.platform-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+}
+
+.platform-card .platform-icon {
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.platform-card h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.platform-card .platform-note {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 1.1rem;
+    min-height: 2.5rem;
+}
+
+.platform-card .download-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.dl-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.9rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dl-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.dl-btn i {
+    flex-shrink: 0;
+    color: var(--accent);
+}
+
+.dl-btn .file-size {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.download-footer {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.checksum-note {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.text-link {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.text-link:hover {
+    text-decoration: underline;
+}
+

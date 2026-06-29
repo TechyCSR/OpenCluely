@@ -21,6 +21,7 @@
             <div class="nav-links">
                 <a href="#features">Features</a>
                 <a href="#demo">Demo</a>
+                <a href="#download">Download</a>
                 <a href="#install">Install</a>
                 <a href="https://opencluely.techycsr.dev" target="_blank">Website</a>
             </div>
@@ -117,6 +118,38 @@
                         Your browser does not support the video tag.
                     </video>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section id="download" class="section section-border">
+        <div class="container">
+            <h2 class="section-title"><i class="fas fa-download"></i> Download Latest Release</h2>
+            <p class="section-subtitle">Pre-built installers for every platform — always the latest version.</p>
+
+            <!-- Loading state -->
+            <div id="download-loading" class="download-loading">
+                <div class="loading-spinner"></div>
+                <p>Fetching latest release…</p>
+            </div>
+
+            <!-- Error fallback -->
+            <div id="download-error" class="download-error hidden">
+                <p>Couldn't load release info. <a href="https://github.com/TechyCSR/OpenCluely/releases/latest" target="_blank" class="text-link">Browse releases on GitHub →</a></p>
+            </div>
+
+            <!-- Release version banner -->
+            <div id="download-version" class="download-version hidden"></div>
+
+            <!-- Platform cards populated by JS -->
+            <div id="download-grid" class="download-grid hidden"></div>
+
+            <div id="download-footer" class="download-footer hidden">
+                <a href="https://github.com/TechyCSR/OpenCluely/releases" target="_blank" class="btn btn-outline">
+                    <i class="fas fa-list"></i> All Releases
+                </a>
+                <span class="checksum-note"><i class="fas fa-shield-halved"></i> SHA-256 checksums included in every release</span>
             </div>
         </div>
     </section>
