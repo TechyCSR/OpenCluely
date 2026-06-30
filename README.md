@@ -1,166 +1,111 @@
 <div align="center">
 
-# 🧠 OpenCluely 
+# OpenCluely
 
-<!-- Development Banner -->
-<p align="center">
-  <img src="https://img.shields.io/badge/Status-Under%20Active%20Development-FFA500?style=for-the-badge&logo=github&logoColor=white" alt="Under Active Development" />
-</p>
-<p align="center" style="margin-top:-8px;">
-  <em>Core is working; improvements are shipping daily.</em>
-</p>
+**The invisible AI interview copilot.**
 
-<p align="center">
-  <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=35&duration=3000&pause=1000&color=2D9CDB&center=true&vCenter=true&width=600&lines=OpenCluely;Invisible+Interview+Assistant;AI-Powered+Real-Time+Help;Stealth+Technology+Expert" alt="OpenCluely Typing Animation" />
-</p>
+Real-time AI help on a stealth overlay that screen sharing cannot see. Ask by voice or screenshot, and get clear answers that stream in as you need them.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/OpenCluely-AI%20Interview%20Assistant-2D9CDB?style=for-the-badge&logo=robot&logoColor=white" alt="OpenCluely Badge" />
+<p>
+  <a href="https://github.com/TechyCSR/OpenCluely/releases/latest"><img src="https://img.shields.io/github/v/release/TechyCSR/OpenCluely?style=for-the-badge&label=Latest&color=111111&labelColor=000000" alt="Latest release" /></a>
+  <a href="https://github.com/TechyCSR/OpenCluely/releases"><img src="https://img.shields.io/github/downloads/TechyCSR/OpenCluely/total?style=for-the-badge&color=111111&labelColor=000000" alt="Downloads" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-111111?style=for-the-badge&labelColor=000000" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-111111?style=for-the-badge&labelColor=000000" alt="Platforms" />
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-Cross%20Platform-blue?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/Stealth-100%25%20Invisible-red?style=flat-square" alt="Stealth" />
-  <img src="https://img.shields.io/badge/AI-Gemini%20Powered-orange?style=flat-square" alt="AI" />
-  <img src="https://img.shields.io/badge/Speech-Azure%20or%20Local%20Whisper-blueviolet?style=flat-square" alt="Speech" />
-</p>
+<a href="https://opencluely.techycsr.dev"><b>Website</b></a> &nbsp;|&nbsp;
+<a href="#download">Download</a> &nbsp;|&nbsp;
+<a href="#quick-start">Quick start</a> &nbsp;|&nbsp;
+<a href="#how-it-works">How it works</a>
 
----
-
-
-**OpenCluely** is a revolutionary AI-powered desktop application that provides **invisible, real-time assistance** during technical rounds.
-
-## 🎬 Demo Video
-
-https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 </div>
 
-## 🌟 Why OpenCluely?
+## Demo
 
-<table>
-<tr>
-<td width="50%">
+https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 
-### 🥷 **100% Stealth Mode**
-- **Invisible to Screen Sharing**: Zoom, Teams, Meet, Discord
-- **Process Disguise**: Appears as normal system process (Terminal, Activity Monitor, Settings)
-- **Click-Through Windows**: Transparent overlay technology
-- **Draggable UI**: Move windows anywhere on screen
-- **Zero Detection**: Bypasses all recording software
+## What it is
 
-</td>
-<td width="50%">
+OpenCluely is a desktop app for technical interviews and practice. It places a small overlay on your screen that recording and conferencing tools do not capture. You can speak a question or take a screenshot, and the AI answers in real time. The answer streams into a floating window and an optional chat panel, with clean code blocks and syntax highlighting.
 
-### 🚀 **AI-Powered Intelligence**
-- **Direct Image Analysis**: Screenshots are analyzed by Gemini (no Tesseract OCR)
-- **Voice Commands**: Optional Azure Speech or local OpenAI Whisper
-- **Context Memory**: Remembers entire interview conversation
-- **Multi-Language Support**: C++, Python, Java, JavaScript, C
-- **Smart Response Window**: Draggable with close button
+It is free and open source. Processing stays on your machine, and the only thing that leaves your device is the request you send to the AI provider.
 
-</td>
-</tr>
-</table>
+## Highlights
 
-## 🖼️ Modern UI Features
+- **Invisible overlay.** Windows stay out of Zoom, Google Meet, Microsoft Teams, Discord, and OBS captures. You see the answer, the call does not.
+- **Hidden during screen share.** When a share starts, the app can hide every window on its own.
+- **Real-time voice.** Speech is split on natural pauses instead of a fixed timer, so one spoken question stays one question. Filler phrases that Whisper invents on silence are dropped before they reach the model.
+- **Streamed answers.** Replies appear word by word as the model generates them, in both the chat and the floating window.
+- **Direct image analysis.** Screenshots go straight to Gemini for visual reasoning, with no slow OCR step in between.
+- **Session memory.** The whole conversation is remembered, so follow-ups, edge cases, and optimizations keep their context.
+- **Language aware.** Tailored answers for C++, C, Python, Java, and JavaScript.
+- **Stealthy by design.** Runs under ordinary system names, ships with no telemetry, and keeps your session local.
+- **Cross platform.** Windows, macOS on Apple Silicon and Intel, and Linux through .deb and AppImage builds.
 
-### 📱 **Interactive Windows**
-- **Floating Overlay Bar**: Compact command center with camera, mic, and skill selector
-- **Draggable Answer Window**: Move and resize AI response window anywhere
-- **Close Button**: Clean × button to close answer window when needed
-- **Auto-Hide Mic**: Microphone button appears only when a speech provider is available
-- **Interactive Chat**: Full conversation window with markdown support
+## Download
 
-### 🎨 **Visual Design**
-- **Glass Morphism**: Beautiful blur effects and transparency
-- **Adaptive Layout**: UI adjusts based on available services
-- **Smart Resizing**: Windows resize automatically to fit content
-- **Professional Look**: Mimics system applications for perfect stealth
+Pre-built installers are published with every release. These links always point at the newest version.
 
----
+| Platform | File | Notes |
+|---|---|---|
+| Windows | [Setup .exe](https://github.com/TechyCSR/OpenCluely/releases/latest) | NSIS installer. Adds a Start Menu shortcut. |
+| macOS (Apple Silicon) | [arm64 .dmg](https://github.com/TechyCSR/OpenCluely/releases/latest) | For M1, M2, M3, and M4 Macs. |
+| macOS (Intel) | [x64 .dmg](https://github.com/TechyCSR/OpenCluely/releases/latest) | For older Intel based Macs. |
+| Linux (Debian or Ubuntu) | [.deb](https://github.com/TechyCSR/OpenCluely/releases/latest) | Pulls system deps automatically (Python, ffmpeg, GTK). |
+| Linux (universal) | [.AppImage](https://github.com/TechyCSR/OpenCluely/releases/latest) | No install. Run `chmod +x` then launch. |
 
-## 🎯 ctional Overview
+Every build is produced automatically on GitHub Actions across all three platforms and ships with SHA-256 checksums. Each release also lists the full set of commits it includes.
 
-### 📋 **Core Components**
+The website at [opencluely.techycsr.dev](https://opencluely.techycsr.dev) detects your operating system and offers the right installer directly.
 
-<table>
-<tr>
-<td width="33%">
+## Quick start
 
-#### 🖱️ **Main Overlay**
-- Floating command bar
-- Screenshot capture (⌘⇧S)
-- Microphone toggle (Optional)
-- Skill selector (DSA)
-- Language picker
-- Status indicator
+If you would rather build from source, three steps are all it takes.
 
-</td>
-<td width="33%">
+1. Clone the repository.
 
-#### 💬 **Interactive Chat**
-- Real-time transcription
-- AI conversation
-- Markdown formatting
-- Session memory
-- Listening animations
-- Auto-scroll messages
+   ```bash
+   git clone https://github.com/TechyCSR/OpenCluely.git
+   cd OpenCluely
+   ```
 
-</td>
-<td width="33%">
+2. Run the setup script.
 
-#### 📊 **Answer Window**
-- Draggable interface
-- Close button (×)
-- Split layout for code
-- Full markdown support
-- Syntax highlighting
-- Smart content sizing
+   ```bash
+   ./setup.sh
+   ```
 
-</td>
-</tr>
-</table>
+   The script installs Node dependencies, creates your `.env` from the example, sets up a local Whisper virtual environment, points the config at it, and launches the app.
 
+3. Add your Gemini key.
 
----
-## ✅ To-Do List & Development Status
+   On first launch the Settings window opens automatically. Get a free key from [Google AI Studio](https://aistudio.google.com/) and paste it in, or edit `.env` directly. Both work, and changes are picked up without a restart.
 
-### 🎯 **Core Features** *(Completed)*
+### Platform notes
 
-- [x] **Stealth overlay** with draggable command bar and click‑through toggle
-- [x] **Screenshot capture** with direct Gemini analysis (no OCR step)
-- [x] **AI response window** with markdown and code highlighting
-- [x] **Global shortcuts** (capture, visibility, interaction, chat, settings)
-- [x] **Session memory** and chat UI
-- [x] **Language picker** and DSA skill prompt
-- [x] **Optional Azure Speech / local Whisper** integration with auto‑hide mic
-- [x] **Multi‑monitor** and area capture APIs
-- [x] **Window binding** and positioning system
-- [x] **Settings management** with app icon/stealth modes
-- [x] **Hidden during screen share** — all windows auto‑hide while screen is being recorded/shared
-- [x] **Real-time voice input** — VAD-driven segmentation replaces blind 4s timer; natural pauses trigger a flush instead of splitting sentences mid-word
-- [x] **Utterance coalescing** — fragments from the same spoken question are merged into one LLM call so one sentence gets one answer
-- [x] **Streaming AI responses** — reply tokens render live word-by-word in chat and overlay (no waiting for full generation)
-- [x] **Whisper hallucination filter** — phantom phrases on silence ("Thank you.", "Thanks for watching.") are dropped before reaching the LLM
+- On Windows, use Git Bash (included with Git for Windows) or WSL to run `setup.sh`.
+- On macOS and Linux, your normal terminal works.
+- No manual `npm` commands are needed. The script handles everything.
 
-### 🚧 **Planned Features** *(In Development)*
-
-- [ ] **Multi‑model support** (OpenAI/Anthropic/Local backends alongside Gemini)
-- [ ] **Auto‑typer for code snippets** (paste or simulate typing into editors/IDEs)
-- [ ] **Export conversation history** (save sessions as markdown/PDF)
-- [ ] **Enhanced stealth modes** (process name randomization, deeper OS integration)
-
----
-
-### ⚙️ **Configuration**
-
-The setup script automatically handles configuration. You only need:
+### Setup script options
 
 ```bash
-# Required: Google Gemini API Key (setup script will ask for this)
+./setup.sh --build                # Build a distributable for your OS
+./setup.sh --ci                   # Use npm ci instead of npm install
+./setup.sh --no-run               # Set up only, do not launch
+./setup.sh --install-system-deps  # Install sox for the microphone (optional)
+./setup.sh --skip-whisper         # Skip the local Whisper bootstrap
+```
+
+## Configuration
+
+The setup script writes sensible defaults. The only required value is a Gemini API key.
+
+```bash
+# Required
 GEMINI_API_KEY=your_gemini_api_key_here
 
-# Optional: Speech Recognition (pick one provider)
+# Optional speech provider. Pick one.
 SPEECH_PROVIDER=whisper
 
 # Azure option
@@ -172,265 +117,104 @@ WHISPER_COMMAND=whisper
 WHISPER_MODEL_DIR=.whisper-models
 WHISPER_MODEL=turbo
 WHISPER_LANGUAGE=en
-WHISPER_SEGMENT_MS=4000
 ```
 
-**Note**: Speech recognition is completely optional. If no configured provider is available, the microphone button will be automatically hidden from all interfaces.
+Speech is optional. If no provider is configured, the microphone button hides itself across the app.
 
-## 📦 Download Pre-Built Installers
+## Optional voice setup
 
-<p align="center">
-  <a href="https://github.com/TechyCSR/OpenCluely/releases/latest">
-    <img src="https://img.shields.io/github/v/release/TechyCSR/OpenCluely?style=for-the-badge&label=Latest%20Release&color=2D9CDB" alt="Latest Release" />
-  </a>
-  &nbsp;
-  <a href="https://github.com/TechyCSR/OpenCluely/releases/latest">
-    <img src="https://img.shields.io/github/release-date/TechyCSR/OpenCluely?style=for-the-badge&color=555" alt="Release Date" />
-  </a>
-  &nbsp;
-  <a href="https://github.com/TechyCSR/OpenCluely/releases">
-    <img src="https://img.shields.io/github/downloads/TechyCSR/OpenCluely/total?style=for-the-badge&color=555" alt="Total Downloads" />
-  </a>
-</p>
+You can use local Whisper for offline transcription or Azure Speech for a cloud option.
 
-Don't want to clone and build? Download a pre-built installer for your platform directly from the latest release:
+For local Whisper, `./setup.sh` handles the full setup. It creates `.venv-whisper`, installs `openai-whisper`, points `.env` at the virtual environment, creates `.whisper-models`, and runs a quick speech test. You only need Python 3.10 or newer and ffmpeg on your system. Install those with `./setup.sh --install-system-deps`, or add `ffmpeg` and `sox` yourself.
 
-| Platform | Download | Notes |
-|---|---|---|
-| **Windows** | [**↓ OpenCluely-Setup.exe**](https://github.com/TechyCSR/OpenCluely/releases/latest) | NSIS installer; auto-creates Start Menu shortcut |
-| **macOS (Apple Silicon)** | [**↓ arm64.dmg**](https://github.com/TechyCSR/OpenCluely/releases/latest) | M1 / M2 / M3 / M4 Macs |
-| **macOS (Intel)** | [**↓ x64.dmg**](https://github.com/TechyCSR/OpenCluely/releases/latest) | Older Intel Macs |
-| **Linux (Debian/Ubuntu)** | [**↓ .deb package**](https://github.com/TechyCSR/OpenCluely/releases/latest) | Auto-pulls system deps: Python 3.10+, ffmpeg, GTK, NSS |
-| **Linux (Universal)** | [**↓ .AppImage**](https://github.com/TechyCSR/OpenCluely/releases/latest) | No install — `chmod +x` then run |
+For Azure Speech, create a Speech resource in the [Azure Portal](https://portal.azure.com/), then add the key and region to `.env` with `SPEECH_PROVIDER=azure`.
 
-> Links always point to the **latest release**. Every build is produced automatically by GitHub Actions across Windows, macOS, and Linux and uploaded with SHA-256 checksums.
+## How it works
 
-## 🚀 Quick Start & Installation
+1. **Ask.** Speak the question or press the screenshot shortcut. The microphone listens for natural pauses on its own and does not cut you off mid sentence.
+2. **Reason.** Gemini reads the audio or image with full conversation context and works toward a precise answer.
+3. **Answer.** The response streams into the overlay in real time, with formatted text and highlighted code.
 
-### ⚡ Three Simple Steps (All Operating Systems)
-
-1. **Clone the repository** (skip if you downloaded a pre-built installer above)
-   ```bash
-   git clone https://github.com/TechyCSR/OpenCluely.git
-   cd OpenCluely
-   ```
-
-2. **Run the setup script** (One command does everything!)
-   ```bash
-   ./setup.sh
-   ```
-
-   The setup script will:
-   - Install all Node dependencies automatically
-   - Create your `.env` file from `env.example` if needed (with safe defaults)
-   - Set up a local Whisper virtualenv in `.venv-whisper` (optional, 3 GB)
-   - Configure `.env` to use local Whisper by default
-   - Launch OpenCluely
-
-3. **First-run onboarding**
-   - On first launch, if no Gemini API key is configured, the app **automatically opens the Settings window** and walks you through entering it.
-   - You can paste the key in the Settings UI, or edit `.env` directly — both work.
-   - Get a free key from [Google AI Studio](https://aistudio.google.com/).
-
-   **Note:** Setup will not hard-block if `GEMINI_API_KEY` is missing — the app launches either way and prompts you when needed.
-
-### 💻 Platform-Specific Notes
-
-- **Windows**: Use Git Bash (comes with Git for Windows), WSL, or any bash environment
-- **macOS/Linux**: Use your regular terminal
-- **All platforms**: No manual npm commands needed - the setup script handles everything
-- **Windows Whisper path**: `setup.sh` now writes `WHISPER_COMMAND=.venv-whisper/Scripts/whisper.exe`
-- **macOS/Linux Whisper path**: `setup.sh` writes `WHISPER_COMMAND=.venv-whisper/bin/whisper`
-
-
-### 🎛️ Setup Script Options
-
-```bash
-./setup.sh --build          # Build distributable for your OS
-./setup.sh --ci             # Use npm ci instead of npm install
-./setup.sh --no-run         # Setup only, don't launch the app
-./setup.sh --install-system-deps  # Install sox for microphone (optional)
-./setup.sh --skip-whisper  # Skip the local Whisper bootstrap
-```
-
-### 🔧 **Optional: Speech Setup** (For Voice Features)
-
-Voice recognition is optional. You can use either Azure Speech or local OpenAI Whisper.
-
-For the local Whisper path, `./setup.sh` now handles the full repo-local setup:
-
-1. Creates `.venv-whisper`
-2. Installs `openai-whisper`
-3. Points `.env` at `.venv-whisper/bin/whisper`
-4. Creates `.whisper-models`
-5. Runs `npm run test-speech`
-
-1. For Azure Speech:
-   - Visit [Azure Portal](https://portal.azure.com/)
-   - Create a Speech Service
-   - Copy your key and region
-
-2. For local Whisper:
-   - Run `./setup.sh --install-system-deps`
-   - Or install required audio tools such as `ffmpeg` and `sox` yourself
-   - On Windows, install audio tooling separately and prefer Git Bash or WSL for `setup.sh`
-
-3. Add one provider to your `.env` file:
-   ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
-   SPEECH_PROVIDER=azure
-   AZURE_SPEECH_KEY=your_azure_speech_key
-   AZURE_SPEECH_REGION=your_region
-   ```
-
-   ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
-   SPEECH_PROVIDER=whisper
-   WHISPER_COMMAND=whisper
-   WHISPER_MODEL_DIR=.whisper-models
-   WHISPER_MODEL=turbo
-   WHISPER_LANGUAGE=en
-   WHISPER_SEGMENT_MS=4000
-   ```
-
-4. The app picks up changes immediately — no restart needed. The microphone buttons appear as soon as the config is valid.
-
-## 🎮 How to Use
-
-### 🖱️ **Main Controls**
+## Keyboard shortcuts
 
 | Action | Shortcut | Description |
-|--------|----------|-------------|
-| **Screenshot Capture** | `⌘⇧S` | Capture screen and analyze via Gemini (image understanding) |
-| **Toggle Speech** | `Alt+R` | Start/stop voice recognition (if configured) |
-| **Toggle Visibility** | `⌘⇧V` | Show/hide all windows |
-| **Toggle Interaction** | `⌘⇧I` or `Alt+A` | Enable/disable window interaction |
-| **Switch to Chat** | `⌘⇧C` | Open interactive chat window |
-| **Settings** | `⌘,` | Open settings panel |
+|---|---|---|
+| Screenshot capture | `Cmd/Ctrl + Shift + S` | Capture the screen and analyze it with Gemini |
+| Toggle speech | `Alt + R` | Start or stop voice recognition, if configured |
+| Toggle visibility | `Cmd/Ctrl + Shift + V` | Show or hide all windows |
+| Toggle interaction | `Cmd/Ctrl + Shift + I` or `Alt + A` | Enable or disable click through |
+| Open chat | `Cmd/Ctrl + Shift + C` | Open the interactive chat window |
+| Settings | `Cmd/Ctrl + ,` | Open the settings panel |
 
-### 🎯 **Workflow**
+## Project status
 
-1. **Start OpenCluely** → App appears as system process (Terminal/Activity Monitor)
-2. **Position Windows** → Drag overlay and answer windows to preferred locations
-3. **Capture Questions** → Use screenshot (⌘⇧S) or voice commands
-4. **Get AI Answers** → Instant responses in draggable answer window
-5. **Interactive Chat** → Type or speak for detailed conversations
-6. **Stay Stealth** → All operations invisible to screen recording
+OpenCluely is under active development. The core is stable and improvements ship regularly.
 
-### 🔧 **Advanced Features**
+### Done
 
-#### 🎨 **Window Management**
-- **Draggable Interface**: Click and drag any window to reposition
-- **Auto-resize**: Windows automatically adjust to content
-- **Close Button**: Click × to close answer window
-- **Always on Top**: Windows stay above all applications
+- Stealth overlay with a draggable command bar and a click through toggle
+- Hidden during screen share, with automatic hiding when a share begins
+- Screenshot capture with direct Gemini analysis, no OCR step
+- Real-time voice input that segments on natural pauses, not a blind timer
+- Utterance coalescing so one spoken question becomes one answer
+- Streamed answers that render word by word in the chat and the overlay
+- Whisper hallucination filter that drops phantom phrases on silence
+- AI response window with markdown and syntax highlighting
+- Global shortcuts for capture, visibility, interaction, chat, and settings
+- Session memory and a full chat UI
+- Language picker and a DSA skill prompt
+- Optional Azure Speech and local Whisper, with an auto hiding mic button
+- Multi-monitor and area capture support
+- Window binding and positioning
+- Settings management with disguise and stealth modes
 
-#### 🧠 **AI Intelligence**
-- **Context Awareness**: Remembers entire conversation
-- **Code Detection**: Automatically formats code blocks
-- **Language Specific**: Tailored responses for selected programming language
-- **Session Memory**: Maintains context across multiple questions
- - **Image Understanding**: DSA prompt is applied only for new image-based queries; chat messages don’t include the full prompt
- - **Multi-monitor & Area Capture**: Programmatic APIs allow targeting a display and optional rectangular crop for focused analysis
+### Planned
 
-#### 🔊 **Optional Voice Features** (Azure Speech / Local Whisper)
-- **Chunked Local Transcription**: Local Whisper transcribes short recorded segments on your machine
-- **Real-time Transcription**: Azure Speech supports live interim recognition
-- **Listening Animation**: Visual feedback during recording
-- **Interim Results**: Available with Azure Speech
-- **Auto-processing**: Instant AI responses to voice input
+- Multiple model backends alongside Gemini (OpenAI, Anthropic, local)
+- Auto typing of code snippets into editors and IDEs
+- Export of conversation history to markdown or PDF
+- Deeper stealth, including process name randomization
 
----
+## Troubleshooting
 
-<details markdown="1">
-<summary>🧩 <b> Troubleshooting</summary>
+<details>
+<summary>Setup issues</summary>
 
-### Setup Issues
-
-- **setup.sh not found or won't run**
-  - Make sure you're in the OpenCluely directory: `cd OpenCluely`
-  - Make the script executable: `chmod +x setup.sh`
-  - On Windows, use Git Bash (comes with Git for Windows)
-
-- **Setup script stops with exit code 130**
-  - This means you pressed Ctrl+C. Just run `./setup.sh` again
-
-- **Node or npm not found**
-  - Install Node.js 18+ from [nodejs.org](https://nodejs.org/)
-  - Restart your terminal and try again
-
-### App Issues
-
-- **Electron won't start or shows blank window (Linux)**
-  - Try: `npm run dev`
-  - Ensure X11/XWayland is available if running in headless environments
-
-- **macOS screen capture doesn't work**
-  - Grant "Screen Recording" permission in System Settings → Privacy & Security → Screen Recording
-  - Quit and relaunch the app after granting permission
-
-- **Windows SmartScreen blocks the app**
-  - Click "More info" → "Run anyway" or use `npm start` during development
-
-- **Microphone/voice not working**
-  - Voice is optional - ignore related warnings if you don't need it
-  - Azure mode: add valid Azure keys to `.env`
-  - Whisper mode: install `openai-whisper`, `ffmpeg`, and `sox`, then set `SPEECH_PROVIDER=whisper`
+- **setup.sh will not run.** Make sure you are in the project folder (`cd OpenCluely`) and that the script is executable (`chmod +x setup.sh`). On Windows, use Git Bash.
+- **Setup stops with exit code 130.** That means Ctrl+C was pressed. Run `./setup.sh` again.
+- **Node or npm not found.** Install Node.js 18 or newer from [nodejs.org](https://nodejs.org/), restart the terminal, and retry.
 
 </details>
 
-<details markdown="2">
-<summary>⚖️ Legal & Ethics</summary>
+<details>
+<summary>App issues</summary>
 
-### 📋 **Disclaimer**
-
-OpenCluely is provided for educational and research purposes. Users are responsible for:
-- Complying with interview guidelines
-- Respecting company policies
-- Understanding legal implications
-- Using ethically and responsibly
-
-### 🔒 **Privacy**
-
-- No data collection or telemetry
-- All processing happens locally
-- API communications are encrypted
-- Session data stays on your device
-
-
-### 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+- **Electron will not start or shows a blank window on Linux.** Try `npm run dev`, and make sure X11 or XWayland is available in headless setups.
+- **macOS screen capture does not work.** Grant Screen Recording permission under System Settings, Privacy and Security, then relaunch the app.
+- **Windows SmartScreen blocks the app.** Click More info, then Run anyway, or use `npm start` during development.
+- **Microphone or voice not working.** Voice is optional. For Azure, add valid keys to `.env`. For Whisper, install `openai-whisper`, `ffmpeg`, and `sox`, then set `SPEECH_PROVIDER=whisper`.
 
 </details>
 
+## Privacy and ethics
 
-</b>
+OpenCluely collects no data and sends no telemetry. Processing happens locally, and your session stays on your device. Requests to the AI provider are encrypted in transit.
 
-##  Website
+The app is built for learning and practice. You are responsible for following the rules of any interview you take and the policies of the companies involved.
 
-🌐 **[opencluely.techycsr.dev](https://opencluely.techycsr.dev)**
+## License
 
----
+Released under the MIT License. See [LICENSE](LICENSE) for details.
 
-## �� Acknowledgments
+## Acknowledgments
 
-- **Google Gemini**: Powering AI intelligence
-- **Azure Speech / Whisper**: Optional voice recognition
-- **Electron**: Cross-platform desktop framework
-- **Community**: Amazing contributors and feedback
+- Google Gemini for the AI reasoning
+- Azure Speech and OpenAI Whisper for optional voice input
+- Electron for the cross platform desktop runtime
+- [Vysper by varun-singhh](https://github.com/varun-singhh/Vysper) for UI and structure inspiration
 
-- **Vysper**: UI and code structure inspiration — see [Vysper by varun-singhh](https://github.com/varun-singhh/Vysper)
-
----
 <div align="center">
 
-
-
-⭐ **Star this repo** if OpenCluely helped you ace your interviews or you vibed with it!
-
-**Made with ❤️ by [TechyCSR](https://techycsr.dev)**
-
+Built by [TechyCSR](https://techycsr.dev). If OpenCluely helped you, consider starring the repo.
 
 </div>
