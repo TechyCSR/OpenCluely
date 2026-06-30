@@ -21,12 +21,14 @@
     menuBtn.addEventListener('click', function () {
       var open = nav.classList.toggle('open');
       menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      menuBtn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
       if (mobileMenu) { mobileMenu.hidden = !open; }
     });
     mobileMenu.querySelectorAll('a').forEach(function (a) {
       a.addEventListener('click', function () {
         nav.classList.remove('open');
         menuBtn.setAttribute('aria-expanded', 'false');
+        menuBtn.setAttribute('aria-label', 'Open menu');
         mobileMenu.hidden = true;
       });
     });
