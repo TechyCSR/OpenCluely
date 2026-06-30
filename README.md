@@ -215,6 +215,6 @@ Released under the MIT License. See [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-Built by [TechyCSR](https://techycsr.dev). If OpenCluely helped you, consider starring the repo.
+Built by [TechyCSR](https://techycsr.dev). If OpenCluely helped you, consider giving it a star ⭐
 
 </div>

@@ -97,6 +97,7 @@ img, video, svg { display: block; max-width: 100%; }
 }
 .ghost-pill:hover { background: var(--surface-2); border-color: #3a3a3a; }
 .ghost-pill .ic { font-size: 1.05rem; }
+.ghost-pill .star-ic { color: #f5c518; font-size: 0.98rem; }
 
 .menu-btn {
   display: none; background: var(--surface); color: var(--text);
