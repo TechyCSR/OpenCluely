@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: #000000;
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    position: relative;
+    overflow: hidden;
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(circle at 30% 40%, #000 0%, transparent 75%);
+    -webkit-mask-image: radial-gradient(circle at 30% 40%, #000 0%, transparent 75%);
+  }
+  .glow { position: absolute; width: 700px; height: 700px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 60%);
+    top: -200px; right: -150px; }
+  .wrap { position: relative; padding: 84px 88px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+  .top { display: flex; align-items: center; gap: 22px; }
+  .mark { width: 76px; height: 76px; border-radius: 18px; background: #0c0c0c; border: 1px solid rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; }
+  .mark svg { display: block; }
+  .brand { font-size: 34px; font-weight: 800; letter-spacing: -1px; }
+  .mid { max-width: 880px; }
+  .tag { display: inline-flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 100px; padding: 9px 18px; font-size: 19px; color: #cfcfcf; margin-bottom: 30px; }
+  .tag .pip { width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px #fff; }
+  h1 { font-size: 78px; line-height: 1.04; letter-spacing: -3px; font-weight: 850;
+    background: linear-gradient(180deg, #ffffff 0%, #9a9a9a 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .sub { margin-top: 26px; font-size: 27px; color: #9a9a9a; letter-spacing: -0.3px; max-width: 760px; }
+  .bottom { display: flex; align-items: center; gap: 18px; }
+  .chip { display: inline-flex; align-items: center; gap: 11px; font-size: 21px; color: #c8c8c8;
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 13px 22px; background: rgba(255,255,255,0.02); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; }
+  .url { margin-left: auto; font-size: 22px; color: #777; font-family: "Courier New", monospace; }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="glow"></div>
+  <div class="wrap">
+    <div class="top">
+      <div class="mark">
+        <svg width="46" height="46" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="17" fill="none" stroke="#fff" stroke-width="5"/>
+          <circle cx="32" cy="32" r="5.5" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="brand">OpenCluely</div>
+    </div>
+
+    <div class="mid">
+      <div class="tag"><span class="pip"></span> Free and open source</div>
+      <h1>The invisible AI<br/>interview copilot</h1>
+      <div class="sub">Real-time answers on a stealth overlay that screen sharing cannot see. Voice and screenshots in, instant help out.</div>
+    </div>
+
+    <div class="bottom">
+      <span class="chip"><span class="dot"></span> Invisible to screen share</span>
+      <span class="chip"><span class="dot"></span> Voice and vision</span>
+      <span class="chip"><span class="dot"></span> Cross platform</span>
+      <span class="url">opencluely.techycsr.dev</span>
+    </div>
+  </div>
+</body>
+</html>
