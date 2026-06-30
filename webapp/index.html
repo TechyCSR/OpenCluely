@@ -1,240 +1,400 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenCluely — Invisible AI Interview Copilot</title>
-    <link rel="stylesheet" href="style.css">
-    <!-- Font Awesome for sharp minimal icons -->
-    <link rel="stylesheet" href="../assests/vendor/fontawesome/all.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#000000" />
+
+  <title>OpenCluely - Invisible AI Interview Copilot</title>
+  <meta name="description" content="OpenCluely is a free, open-source desktop app that gives you real-time AI help during technical interviews. A stealth overlay that screen sharing cannot see, with voice and screenshot input and instant streamed answers." />
+  <meta name="keywords" content="OpenCluely, AI interview assistant, interview copilot, coding interview helper, stealth overlay, screen share invisible, Gemini, Whisper, open source" />
+  <meta name="author" content="TechyCSR" />
+  <link rel="canonical" href="https://opencluely.techycsr.dev/" />
+  <meta name="robots" content="index, follow" />
+
+  <!-- Icons -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="favicon.svg" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="OpenCluely" />
+  <meta property="og:title" content="OpenCluely - Invisible AI Interview Copilot" />
+  <meta property="og:description" content="Real-time AI help during technical interviews on a stealth overlay that screen sharing cannot see. Voice and screenshots in, instant answers out. Free and open source." />
+  <meta property="og:url" content="https://opencluely.techycsr.dev/" />
+  <meta property="og:image" content="https://opencluely.techycsr.dev/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="OpenCluely, the invisible AI interview copilot" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="OpenCluely - Invisible AI Interview Copilot" />
+  <meta name="twitter:description" content="Real-time AI help during technical interviews on a stealth overlay that screen sharing cannot see. Free and open source." />
+  <meta name="twitter:image" content="https://opencluely.techycsr.dev/og-image.png" />
+
+  <link rel="preload" href="style.css" as="style" />
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Structured data: software application -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "OpenCluely",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Windows, macOS, Linux",
+    "description": "A free, open-source desktop app that provides real-time AI assistance during technical interviews through an invisible overlay.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "url": "https://opencluely.techycsr.dev/",
+    "author": { "@type": "Person", "name": "TechyCSR", "url": "https://techycsr.dev" },
+    "license": "https://opensource.org/licenses/MIT"
+  }
+  </script>
 </head>
 <body>
-    <!-- Grid Background Decoration -->
-    <div class="grid-bg"></div>
+  <a class="skip-link" href="#main">Skip to content</a>
 
-    <!-- Navigation -->
-    <nav class="nav">
-        <div class="nav-container">
-            <a href="#" class="logo">
-                <span class="logo-icon"><i class="fas fa-brain"></i></span> OpenCluely
-            </a>
-            <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#demo">Demo</a>
-                <a href="#download">Download</a>
-                <a href="#install">Install</a>
-                <a href="https://opencluely.techycsr.dev" target="_blank">Website</a>
-            </div>
-            <div class="nav-socials">
-                <a href="https://github.com/TechyCSR/OpenCluely" target="_blank" title="GitHub" class="nav-icon-link">
-                    <i class="fab fa-github"></i>
-                </a>
-                <a href="https://opencluely.techycsr.dev" target="_blank" title="Website" class="nav-icon-link">
-                    <i class="fas fa-globe"></i>
-                </a>
-                <a href="https://techycsr.dev" target="_blank" title="Developer" class="nav-icon-link">
-                    <i class="fas fa-globe"></i>
-                </a>
-            </div>
-        </div>
-    </nav>
+  <!-- Inline icon sprite (kept off-screen, referenced with <use>) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5Z"/></symbol>
+      <symbol id="i-windows" viewBox="0 0 24 24"><path fill="currentColor" d="M3 5.5 10.4 4.5v7.1H3V5.5Zm0 13 7.4 1V12.4H3v6.1Zm8.3 1.2L21 21V12.4h-9.7v7.3Zm0-15.4v7.2H21V3l-9.7 1.3Z"/></symbol>
+      <symbol id="i-apple" viewBox="0 0 24 24"><path fill="currentColor" d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.9-1.4-.1-2.8.9-3.5.9-.7 0-1.9-.8-3.1-.8-1.6 0-3.1.9-3.9 2.4-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.7 2.5 3 2.4 1.2 0 1.6-.8 3.1-.8 1.4 0 1.8.8 3.1.8 1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.6-1-2.6-3.8ZM14.1 5.4c.7-.8 1.1-2 1-3.1-1 0-2.2.6-2.9 1.4-.6.7-1.2 1.9-1 3 1.1.1 2.2-.5 2.9-1.3Z"/></symbol>
+      <symbol id="i-linux" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2c-2.2 0-3.6 1.9-3.6 4.4 0 1.7.5 2.5.5 3.8 0 1.1-.9 1.9-1.7 3.3-.8 1.4-1.9 3-2.4 4.4-.3.9-.2 1.7.2 2.1.4.4 1 .4 1.6.2.7-.3 1.2-.2 1.6.1.4.3.8.7 1.7.8 1 .2 2.6.2 3.8 0 .9-.1 1.3-.5 1.7-.8.4-.3.9-.4 1.6-.1.6.2 1.2.2 1.6-.2.4-.4.5-1.2.2-2.1-.5-1.4-1.6-3-2.4-4.4-.8-1.4-1.7-2.2-1.7-3.3 0-1.3.5-2.1.5-3.8C15.6 3.9 14.2 2 12 2Zm-1.4 4.1c.4 0 .7.4.7.9s-.3.9-.7.9-.7-.4-.7-.9.3-.9.7-.9Zm2.8 0c.4 0 .7.4.7.9s-.3.9-.7.9-.7-.4-.7-.9.3-.9.7-.9Z"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.4L11 13.6V4a1 1 0 0 1 1-1Zm-7 15a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"/></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path fill="currentColor" d="M2.3 3.7 3.7 2.3l18 18-1.4 1.4-3-3A11 11 0 0 1 12 20C6.5 20 2.7 16 1 12a17 17 0 0 1 4.2-5.5L2.3 3.7Zm6.4 6.4-1.5-1.5A7 7 0 0 0 6.6 12c1.4 3 4.4 6 9.4 4.9l-1.7-1.7a3 3 0 0 1-3.9-3.9l-1.7-1.2ZM12 6c4.4 0 7.6 3.2 9.4 6a17 17 0 0 1-2 2.8l-2.9-2.9A5 5 0 0 0 9.1 6.6 9 9 0 0 1 12 6Z"/></symbol>
+      <symbol id="i-mic" viewBox="0 0 24 24"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a1 1 0 1 1 2 0 7 7 0 0 1-6 6.9V21h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-3.1A7 7 0 0 1 5 11a1 1 0 1 1 2 0 5 5 0 0 0 10 0Z"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><path fill="currentColor" d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9Zm3 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></symbol>
+      <symbol id="i-cpu" viewBox="0 0 24 24"><path fill="currentColor" d="M9 2v2H7a3 3 0 0 0-3 3v2H2v2h2v2H2v2h2a3 3 0 0 0 3 3h2v2h2v-2h2v2h2v-2a3 3 0 0 0 3-3h2v-2h-2v-2h2v-2h-2V7a3 3 0 0 0-3-3h-2V2h-2v2h-2V2H9Zm0 6h6v8H9V8Z"/></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></symbol>
+      <symbol id="i-brain" viewBox="0 0 24 24"><path fill="currentColor" d="M8 3a3 3 0 0 0-3 3 3 3 0 0 0-1.8 5.4A3 3 0 0 0 5 17a3 3 0 0 0 5 2.2V5a2 2 0 0 0-2-2Zm8 0a2 2 0 0 0-2 2v14.2A3 3 0 0 0 19 17a3 3 0 0 0 1.8-5.6A3 3 0 0 0 19 6a3 3 0 0 0-3-3Z"/></symbol>
+      <symbol id="i-memory" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a9 9 0 0 0-9 9v4a3 3 0 0 0 3 3h1v-8H6a6 6 0 0 1 12 0h-1v8h1a3 3 0 0 0 3-3v-4a9 9 0 0 0-9-9Z"/></symbol>
+      <symbol id="i-stream" viewBox="0 0 24 24"><path fill="currentColor" d="M4 5h16v2H4V5Zm0 6h10v2H4v-2Zm0 6h14v2H4v-2Z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path fill="currentColor" d="M9.5 17.6 4 12.1l1.4-1.4 4.1 4.1 9.1-9.1L20 7.1 9.5 17.6Z"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="currentColor" d="M5 12h12.2l-4.6-4.6L14 6l7 7-7 7-1.4-1.4 4.6-4.6H5v-2Z"/></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24"><path fill="currentColor" d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1L12 2Z"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path fill="currentColor" d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path fill="currentColor" d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4 6.4 5Z"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 6h-2.8a15 15 0 0 0-1.3-3.4A8 8 0 0 1 18.9 8ZM12 4c.8 1 1.5 2.4 1.9 4h-3.8c.4-1.6 1.1-3 1.9-4ZM4.3 14a8 8 0 0 1 0-4h3.2a17 17 0 0 0 0 4H4.3Zm.8 2h2.8c.3 1.2.8 2.4 1.3 3.4A8 8 0 0 1 5.1 16Zm2.8-8H5.1a8 8 0 0 1 4.1-3.4C8.7 5.6 8.2 6.8 7.9 8ZM12 20c-.8-1-1.5-2.4-1.9-4h3.8c-.4 1.6-1.1 3-1.9 4Zm2.4-6H9.6a15 15 0 0 1 0-4h4.8a15 15 0 0 1 0 4Zm.5 5.4c.5-1 1-2.2 1.3-3.4h2.8a8 8 0 0 1-4.1 3.4ZM16.5 14a17 17 0 0 0 0-4h3.2a8 8 0 0 1 0 4h-3.2Z"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Zm-1 13-3.5-3.5L9 10l2 2 4-4 1.5 1.5L11 15Z"/></symbol>
+    </defs>
+  </svg>
 
-    <!-- Hero Section with 3D Mockup -->
+  <!-- Navigation -->
+  <header class="nav" id="nav">
+    <div class="nav-inner">
+      <a href="#" class="brand" aria-label="OpenCluely home">
+        <span class="brand-mark">
+          <svg viewBox="0 0 64 64" width="22" height="22" aria-hidden="true"><circle cx="32" cy="32" r="17" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="32" cy="32" r="6" fill="currentColor"/></svg>
+        </span>
+        OpenCluely
+      </a>
+
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#download">Download</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+
+      <div class="nav-right">
+        <a class="ghost-pill" href="https://github.com/TechyCSR/OpenCluely" target="_blank" rel="noopener" aria-label="OpenCluely on GitHub">
+          <svg class="ic"><use href="#i-github"/></svg>
+          <span id="star-count">Star</span>
+        </a>
+        <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-expanded="false">
+          <svg class="ic"><use href="#i-menu"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile menu -->
+    <div class="mobile-menu" id="mobile-menu" hidden>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#download">Download</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/TechyCSR/OpenCluely" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
     <section class="hero">
-        <div class="hero-container">
-            <div class="hero-text">
-                <div class="status-tag">
-                    <span class="pulse-dot"></span> Under Active Development
-                </div>
-                <h1>Invisible AI Interview Copilot</h1>
-                <p class="hero-subtitle">
-                    A revolutionary desktop application providing real-time, completely stealth assistance during technical rounds. 
-                    100% free and open-source.
-                </p>
-                <div class="hero-actions">
-                    <a href="https://github.com/TechyCSR/OpenCluely" target="_blank" class="btn btn-white">
-                        <i class="fab fa-github"></i> Clone & Star Repo
-                    </a>
-                    <a href="#install" class="btn btn-outline">Quick Setup</a>
-                </div>
-                <div class="hero-badges">
-                    <span><i class="fas fa-shield-halved"></i> 100% Invisible</span>
-                    <span><i class="fas fa-microchip"></i> Gemini Powered</span>
-                    <span><i class="fas fa-desktop"></i> Cross-Platform</span>
-                </div>
-            </div>
-
-            <!-- 3D Web App Mockup -->
-            <div class="hero-3d-scene">
-                <div class="interactive-card-3d" id="tilt-card">
-                    <!-- Glassmorphic Desktop Container Mock -->
-                    <div class="mock-desktop">
-                        <div class="mock-header">
-                            <span class="dot red"></span>
-                            <span class="dot yellow"></span>
-                            <span class="dot green"></span>
-                            <span class="mock-title">System Console</span>
-                        </div>
-                        <div class="mock-body">
-                            <!-- Overlay Bar mockup -->
-                            <div class="mock-overlay-bar">
-                                <span class="overlay-item"><i class="fas fa-camera"></i></span>
-                                <span class="overlay-item active"><i class="fas fa-microphone"></i> Rec</span>
-                                <span class="overlay-item">DSA <i class="fas fa-chevron-down"></i></span>
-                                <span class="overlay-item">C++ <i class="fas fa-chevron-down"></i></span>
-                            </div>
-
-                            <!-- Answer window mockup -->
-                            <div class="mock-answer-window">
-                                <div class="answer-header">
-                                    <span><i class="fas fa-brain"></i> OpenCluely Response</span>
-                                    <span class="close-btn">&times;</span>
-                                </div>
-                                <div class="answer-content">
-                                    <p class="code-comment">// Finding the optimal solution...</p>
-                                    <pre><code><span class="keyword">int</span> <span class="function">findDuplicate</span>(<span class="type">vector</span>&lt;<span class="keyword">int</span>&gt;&amp; nums) {
-    <span class="keyword">int</span> tortoise = nums[<span class="number">0</span>];
-    <span class="keyword">int</span>   hare = nums[<span class="number">0</span>];
-    ...
-}</code></pre>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <div class="hero-inner">
+        <div class="hero-text">
+          <span class="status-tag"><span class="pulse-dot"></span> Free and open source</span>
+          <h1>The invisible AI interview copilot</h1>
+          <p class="hero-sub">
+            OpenCluely puts a stealth overlay on your screen that meeting software cannot see.
+            Ask by voice or screenshot and get clear, streamed answers in real time, right when you need them.
+          </p>
+          <div class="hero-actions">
+            <a href="#download" class="btn btn-solid">
+              <svg class="ic"><use href="#i-download"/></svg>
+              <span id="hero-dl-label">Download</span>
+            </a>
+            <a href="https://github.com/TechyCSR/OpenCluely" target="_blank" rel="noopener" class="btn btn-line">
+              <svg class="ic"><use href="#i-github"/></svg>
+              View source
+            </a>
+          </div>
+          <ul class="trust-row">
+            <li><svg class="ic"><use href="#i-eye-off"/></svg> Invisible to screen share</li>
+            <li><svg class="ic"><use href="#i-bolt"/></svg> Gemini powered</li>
+            <li><svg class="ic"><use href="#i-globe"/></svg> Windows, macOS, Linux</li>
+          </ul>
         </div>
+
+        <!-- Authentic overlay mock -->
+        <div class="hero-stage">
+          <div class="tilt" id="tilt">
+            <!-- Real command bar replica -->
+            <div class="cmd-bar" role="img" aria-label="OpenCluely floating command bar">
+              <span class="cmd-item"><svg class="ic"><use href="#i-camera"/></svg><kbd>Cmd Shift S</kbd></span>
+              <span class="cmd-sep"></span>
+              <span class="cmd-item recording"><svg class="ic"><use href="#i-mic"/></svg></span>
+              <span class="cmd-sep"></span>
+              <span class="cmd-item"><svg class="ic"><use href="#i-brain"/></svg><b>DSA</b></span>
+              <span class="cmd-sep"></span>
+              <span class="cmd-item"><svg class="ic"><use href="#i-cpu"/></svg><b>C++</b></span>
+              <span class="cmd-sep"></span>
+              <span class="status-dot"></span>
+            </div>
+
+            <!-- Streaming answer window replica -->
+            <div class="answer-win" aria-hidden="true">
+              <div class="answer-head">
+                <span class="answer-title">
+                  <svg class="ic"><use href="#i-brain"/></svg> OpenCluely
+                </span>
+                <span class="win-dots"><i></i><i></i><i></i></span>
+              </div>
+              <div class="answer-body">
+                <p class="ask">"Find the duplicate number in an array of n plus one integers."</p>
+                <p class="muted">Floyd's cycle detection runs in O(n) time and O(1) space.</p>
+                <pre class="code"><code id="type-code"></code><span class="caret"></span></pre>
+              </div>
+            </div>
+          </div>
+          <div class="stage-note">A real look at the overlay. Nothing here is captured by screen recording.</div>
+        </div>
+      </div>
     </section>
 
-    <!-- Demo Section -->
-    <section id="demo" class="section">
-        <div class="container">
-            <h2 class="section-title"><i class="fas fa-clapperboard"></i> Witness Stealth in Action</h2>
-            <p class="section-subtitle">See how OpenCluely operates fully transparently in real-time desktop capture.</p>
-            <div class="video-wrapper">
-                <div class="video-container">
-                    <video controls muted autoplay loop>
-                        <source src="https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                </div>
-            </div>
-        </div>
+    <!-- Logos / works-with strip -->
+    <section class="strip">
+      <span>Stays hidden on</span>
+      <div class="strip-items">
+        <span>Zoom</span><span>Google Meet</span><span>Microsoft Teams</span><span>Discord</span><span>OBS</span>
+      </div>
     </section>
 
-    <!-- Download Section -->
-    <section id="download" class="section section-border">
-        <div class="container">
-            <h2 class="section-title"><i class="fas fa-download"></i> Download Latest Release</h2>
-            <p class="section-subtitle">Pre-built installers for every platform — always the latest version.</p>
-
-            <!-- Loading state -->
-            <div id="download-loading" class="download-loading">
-                <div class="loading-spinner"></div>
-                <p>Fetching latest release…</p>
-            </div>
-
-            <!-- Error fallback -->
-            <div id="download-error" class="download-error hidden">
-                <p>Couldn't load release info. <a href="https://github.com/TechyCSR/OpenCluely/releases/latest" target="_blank" class="text-link">Browse releases on GitHub →</a></p>
-            </div>
-
-            <!-- Release version banner -->
-            <div id="download-version" class="download-version hidden"></div>
-
-            <!-- Platform cards populated by JS -->
-            <div id="download-grid" class="download-grid hidden"></div>
-
-            <div id="download-footer" class="download-footer hidden">
-                <a href="https://github.com/TechyCSR/OpenCluely/releases" target="_blank" class="btn btn-outline">
-                    <i class="fas fa-list"></i> All Releases
-                </a>
-                <span class="checksum-note"><i class="fas fa-shield-halved"></i> SHA-256 checksums included in every release</span>
-            </div>
+    <!-- Features -->
+    <section id="features" class="section bordered">
+      <div class="container">
+        <h2 class="section-title">Everything you need, nothing you do not</h2>
+        <p class="section-sub">Built to be fast, quiet, and genuinely helpful under pressure.</p>
+        <div class="grid-3">
+          <article class="card">
+            <span class="card-ic"><svg class="ic"><use href="#i-eye-off"/></svg></span>
+            <h3>Invisible overlay</h3>
+            <p>Windows stay out of Zoom, Meet, Teams, Discord, and OBS captures. You see the answer, the call does not.</p>
+          </article>
+          <article class="card">
+            <span class="card-ic"><svg class="ic"><use href="#i-mic"/></svg></span>
+            <h3>Real-time voice</h3>
+            <p>Speech is split on natural pauses, not a blind timer, so a single spoken question stays a single question.</p>
+          </article>
+          <article class="card">
+            <span class="card-ic"><svg class="ic"><use href="#i-stream"/></svg></span>
+            <h3>Streamed answers</h3>
+            <p>Replies appear word by word as the model thinks, in both the chat and the floating answer window.</p>
+          </article>
+          <article class="card">
+            <span class="card-ic"><svg class="ic"><use href="#i-camera"/></svg></span>
+            <h3>Direct image analysis</h3>
+            <p>Screenshots go straight to Gemini for visual reasoning. No slow OCR step in the middle.</p>
+          </article>
+          <article class="card">
+            <span class="card-ic"><svg class="ic"><use href="#i-memory"/></svg></span>
+            <h3>Session memory</h3>
+            <p>It remembers the whole conversation, so follow-ups, edge cases, and optimizations all keep context.</p>
+          </article>
+          <article class="card">
+            <span class="card-ic"><svg class="ic"><use href="#i-shield"/></svg></span>
+            <h3>Process disguise</h3>
+            <p>Runs under ordinary system names and ships with no telemetry. Everything stays on your machine.</p>
+          </article>
         </div>
+      </div>
     </section>
 
-    <!-- Features Section -->
-    <section id="features" class="section section-border">
-        <div class="container">
-            <h2 class="section-title"><i class="fas fa-shield-halved"></i> Built For Unmatched Stealth</h2>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-ghost"></i></div>
-                    <h3>100% Invisible Mode</h3>
-                    <p>Completely invisible to video conferencing apps like Zoom, Teams, Meet, and Discord. Bypasses recording and streaming software with programmatic transparent screen overlays.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-bolt"></i></div>
-                    <h3>Direct Image Analysis</h3>
-                    <p>Skip slow OCR models. OpenCluely passes desktop viewport crops and screenshots directly to Google Gemini for real-time visual reasoning and problem-solving.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-microphone-lines"></i></div>
-                    <h3>Seamless Voice Commands</h3>
-                    <p>Integrate with Azure Speech services or local OpenAI Whisper models to automatically record, transcribe, and respond to verbal interviewer questions on the fly.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-brain"></i></div>
-                    <h3>Smart Context Memory</h3>
-                    <p>Maintains complete conversational history so you can ask follow-up questions, debug edge cases, or ask for complexity optimizations mid-session.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-window-restore"></i></div>
-                    <h3>Glass UI & Custom Binding</h3>
-                    <p>A beautiful, minimalistic glassmorphic interface that acts as a click-through or draggable widget. Easily adapt, resize, or close windows instantly.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-user-secret"></i></div>
-                    <h3>Process Disguise</h3>
-                    <p>Renders under typical safe system names (like Terminal, Settings, or System Tasks) to maintain optimal security against human inspection of background processes.</p>
-                </div>
-            </div>
+    <!-- How it works -->
+    <section id="how" class="section bordered">
+      <div class="container">
+        <h2 class="section-title">Three steps, then you forget it is there</h2>
+        <p class="section-sub">Set it up once and let it sit quietly in the corner.</p>
+        <div class="steps">
+          <div class="step">
+            <span class="step-n">01</span>
+            <h3>Ask</h3>
+            <p>Speak the question or press the screenshot shortcut. The mic listens for natural pauses on its own.</p>
+          </div>
+          <div class="step">
+            <span class="step-n">02</span>
+            <h3>Reason</h3>
+            <p>Gemini reads the audio or image with full conversation context and works toward a precise answer.</p>
+          </div>
+          <div class="step">
+            <span class="step-n">03</span>
+            <h3>Answer</h3>
+            <p>The response streams into the overlay in real time, with clean code blocks and syntax highlighting.</p>
+          </div>
         </div>
+      </div>
     </section>
 
-    <!-- Installation / Quick Start -->
-    <section id="install" class="section section-border">
-        <div class="container">
-            <h2 class="section-title"><i class="fas fa-rocket"></i> Fast Installation</h2>
-            <p class="section-subtitle">Get up and running in less than 2 minutes using our singlesetup command pipeline.</p>
-            <div class="steps-container">
-                <div class="step-card">
-                    <div class="step-num">01</div>
-                    <h3>Clone & Enter</h3>
-                    <div class="terminal-block">
-                        <code>git clone https://github.com/TechyCSR/OpenCluely.git<br>cd OpenCluely</code>
-                    </div>
-                </div>
-                <div class="step-card">
-                    <div class="step-num">02</div>
-                    <h3>Gemini Credentials</h3>
-                    <p>Grab a free API Key from <a href="https://aistudio.google.com/" target="_blank" class="text-link">Google AI Studio</a> to power the intelligence.</p>
-                </div>
-                <div class="step-card">
-                    <div class="step-num">03</div>
-                    <h3>Bootstrap Script</h3>
-                    <div class="terminal-block">
-                        <code>./setup.sh</code>
-                    </div>
-                    <p class="step-tip">This installs node modules, setups whisper environment, auto-configures settings & launches the application!</p>
-                </div>
-            </div>
+    <!-- Download -->
+    <section id="download" class="section bordered">
+      <div class="container">
+        <h2 class="section-title">Download the latest release</h2>
+        <p class="section-sub">Pre-built installers for every platform. These links always point at the newest version.</p>
+
+        <div id="dl-recommend" class="dl-recommend hidden"></div>
+
+        <div id="dl-loading" class="dl-loading">
+          <span class="spinner"></span>
+          <span>Fetching the latest release from GitHub</span>
         </div>
+
+        <div id="dl-error" class="dl-error hidden">
+          We could not reach GitHub right now.
+          <a class="ulink" href="https://github.com/TechyCSR/OpenCluely/releases/latest" target="_blank" rel="noopener">Open the releases page</a>
+        </div>
+
+        <div id="dl-version" class="dl-version hidden"></div>
+        <div id="dl-grid" class="dl-grid hidden"></div>
+
+        <div id="dl-foot" class="dl-foot hidden">
+          <a class="btn btn-line" href="https://github.com/TechyCSR/OpenCluely/releases" target="_blank" rel="noopener">All releases</a>
+          <span class="dl-foot-note"><svg class="ic"><use href="#i-shield"/></svg> Every build ships with SHA-256 checksums</span>
+        </div>
+      </div>
     </section>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container footer-content">
-            <div class="footer-logo"><i class="fas fa-brain"></i> OpenCluely</div>
-            <p>Designed for absolute privacy. All operations execute directly on your local device.</p>
-            <div class="footer-bottom">
-                <span>&copy; 2026 OpenCluely. MIT License.</span>
-                <span>Created with <i class="fas fa-heart" style="color: #ef4444;"></i> by <a href="https://techycsr.dev" target="_blank">TechyCSR</a></span>
-            </div>
+    <!-- Demo -->
+    <section id="demo" class="section bordered">
+      <div class="container">
+        <h2 class="section-title">See it stay hidden</h2>
+        <p class="section-sub">A short capture of the overlay running live during a screen share.</p>
+        <div class="video-frame">
+          <video controls muted loop playsinline preload="none" poster="og-image.png">
+            <source src="https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
-    </footer>
+      </div>
+    </section>
 
-    <script src="script.js"></script>
+    <!-- FAQ -->
+    <section id="faq" class="section bordered">
+      <div class="container narrow">
+        <h2 class="section-title">Questions, answered</h2>
+        <p class="section-sub">The things people usually want to know before trying it.</p>
+        <div class="faq">
+          <details>
+            <summary>Is OpenCluely really invisible during screen sharing?<svg class="ic chev"><use href="#i-arrow"/></svg></summary>
+            <p>Yes. The overlay windows are excluded from capture in tools like Zoom, Google Meet, Microsoft Teams, Discord, and OBS. When a screen share starts, the app can also hide every window on its own. You still see the answers on your physical display.</p>
+          </details>
+          <details>
+            <summary>Do I need an API key?<svg class="ic chev"><use href="#i-arrow"/></svg></summary>
+            <p>You need a free Google Gemini API key for the AI features. On first launch the app opens its Settings window and walks you through adding it. You can paste it in the UI or edit the .env file directly.</p>
+          </details>
+          <details>
+            <summary>Is voice input required?<svg class="ic chev"><use href="#i-arrow"/></svg></summary>
+            <p>No. Voice is optional. You can use screenshots and the chat on their own. If you want speech, pick either local Whisper for offline transcription or Azure Speech. When no provider is set up, the mic button hides itself.</p>
+          </details>
+          <details>
+            <summary>Which platforms are supported?<svg class="ic chev"><use href="#i-arrow"/></svg></summary>
+            <p>Windows, macOS on both Apple Silicon and Intel, and Linux through .deb and AppImage builds. Every release is built automatically across all three on GitHub Actions.</p>
+          </details>
+          <details>
+            <summary>Is my data collected?<svg class="ic chev"><use href="#i-arrow"/></svg></summary>
+            <p>No telemetry and no data collection. Processing happens locally and your session stays on your device. Only the requests you send to the AI provider leave your machine, encrypted in transit.</p>
+          </details>
+          <details>
+            <summary>Is it free?<svg class="ic chev"><use href="#i-arrow"/></svg></summary>
+            <p>Yes. OpenCluely is open source under the MIT license. You only pay for whatever AI usage your own Gemini key incurs, which has a free tier.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section id="install" class="section bordered">
+      <div class="container narrow">
+        <h2 class="section-title">Prefer to build it yourself?</h2>
+        <p class="section-sub">Three commands and the setup script handles the rest.</p>
+        <ol class="install-list">
+          <li>
+            <span class="num">1</span>
+            <div>
+              <h3>Clone the repository</h3>
+              <pre class="term"><code>git clone https://github.com/TechyCSR/OpenCluely.git
+cd OpenCluely</code></pre>
+            </div>
+          </li>
+          <li>
+            <span class="num">2</span>
+            <div>
+              <h3>Run the setup script</h3>
+              <pre class="term"><code>./setup.sh</code></pre>
+              <p class="hint">It installs dependencies, creates your .env, sets up local Whisper, and launches the app.</p>
+            </div>
+          </li>
+          <li>
+            <span class="num">3</span>
+            <div>
+              <h3>Add your Gemini key</h3>
+              <p class="hint">On first launch the Settings window opens automatically. Get a free key from <a class="ulink" href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a> and paste it in.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-top">
+        <a href="#" class="brand">
+          <span class="brand-mark">
+            <svg viewBox="0 0 64 64" width="20" height="20" aria-hidden="true"><circle cx="32" cy="32" r="17" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="32" cy="32" r="6" fill="currentColor"/></svg>
+          </span>
+          OpenCluely
+        </a>
+        <nav class="footer-links" aria-label="Footer">
+          <a href="#features">Features</a>
+          <a href="#download">Download</a>
+          <a href="#faq">FAQ</a>
+          <a href="https://github.com/TechyCSR/OpenCluely" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://techycsr.dev" target="_blank" rel="noopener">Developer</a>
+        </nav>
+      </div>
+      <p class="footer-note">
+        Built for privacy. All processing runs locally on your device.
+        OpenCluely is intended for learning and practice. Please follow the rules of any interview you take.
+      </p>
+      <div class="footer-bottom">
+        <span>MIT License. Copyright 2026 OpenCluely.</span>
+        <span>Made by <a class="ulink" href="https://techycsr.dev" target="_blank" rel="noopener">TechyCSR</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js" defer></script>
 </body>
 </html>
