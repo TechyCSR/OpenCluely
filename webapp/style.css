@@ -324,6 +324,7 @@ img, video, svg { display: block; max-width: 100%; }
 /* ---------- Install ---------- */
 .install-list { list-style: none; display: flex; flex-direction: column; gap: 16px; }
 .install-list li { display: flex; gap: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; }
+.install-list li > div { min-width: 0; flex: 1; }
 .install-list .num {
   flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; background: #fff; color: #000;
   display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem;
@@ -333,7 +334,9 @@ img, video, svg { display: block; max-width: 100%; }
 .term {
   background: #000; border: 1px solid var(--border-2); border-radius: 8px; padding: 13px 16px;
   font-family: var(--mono); font-size: 0.8rem; color: #e5e5e5; overflow-x: auto; line-height: 1.7;
+  max-width: 100%;
 }
+.term code { white-space: pre; }
 
 /* ---------- Footer ---------- */
 .footer { border-top: 1px solid var(--border); background: var(--bg-soft); padding: clamp(3rem, 6vw, 4.5rem) 0 2.5rem; }
