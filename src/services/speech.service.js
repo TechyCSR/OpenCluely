@@ -421,6 +421,7 @@ class SpeechService extends EventEmitter {
     this.segmentTimer = null;
     this.transcriptionInFlight = false;
     this.pendingFlush = false;
+    this.pendingFinal = false;
     this.audioProgram = null;
     this.whisperCommand = null;
     this._resetVadState();
@@ -674,6 +675,7 @@ class SpeechService extends EventEmitter {
     this.segmentBytes = 0;
     this.transcriptionInFlight = false;
     this.pendingFlush = false;
+    this.pendingFinal = false;
     this._resetVadState();
     this.emit('recording-started');
     this.emit('status', 'Local Whisper recording started');
@@ -1023,6 +1025,7 @@ class SpeechService extends EventEmitter {
     this.segmentBytes = 0;
     this.transcriptionInFlight = false;
     this.pendingFlush = false;
+    this.pendingFinal = false;
     this._resetVadState();
     this._audioDataLogged = false;
     this.useRendererCapture = false;
@@ -1659,7 +1662,15 @@ class SpeechService extends EventEmitter {
 
   async _flushWhisperSegment({ final }) {
     if (this.transcriptionInFlight) {
-      this.pendingFlush = this.pendingFlush || final;
+      // A flush was requested while a transcription is still running. Record
+      // that we owe a follow-up flush for ANY request (not just a final one),
+      // otherwise an utterance that ended mid-transcription stays stranded in
+      // the buffer until the next utterance ends or the session stops. Track
+      // final-ness separately so a queued stop still finalises correctly.
+      this.pendingFlush = true;
+      if (final) {
+        this.pendingFinal = true;
+      }
       return;
     }
 
@@ -1685,9 +1696,10 @@ class SpeechService extends EventEmitter {
       this.transcriptionInFlight = false;
 
       if (this.pendingFlush) {
-        const shouldRunFinal = this.pendingFlush;
         this.pendingFlush = false;
-        await this._flushWhisperSegment({ final: shouldRunFinal });
+        const runFinal = this.pendingFinal;
+        this.pendingFinal = false;
+        await this._flushWhisperSegment({ final: runFinal });
       }
     }
   }
