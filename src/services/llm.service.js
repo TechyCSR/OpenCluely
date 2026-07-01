@@ -946,6 +946,10 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
 
     for (const modelName of modelsToTry) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        // Shared with the consume loop so that once the timeout wins the race
+        // (or the attempt fails) any late chunks are ignored instead of being
+        // pushed to the UI, which would corrupt the bubble we already gave up on.
+        let cancelled = false;
         try {
           await this.performPreflightCheck();
 
@@ -958,13 +962,19 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
               systemInstruction: geminiRequest.systemInstruction
             });
             for await (const chunk of stream) {
+              if (cancelled) {
+                break;
+              }
               const piece = this._extractChunkText(chunk);
-              if (piece) {
+              if (piece && !cancelled) {
                 fullText += piece;
                 onDelta(piece);
               }
             }
           })();
+          // If the timeout wins below, consume may reject later; swallow it so
+          // it never surfaces as an unhandled rejection.
+          consume.catch(() => {});
 
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Request timeout')), timeout)
@@ -984,6 +994,8 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
 
           return fullText;
         } catch (error) {
+          // Stop the background consume loop from emitting any further deltas.
+          cancelled = true;
           const errorInfo = this.analyzeError(error);
           lastError = error;
 
