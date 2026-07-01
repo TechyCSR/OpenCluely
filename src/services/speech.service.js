@@ -816,13 +816,16 @@ class SpeechService extends EventEmitter {
     const chunkMs = this._chunkDurationMs(buffer);
     const energy = this._chunkRmsEnergy(buffer);
 
+    const floor = this._getVadEnergyFloor();
     // Seed / adapt the background noise floor while not actively speaking so
-    // the threshold tracks the room rather than a hard-coded constant.
+    // the threshold tracks the room rather than a hard-coded constant. Seed
+    // conservatively: if the very first chunk is already loud (the user started
+    // talking immediately), clamp to the configured floor so a high seed can't
+    // push the enter-threshold out of reach and stall VAD for the whole session.
     if (!this.vadNoiseInit) {
-      this.vadNoiseFloor = energy;
+      this.vadNoiseFloor = Math.min(energy, floor);
       this.vadNoiseInit = true;
     }
-    const floor = this._getVadEnergyFloor();
     // Hysteresis: it takes more energy to *start* an utterance than to keep
     // one going, so a brief dip mid-sentence doesn't end it prematurely.
     const enterThreshold = Math.max(floor, this.vadNoiseFloor * 2.5);
