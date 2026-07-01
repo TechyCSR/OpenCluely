@@ -1209,6 +1209,10 @@ class ApplicationController {
   }
 
   async processTranscriptionWithLLM(text, sessionHistory) {
+    // Hoisted so the catch block can tie a fallback answer to the same UI
+    // bubble the streaming start event created; otherwise a total failure
+    // leaves an empty streamed bubble stranded next to the fallback message.
+    let messageId = null;
     try {
       // Validate input text
       if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -1241,7 +1245,7 @@ class ApplicationController {
       // A unique messageId ties the start/chunk/final events to one bubble so
       // the UI never duplicates or interleaves concurrent responses.
       this._responseSeq = (this._responseSeq || 0) + 1;
-      const messageId = `tr-${Date.now()}-${this._responseSeq}`;
+      messageId = `tr-${Date.now()}-${this._responseSeq}`;
       windowManager.broadcastToAllWindows("transcription-llm-response-start", {
         messageId,
         skill: this.activeSkill
@@ -1303,6 +1307,11 @@ class ApplicationController {
       // Try to provide a fallback response
       try {
         const fallbackResult = llmService.generateIntelligentFallbackResponse(text, this.activeSkill);
+        // Carry the streaming messageId so the chat/overlay replace the live
+        // bubble instead of leaving it stuck and appending a duplicate.
+        if (messageId) {
+          fallbackResult.metadata = { ...fallbackResult.metadata, messageId };
+        }
 
         sessionManager.addModelResponse(fallbackResult.response, {
           skill: this.activeSkill,
