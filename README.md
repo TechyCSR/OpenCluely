@@ -34,8 +34,8 @@ It is free and open source. Processing stays on your machine, and the only thing
 
 - **Invisible overlay.** Windows stay out of Zoom, Google Meet, Microsoft Teams, Discord, and OBS captures. You see the answer, the call does not.
 - **Hidden during screen share.** When a share starts, the app can hide every window on its own.
-- **Real-time voice.** Speech is split on natural pauses instead of a fixed timer, so one spoken question stays one question. Filler phrases that Whisper invents on silence are dropped before they reach the model.
-- **Streamed answers.** Replies appear word by word as the model generates them, in both the chat and the floating window.
+- **Flexible local voice.** Choose manual start/stop capture or automatic voice-activity detection without fixed-timer sentence cuts.
+- **Configurable streamed answers.** Route voice replies to chat, the floating overlay, or both.
 - **Direct image analysis.** Screenshots go straight to Gemini for visual reasoning, with no slow OCR step in between.
 - **Session memory.** The whole conversation is remembered, so follow-ups, edge cases, and optimizations keep their context.
 - **Language aware.** Tailored answers for C++, C, Python, Java, and JavaScript.
@@ -116,8 +116,14 @@ AZURE_SPEECH_REGION=your_region
 # Local Whisper option
 WHISPER_COMMAND=whisper
 WHISPER_MODEL_DIR=.whisper-models
-WHISPER_MODEL=turbo
-WHISPER_LANGUAGE=en
+WHISPER_MODEL=small
+WHISPER_LANGUAGE=auto
+WHISPER_DEVICE=auto
+WHISPER_PYTHON=
+WHISPER_CAPTURE_MODE=vad
+WHISPER_RESPONSE_TARGET=both
+WHISPER_MANUAL_MAX_MS=90000
+WHISPER_GPU_IDLE_MS=60000
 ```
 
 Speech is optional. If no provider is configured, the microphone button hides itself across the app.
@@ -126,15 +132,15 @@ Speech is optional. If no provider is configured, the microphone button hides it
 
 You can use local Whisper for offline transcription or Azure Speech for a cloud option.
 
-For local Whisper, `./setup.sh` handles the full setup. It creates `.venv-whisper`, installs `openai-whisper`, points `.env` at the virtual environment, creates `.whisper-models`, and runs a quick speech test. You only need Python 3.10 or newer and ffmpeg on your system. Install those with `./setup.sh --install-system-deps`, or add `ffmpeg` and `sox` yourself.
+For local Whisper, `./setup.sh` handles the full setup. It creates `.venv-whisper`, installs `openai-whisper`, points `.env` at the virtual environment, creates `.whisper-models`, and runs a quick speech test. The app reads its own PCM WAV recordings directly; ffmpeg is only needed when transcribing other audio formats through the CLI fallback.
 
 For Azure Speech, create a Speech resource in the [Azure Portal](https://portal.azure.com/), then add the key and region to `.env` with `SPEECH_PROVIDER=azure`.
 
 ## How it works
 
-1. **Ask.** Speak the question or press the screenshot shortcut. The microphone listens for natural pauses on its own and does not cut you off mid sentence.
+1. **Ask.** Use automatic pause detection, choose manual start/stop capture in Settings, or use the screenshot shortcut.
 2. **Reason.** Gemini reads the audio or image with full conversation context and works toward a precise answer.
-3. **Answer.** The response streams into the overlay in real time, with formatted text and highlighted code.
+3. **Answer.** Voice responses stream to chat, the overlay, or both, according to Settings.
 
 ## Keyboard shortcuts
 
@@ -156,9 +162,9 @@ OpenCluely is under active development. The core is stable and improvements ship
 - Stealth overlay with a draggable command bar and a click through toggle
 - Hidden during screen share, with automatic hiding when a share begins
 - Screenshot capture with direct Gemini analysis, no OCR step
-- Real-time voice input that segments on natural pauses, not a blind timer
-- Utterance coalescing so one spoken question becomes one answer
-- Streamed answers that render word by word in the chat and the overlay
+- Configurable manual or VAD-driven voice capture
+- Persistent local Whisper worker with optional CUDA acceleration and idle GPU release
+- Configurable chat/overlay routing for streamed voice answers
 - Whisper hallucination filter that drops phantom phrases on silence
 - AI response window with markdown and syntax highlighting
 - Global shortcuts for capture, visibility, interaction, chat, and settings

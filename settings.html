@@ -397,14 +397,46 @@
                                 <div class="settings-item-label">Whisper Model</div>
                                 <div class="settings-item-description">Local model name used by the Whisper CLI</div>
                             </div>
-                            <input type="text" class="input-field" id="whisperModel" placeholder="turbo">
+                            <input type="text" class="input-field" id="whisperModel" placeholder="small">
                         </div>
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label">Whisper Language</div>
-                                <div class="settings-item-description">Language code for local transcription</div>
+                                <div class="settings-item-description">Language code or auto-detection for local transcription</div>
                             </div>
-                            <input type="text" class="input-field" id="whisperLanguage" placeholder="en">
+                            <input type="text" class="input-field" id="whisperLanguage" placeholder="auto">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Compute Device</div>
+                                <div class="settings-item-description">Automatically use CUDA when available, or force CPU/GPU</div>
+                            </div>
+                            <select class="input-field" id="whisperDevice">
+                                <option value="auto">Auto</option>
+                                <option value="cpu">CPU</option>
+                                <option value="cuda">CUDA</option>
+                            </select>
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Capture Mode</div>
+                                <div class="settings-item-description">Manual records until you press stop; VAD detects natural pauses</div>
+                            </div>
+                            <select class="input-field" id="whisperCaptureMode">
+                                <option value="vad">Automatic (VAD)</option>
+                                <option value="manual">Manual start/stop</option>
+                            </select>
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Voice Response Target</div>
+                                <div class="settings-item-description">Choose where answers generated from speech are displayed</div>
+                            </div>
+                            <select class="input-field" id="whisperResponseTarget">
+                                <option value="both">Chat and overlay</option>
+                                <option value="chat">Chat only</option>
+                                <option value="overlay">Overlay only</option>
+                            </select>
                         </div>
                         <div class="settings-item">
                             <div>

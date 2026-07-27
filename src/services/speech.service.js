@@ -386,6 +386,7 @@ const { spawn, spawnSync } = require('child_process');
 const { EventEmitter } = require('events');
 const logger = require('../core/logger').createServiceLogger('SPEECH');
 const config = require('../core/config');
+const WhisperWorkerService = require('./whisper-worker.service');
 
 let sdk = null;
 try {
@@ -424,6 +425,9 @@ class SpeechService extends EventEmitter {
     this.pendingFinal = false;
     this.audioProgram = null;
     this.whisperCommand = null;
+    this.whisperWorker = new WhisperWorkerService();
+    this.isProcessingAudio = false;
+    this.manualStopRequested = false;
     this._resetVadState();
 
     this.initializeClient();
@@ -518,6 +522,7 @@ class SpeechService extends EventEmitter {
       }
 
       this.available = true;
+      this._configureWhisperWorker();
       logger.info('Local Whisper service initialized successfully', {
         command: [this.whisperCommand.command, ...this.whisperCommand.baseArgs].join(' '),
         model: this._getWhisperModel(),
@@ -545,6 +550,11 @@ class SpeechService extends EventEmitter {
 
       if (this.isRecording) {
         logger.warn('Recording already in progress');
+        return;
+      }
+
+      if (this.isProcessingAudio) {
+        this.emit('status', 'Please wait for the current transcription to finish');
         return;
       }
 
@@ -654,9 +664,6 @@ class SpeechService extends EventEmitter {
       () => {
         clearTimeout(startTimeout);
         logger.info('Continuous Azure speech recognition started successfully');
-        if (global.windowManager) {
-          global.windowManager.handleRecordingStarted();
-        }
       },
       (error) => {
         clearTimeout(startTimeout);
@@ -676,9 +683,28 @@ class SpeechService extends EventEmitter {
     this.transcriptionInFlight = false;
     this.pendingFlush = false;
     this.pendingFinal = false;
+    this.manualStopRequested = false;
     this._resetVadState();
     this.emit('recording-started');
     this.emit('status', 'Local Whisper recording started');
+
+    if (this.whisperWorker.isConfigured()) {
+      this.whisperWorker.warmup({
+        model: this._getWhisperModel(),
+        modelDir: this._getWhisperModelDir(),
+        device: this._getWhisperDevice()
+      }).then((result) => {
+        logger.info('Whisper GPU warmup completed while recording', {
+          model: result.model,
+          device: result.device,
+          gpu: result.gpu
+        });
+      }).catch((error) => {
+        logger.warn('Whisper warmup failed; transcription will use fallback', {
+          error: error.message
+        });
+      });
+    }
 
     // Capture microphone audio in the renderer via the Web Audio API on Windows
     // and macOS. Windows lacks the Unix sox/rec/arecord tools node-record-lpcm16
@@ -690,19 +716,17 @@ class SpeechService extends EventEmitter {
     if (this.useRendererCapture) {
       this.emit('status', 'Waiting for microphone audio…');
       // The renderer starts sending chunks once it receives the recording-started event.
-      this._startSegmentWatchdog();
-      if (global.windowManager) {
-        global.windowManager.handleRecordingStarted();
+      if (!this._isManualCaptureMode()) {
+        this._startSegmentWatchdog();
       }
       return;
     }
 
     this._startMicrophoneCapture();
-    this._startSegmentWatchdog();
-
-    if (global.windowManager) {
-      global.windowManager.handleRecordingStarted();
+    if (!this._isManualCaptureMode()) {
+      this._startSegmentWatchdog();
     }
+
   }
 
   /**
@@ -799,6 +823,20 @@ class SpeechService extends EventEmitter {
    */
   _ingestWhisperAudio(buffer) {
     if (!buffer || !buffer.length) {
+      return;
+    }
+
+    if (this._isManualCaptureMode()) {
+      this.segmentBuffers.push(buffer);
+      this.segmentBytes += buffer.length;
+      this.vadLastChunkAt = Date.now();
+
+      const capturedMs = this.segmentBytes / 32;
+      if (!this.manualStopRequested && capturedMs >= this._getManualCaptureMaxMs()) {
+        this.manualStopRequested = true;
+        this.emit('status', 'Maximum recording duration reached; processing audio');
+        setImmediate(() => this.stopRecording());
+      }
       return;
     }
 
@@ -937,14 +975,17 @@ class SpeechService extends EventEmitter {
     }
 
     if (this.provider === 'whisper') {
-      this._finalizeWhisperStop();
+      this.isProcessingAudio = true;
+      this.emit('recording-stopped');
+      this.emit('status', 'Processing local speech…');
+      this._finalizeWhisperStop({ captureAlreadyStopped: true });
       return;
     }
 
     this._finalizeStop('Recording stopped');
   }
 
-  async _finalizeWhisperStop() {
+  async _finalizeWhisperStop({ captureAlreadyStopped = false } = {}) {
     if (this.segmentTimer) {
       clearInterval(this.segmentTimer);
       this.segmentTimer = null;
@@ -965,7 +1006,13 @@ class SpeechService extends EventEmitter {
       logger.error('Final Whisper transcription failed', { error: error.message });
       this.emit('error', `Whisper transcription failed: ${error.message}`);
     } finally {
-      this._finalizeStop('Recording stopped');
+      this._cleanup();
+      this.isProcessingAudio = false;
+      this.whisperWorker.releaseWhenIdle();
+      if (!captureAlreadyStopped) {
+        this.emit('recording-stopped');
+      }
+      this.emit('status', 'Recording stopped');
     }
   }
 
@@ -973,9 +1020,6 @@ class SpeechService extends EventEmitter {
     this._cleanup();
     this.emit('recording-stopped');
     this.emit('status', statusMessage);
-    if (global.windowManager) {
-      global.windowManager.handleRecordingStopped();
-    }
   }
 
   _cleanup() {
@@ -1117,6 +1161,7 @@ class SpeechService extends EventEmitter {
     return {
       provider: this.provider,
       isRecording: this.isRecording,
+      isProcessingAudio: this.isProcessingAudio,
       isInitialized: this.provider === 'azure' ? !!this.speechConfig : !!this.whisperCommand,
       sessionDuration: this.sessionStartTime ? Date.now() - this.sessionStartTime : 0,
       retryCount: this.retryCount,
@@ -1128,6 +1173,8 @@ class SpeechService extends EventEmitter {
         whisperModelDir: this._getWhisperModelDir(),
         whisperModel: this._getWhisperModel(),
         whisperLanguage: this._getWhisperLanguage(),
+        whisperCaptureMode: this._getWhisperCaptureMode(),
+        whisperDevice: this._getWhisperDevice(),
         whisperSegmentMs: String(this._getWhisperSegmentMs())
       },
       config: {
@@ -1150,8 +1197,19 @@ class SpeechService extends EventEmitter {
     return false;
   }
 
+  isManualCaptureMode() {
+    return this.provider === 'whisper' && this._getWhisperCaptureMode() === 'manual';
+  }
+
+  shutdown() {
+    this.isRecording = false;
+    this.isProcessingAudio = false;
+    this._cleanup();
+    this.whisperWorker.close();
+  }
+
   updateSettings(settings = {}) {
-    const speechKeys = ['speechProvider', 'azureKey', 'azureRegion', 'whisperCommand', 'whisperModelDir', 'whisperModel', 'whisperLanguage', 'whisperSegmentMs'];
+    const speechKeys = ['speechProvider', 'azureKey', 'azureRegion', 'whisperCommand', 'whisperModelDir', 'whisperModel', 'whisperLanguage', 'whisperCaptureMode', 'whisperDevice', 'whisperSegmentMs'];
     let changed = false;
 
     for (const key of speechKeys) {
@@ -1186,7 +1244,7 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperModel() {
-    return this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'turbo';
+    return this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'small';
   }
 
   _getWhisperModelDir() {
@@ -1215,7 +1273,7 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperLanguage() {
-    return this._getSetting('whisperLanguage') || process.env.WHISPER_LANGUAGE || config.get('speech.whisper.language') || 'en';
+    return this._getSetting('whisperLanguage') || process.env.WHISPER_LANGUAGE || config.get('speech.whisper.language') || 'auto';
   }
 
   _getWhisperSegmentMs() {
@@ -1263,6 +1321,91 @@ class SpeechService extends EventEmitter {
   _getSetting(key) {
     const value = this.runtimeSettings[key];
     return value === '' ? null : value;
+  }
+
+  _isManualCaptureMode() {
+    return this._getWhisperCaptureMode() === 'manual';
+  }
+
+  _getWhisperCaptureMode() {
+    const configured = String(
+      this._getSetting('whisperCaptureMode') || process.env.WHISPER_CAPTURE_MODE || ''
+    ).trim().toLowerCase();
+    if (configured === 'manual' || configured === 'vad') {
+      return configured;
+    }
+
+    // Backward compatibility for existing local configurations.
+    if (process.env.WHISPER_MANUAL_CAPTURE !== undefined) {
+      return process.env.WHISPER_MANUAL_CAPTURE === 'false' ? 'vad' : 'manual';
+    }
+    return 'vad';
+  }
+
+  _getManualCaptureMaxMs() {
+    const parsed = Number(process.env.WHISPER_MANUAL_MAX_MS || 90000);
+    return Number.isFinite(parsed) ? Math.max(5000, parsed) : 90000;
+  }
+
+  _getWhisperDevice() {
+    return String(process.env.WHISPER_DEVICE || 'auto').trim().toLowerCase();
+  }
+
+  _getWhisperPythonPath() {
+    const configuredPython = String(process.env.WHISPER_PYTHON || '').trim();
+    if (configuredPython) {
+      const resolvedPython = path.isAbsolute(configuredPython)
+        ? path.normalize(configuredPython)
+        : path.resolve(configuredPython);
+      if (fs.existsSync(resolvedPython)) {
+        return resolvedPython;
+      }
+    }
+
+    const userDataCandidate = this._getUserDataWhisperCandidate();
+    if (userDataCandidate && fs.existsSync(userDataCandidate.command)) {
+      return userDataCandidate.command;
+    }
+
+    if (!this.whisperCommand) {
+      return null;
+    }
+
+    const command = path.normalize(this.whisperCommand.command);
+    const moduleIndex = this.whisperCommand.baseArgs.indexOf('-m');
+    if (
+      moduleIndex !== -1 &&
+      this.whisperCommand.baseArgs[moduleIndex + 1] === 'whisper' &&
+      fs.existsSync(command)
+    ) {
+      return command;
+    }
+
+    const pythonName = process.platform === 'win32' ? 'python.exe' : 'python';
+    const siblingPython = path.join(path.dirname(command), pythonName);
+    return fs.existsSync(siblingPython) ? siblingPython : null;
+  }
+
+  _getWhisperWorkerScriptPath() {
+    const sourcePath = path.resolve(__dirname, '..', '..', 'scripts', 'whisper_worker.py');
+    return sourcePath.includes('app.asar')
+      ? sourcePath.replace('app.asar', 'app.asar.unpacked')
+      : sourcePath;
+  }
+
+  _configureWhisperWorker() {
+    const pythonPath = this._getWhisperPythonPath();
+    const scriptPath = this._getWhisperWorkerScriptPath();
+    const idleUnloadMs = Math.max(10000, Number(process.env.WHISPER_GPU_IDLE_MS || 60000));
+    this.whisperWorker.configure({ pythonPath, scriptPath, idleUnloadMs });
+
+    logger.info('Whisper worker configuration', {
+      configured: this.whisperWorker.isConfigured(),
+      pythonPath,
+      scriptPath,
+      device: this._getWhisperDevice(),
+      idleUnloadMs
+    });
   }
 
   /**
@@ -1754,18 +1897,47 @@ class SpeechService extends EventEmitter {
       throw new Error('Local Whisper CLI not configured');
     }
 
+    if (this.whisperWorker.isConfigured()) {
+      const startedAt = Date.now();
+      try {
+        const result = await this.whisperWorker.transcribe(audioFilePath, {
+          model: this._getWhisperModel(),
+          language: this._getWhisperLanguage(),
+          modelDir: this._getWhisperModelDir(),
+          device: this._getWhisperDevice()
+        });
+        logger.info('Persistent Whisper transcription completed', {
+          processingTime: Date.now() - startedAt,
+          model: result.model,
+          device: result.device,
+          gpu: result.gpu,
+          detectedLanguage: result.language
+        });
+        return result.text || '';
+      } catch (error) {
+        logger.warn('Persistent Whisper worker failed; falling back to CLI', {
+          error: error.message,
+          workerTraceback: error.workerTraceback
+        });
+      }
+    }
+
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencluely-whisper-out-'));
     const args = [
       ...this.whisperCommand.baseArgs,
       audioFilePath,
       '--model', this._getWhisperModel(),
-      '--language', this._getWhisperLanguage(),
       '--task', 'transcribe',
       '--output_format', 'txt',
       '--output_dir', outputDir,
       '--verbose', 'False',
       '--fp16', 'False'
     ];
+
+    const language = this._getWhisperLanguage();
+    if (language && language !== 'auto' && language !== 'detect') {
+      args.push('--language', language);
+    }
 
     if (this._getWhisperModelDir()) {
       args.push('--model_dir', this._getWhisperModelDir());

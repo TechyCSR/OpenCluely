@@ -153,8 +153,14 @@ class FirstRunManager {
       '# WHISPER_MODEL_DIR is optional. Leave it unset and the app stores model',
       '# weights in a stable app-data folder. Set an absolute path to override.',
       '# WHISPER_MODEL_DIR=',
-      'WHISPER_MODEL=turbo',
-      'WHISPER_LANGUAGE=en',
+      'WHISPER_MODEL=small',
+      'WHISPER_LANGUAGE=auto',
+      'WHISPER_DEVICE=auto',
+      'WHISPER_PYTHON=',
+      'WHISPER_CAPTURE_MODE=vad',
+      'WHISPER_RESPONSE_TARGET=both',
+      'WHISPER_MANUAL_MAX_MS=90000',
+      'WHISPER_GPU_IDLE_MS=60000',
       'WHISPER_SEGMENT_MS=4000',
       ''
     ].join(os.EOL);

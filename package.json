@@ -59,11 +59,15 @@
       "!.env*",
       "!.venv-whisper/**/*",
       "!.whisper-models/**/*",
+      "!bin/**/*",
+      "!scripts/__pycache__/**/*",
+      "!**/*.pyc",
       "!eng.traineddata"
     ],
     "asarUnpack": [
       "assests/icons/**/*",
-      "prompts/**/*"
+      "prompts/**/*",
+      "scripts/whisper_worker.py"
     ],
     "mac": {
       "category": "public.app-category.utilities",

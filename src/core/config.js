@@ -65,8 +65,8 @@ class ConfigManager {
           outputFormat: 'detailed'
         },
         whisper: {
-          model: 'turbo',
-          language: 'en',
+          model: 'small',
+          language: 'auto',
           // segmentMs is the legacy fixed-window size and now acts as the
           // hard upper bound for a single utterance when VAD is enabled.
           segmentMs: 4000,

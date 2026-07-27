@@ -4,5 +4,6 @@ node_modules/
 .whisper-models/
 eng.traineddata
 dist/
+bin/
 .DS_Store
 *.log

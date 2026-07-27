@@ -332,7 +332,7 @@
           'Python 3.10+ must be on PATH (download from python.org if missing).',
           'A new <code>.venv-whisper\\</code> folder will be created in the app directory.',
           'Whisper will be installed into that venv (pip download, no admin rights needed).',
-          'First transcription downloads the <code>turbo</code> model (~150 MB).',
+          'First transcription downloads the <code>small</code> model (~461 MB).',
         ],
       },
       darwin: {
@@ -341,7 +341,7 @@
           'Uses your existing Python 3 (install via Homebrew if missing).',
           'A new <code>.venv-whisper/</code> folder is created in the app data directory.',
           'Whisper installs into that venv — no <code>sudo</code> required.',
-          'First transcription downloads the <code>turbo</code> model (~150 MB).',
+          'First transcription downloads the <code>small</code> model (~461 MB).',
         ],
       },
       other: {
@@ -350,7 +350,7 @@
           'Uses your system Python 3 (needs <code>python3-venv</code> on Debian/Ubuntu).',
           'A new <code>.venv-whisper/</code> folder is created in the app data directory.',
           'Whisper installs into that venv — avoids the externally-managed-environment error.',
-          'First transcription downloads the <code>turbo</code> model (~150 MB).',
+          'First transcription downloads the <code>small</code> model (~461 MB).',
         ],
       },
     };
@@ -422,7 +422,7 @@
     }
 
     try {
-      const r = await window.electronAPI.downloadWhisperModel('turbo');
+      const r = await window.electronAPI.downloadWhisperModel('small');
       state.modelDownloading = false;
       if (r.ok) {
         state.modelDownloaded = true;

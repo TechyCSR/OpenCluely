@@ -395,7 +395,7 @@ class WhisperInstaller {
             'Python 3.10+ must be on PATH (download from python.org if missing).',
             "We'll create <code>.venv-whisper\\</code> in the app directory — no admin needed.",
             'openai-whisper installs into the venv via pip (live progress shown below).',
-            'First transcription downloads the <code>turbo</code> model (~150 MB).',
+            'First transcription downloads the <code>small</code> model (~461 MB).',
           ],
         };
       case 'darwin':
@@ -405,7 +405,7 @@ class WhisperInstaller {
             'Uses your existing Python 3 (install via Homebrew if missing).',
             "We'll create <code>.venv-whisper/</code> in the app directory.",
             'openai-whisper installs into the venv — no <code>sudo</code> required.',
-            'First transcription downloads the <code>turbo</code> model (~150 MB).',
+            'First transcription downloads the <code>small</code> model (~461 MB).',
           ],
         };
       default:
@@ -415,7 +415,7 @@ class WhisperInstaller {
             'Uses your system Python 3.',
             "We'll create <code>.venv-whisper/</code> in the app directory.",
             'This avoids the "externally-managed-environment" pip error on Ubuntu 23.04+, Debian 12+, Fedora 38+.',
-            'First transcription downloads the <code>turbo</code> model (~150 MB).',
+            'First transcription downloads the <code>small</code> model (~461 MB).',
           ],
         };
     }
@@ -553,7 +553,7 @@ class WhisperInstaller {
     return false;
   }
 
-  async downloadModel(modelName = 'turbo', { onProgress } = {}) {
+  async downloadModel(modelName = 'small', { onProgress } = {}) {
     const log = (line) => {
       if (typeof onProgress === 'function' && line) {
         try { onProgress(line); } catch (_) { /* ignore */ }
