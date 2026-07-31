@@ -1365,6 +1365,16 @@ class WindowManager {
       onboardingWindow = await this.createWindow('onboarding');
       this.windows.set('onboarding', onboardingWindow);
 
+      // The 'closed' handlers in setupWindowEventHandlers() are wired once,
+      // at startup, over the windows that exist then. The onboarding wizard
+      // is created later, so it needs its own handler — otherwise its entry
+      // outlives the BrowserWindow and later iterations over this.windows
+      // call methods on a destroyed object.
+      onboardingWindow.on('closed', () => {
+        logger.debug('Window closed', { type: 'onboarding' });
+        this.windows.delete('onboarding');
+      });
+
       // Once the wizard renderer signals it's ready, send it the
       // current first-run status so it can pre-populate correctly.
       onboardingWindow.webContents.once('did-finish-load', () => {
