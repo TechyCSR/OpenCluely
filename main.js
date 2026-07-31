@@ -1543,13 +1543,13 @@ class ApplicationController {
     } else if (this.isReady) {
       // When app is activated, ensure windows appear on current desktop
       const mainWindow = windowManager.getWindow("main");
-      if (mainWindow && mainWindow.isVisible()) {
+      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
         windowManager.showOnCurrentDesktop(mainWindow);
       }
 
       // Also handle other visible windows
       windowManager.windows.forEach((window, type) => {
-        if (window.isVisible()) {
+        if (!window.isDestroyed() && window.isVisible()) {
           windowManager.showOnCurrentDesktop(window);
         }
       });
