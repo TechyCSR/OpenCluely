@@ -1460,6 +1460,15 @@ class WindowManager {
     });
   }
 
+  sendToWindow(type, channel, data) {
+    const window = this.windows.get(type);
+    if (window && !window.isDestroyed()) {
+      window.webContents.send(channel, data);
+      return true;
+    }
+    return false;
+  }
+
   broadcastToAllWindows(channel, data) {
     const windowStates = {};
     
@@ -1476,15 +1485,20 @@ class WindowManager {
       }
     });
     
-    logger.info('Broadcast sent to all windows', { 
-      channel, 
-      windowCount: this.windows.size,
-      windowStates,
-      dataKeys: data ? Object.keys(data) : [],
-      // Fixed: Check for 'content' instead of 'response' to match actual data structure
-      dataPreview: data && data.content ? data.content.substring(0, 50) + '...' : 
-                   data && data.response ? data.response.substring(0, 50) + '...' : 'No response'
-    });
+    // Log at debug level for high-frequency streaming chunk events to reduce per-chunk log overhead
+    if (channel.endsWith('-chunk') || channel.includes('chunk')) {
+      logger.debug('Broadcast sent to all windows', { channel, windowCount: this.windows.size });
+    } else {
+      logger.info('Broadcast sent to all windows', { 
+        channel, 
+        windowCount: this.windows.size,
+        windowStates,
+        dataKeys: data ? Object.keys(data) : [],
+        // Fixed: Check for 'content' instead of 'response' to match actual data structure
+        dataPreview: data && data.content ? data.content.substring(0, 50) + '...' : 
+                     data && data.response ? data.response.substring(0, 50) + '...' : 'No response'
+      });
+    }
   }
 
   getWindow(type) {
