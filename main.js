@@ -1092,7 +1092,7 @@ class ApplicationController {
 
       this._responseSeq = (this._responseSeq || 0) + 1;
       const messageId = `img-${Date.now()}-${this._responseSeq}`;
-      windowManager.broadcastToAllWindows("transcription-llm-response-start", {
+      this.sendToVoiceResponseWindows("transcription-llm-response-start", {
         messageId,
         skill: this.activeSkill
       });
@@ -1104,7 +1104,7 @@ class ApplicationController {
         sessionHistory.recent,
         needsProgrammingLanguage ? this.codingLanguage : null,
         (delta) => {
-          windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
+          this.sendToVoiceResponseWindows("transcription-llm-response-chunk", {
             messageId,
             delta
           });
@@ -1119,7 +1119,7 @@ class ApplicationController {
         isImageAnalysis: true
       });
 
-      this.broadcastTranscriptionLLMResponse(llmResult);
+      this.sendTranscriptionLLMResponseToVoiceTargets(llmResult);
 
       windowManager.showLLMResponse(llmResult.response, {
         skill: this.activeSkill,
@@ -1158,7 +1158,7 @@ class ApplicationController {
 
       this._responseSeq = (this._responseSeq || 0) + 1;
       const messageId = `chat-${Date.now()}-${this._responseSeq}`;
-      windowManager.broadcastToAllWindows("transcription-llm-response-start", {
+      this.sendToVoiceResponseWindows("transcription-llm-response-start", {
         messageId,
         skill: this.activeSkill
       });
@@ -1170,7 +1170,7 @@ class ApplicationController {
         sessionHistory.recent,
         needsProgrammingLanguage ? this.codingLanguage : null,
         (delta) => {
-          windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
+          this.sendToVoiceResponseWindows("transcription-llm-response-chunk", {
             messageId,
             delta
           });
@@ -1193,7 +1193,7 @@ class ApplicationController {
         usedFallback: llmResult.metadata.usedFallback,
       });
 
-      this.broadcastTranscriptionLLMResponse(llmResult);
+      this.sendTranscriptionLLMResponseToVoiceTargets(llmResult);
 
       windowManager.showLLMResponse(llmResult.response, {
         skill: this.activeSkill,
@@ -1472,30 +1472,13 @@ class ApplicationController {
   }
 
   broadcastTranscriptionLLMResponse(llmResult) {
-    const broadcastData = {
-      response: llmResult.response,
-      metadata: llmResult.metadata,
-      messageId: llmResult.metadata && llmResult.metadata.messageId,
-      skill: this.activeSkill,
-      isTranscriptionResponse: true
-    };
-
-    logger.info("Broadcasting transcription LLM response to all windows", {
-      responseLength: llmResult.response.length,
-      skill: this.activeSkill,
-      responsePreview: llmResult.response.substring(0, 100) + "..."
-    });
-
-    windowManager.broadcastToAllWindows("transcription-llm-response", broadcastData);
+    this.sendTranscriptionLLMResponseToVoiceTargets(llmResult);
   }
 
   sendToChatWindow(channel, data) {
-    const chatWindow = windowManager.getWindow("chat");
-    if (!chatWindow || chatWindow.isDestroyed()) {
-      logger.warn("Chat window unavailable for speech event", { channel });
-      return;
+    if (!windowManager.sendToWindow("chat", channel, data)) {
+      logger.warn("Chat window unavailable for event", { channel });
     }
-    chatWindow.webContents.send(channel, data);
   }
 
   getVoiceResponseTarget() {
@@ -1513,10 +1496,7 @@ class ApplicationController {
       this.sendToChatWindow(channel, data);
     }
     if (target === 'overlay' || target === 'both') {
-      const responseWindow = windowManager.getWindow("llmResponse");
-      if (responseWindow && !responseWindow.isDestroyed()) {
-        responseWindow.webContents.send(channel, data);
-      }
+      windowManager.sendToWindow("llmResponse", channel, data);
     }
   }
 
