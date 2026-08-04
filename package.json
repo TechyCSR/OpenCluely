@@ -4,8 +4,10 @@
   "description": "AI Problem Solving Assistant",
   "main": "main.js",
   "scripts": {
-    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
-    "dev": "env -u ELECTRON_RUN_AS_NODE electron . --no-sandbox --disable-gpu",
+    "start": "node scripts/launch.js",
+    "dev": "node scripts/launch.js --no-sandbox --disable-gpu",
+    "setup": "node setup.js",
+    "setup:skip-whisper": "node setup.js --skip-whisper",
     "test-speech": "node scripts/test-speech.js",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
@@ -87,6 +89,7 @@
           ]
         }
       ],
+      "identity": "-",
       "darkModeSupport": true,
       "hardenedRuntime": false,
       "gatekeeperAssess": false,

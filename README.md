@@ -48,19 +48,29 @@ Pre-built installers are published with every release. These links always point 
 
 | Platform | File | Notes |
 |---|---|---|
-| Windows | [Setup .exe](https://github.com/TechyCSR/OpenCluely/releases/latest) | NSIS installer. Adds a Start Menu shortcut. |
-| Linux (Debian or Ubuntu) | [.deb](https://github.com/TechyCSR/OpenCluely/releases/latest) | Pulls system deps automatically (Python, ffmpeg, GTK). |
-| Linux (universal) | [.AppImage](https://github.com/TechyCSR/OpenCluely/releases/latest) | No install. Run `chmod +x` then launch. |
+| **Windows** | [Setup .exe](https://github.com/TechyCSR/OpenCluely/releases/latest) | NSIS installer. Adds a Start Menu shortcut. |
+| **macOS (Apple Silicon)** | [.dmg (arm64)](https://github.com/TechyCSR/OpenCluely/releases/latest) | For M1/M2/M3/M4 Macs. See quarantine fix below. |
+| **macOS (Intel)** | [.dmg (x64)](https://github.com/TechyCSR/OpenCluely/releases/latest) | For older Intel-based Macs. See quarantine fix below. |
+| **Linux (Debian/Ubuntu)** | [.deb](https://github.com/TechyCSR/OpenCluely/releases/latest) | Pulls system deps automatically (Python, ffmpeg, GTK). |
+| **Linux (universal)** | [.AppImage](https://github.com/TechyCSR/OpenCluely/releases/latest) | No install. Run `chmod +x` then launch. |
 
-> **macOS:** there is no pre-built download. The app is unsigned and un-notarized, so macOS Gatekeeper blocks it as "damaged and can't be opened." Run OpenCluely from source instead — see [Quick start](#quick-start). It is a one-line `./setup.sh` once Node.js is installed.
+### macOS installation
+
+Since OpenCluely is open source and unsigned, macOS Gatekeeper will block it on first run. After downloading and dragging the app to Applications, run this **one-time fix** in Terminal:
+
+```bash
+xattr -rd com.apple.quarantine /Applications/OpenCluely.app
+```
+
+After that, the app opens normally like any other application — no further steps needed.
 
 Every build is produced automatically on GitHub Actions and ships with SHA-256 checksums. Each release also lists the full set of commits it includes.
 
 The website at [opencluely.techycsr.dev](https://opencluely.techycsr.dev) detects your operating system and offers the right installer directly.
 
-## Quick start
+## Quick start (run from source)
 
-If you would rather build from source, three steps are all it takes.
+If you prefer to build from source — or want to contribute — three steps are all it takes. This works on **macOS, Windows, and Linux** with no extra tools beyond Node.js.
 
 1. Clone the repository.
 
@@ -69,33 +79,26 @@ If you would rather build from source, three steps are all it takes.
    cd OpenCluely
    ```
 
-2. Run the setup script.
+2. Run the setup.
 
    ```bash
-   ./setup.sh
+   npm run setup
    ```
 
-   The script installs Node dependencies, creates your `.env` from the example, sets up a local Whisper virtual environment, points the config at it, and launches the app.
+   This installs Node dependencies, creates your `.env` from the example, sets up a local Whisper virtual environment, points the config at it, and launches the app. On macOS and Linux, `./setup.sh` also works.
 
 3. Add your Gemini key.
 
    On first launch the Settings window opens automatically. Get a free key from [Google AI Studio](https://aistudio.google.com/) and paste it in, or edit `.env` directly. Both work, and changes are picked up without a restart.
 
-### Platform notes
-
-- On Windows, use Git Bash (included with Git for Windows) or WSL to run `setup.sh`.
-- On macOS and Linux, your normal terminal works.
-- **macOS users must build from source** (steps above) — there is no pre-built `.dmg`. Because the app is unsigned, a downloaded build would be blocked by Gatekeeper as "damaged"; running from source avoids that entirely.
-- No manual `npm` commands are needed. The script handles everything.
-
-### Setup script options
+### Setup options
 
 ```bash
-./setup.sh --build                # Build a distributable for your OS
-./setup.sh --ci                   # Use npm ci instead of npm install
-./setup.sh --no-run               # Set up only, do not launch
-./setup.sh --install-system-deps  # Install sox for the microphone (optional)
-./setup.sh --skip-whisper         # Skip the local Whisper bootstrap
+npm run setup -- --build                # Build a distributable for your OS
+npm run setup -- --ci                   # Use npm ci instead of npm install
+npm run setup -- --no-run               # Set up only, do not launch
+npm run setup -- --install-system-deps  # Install sox for the microphone (optional)
+npm run setup -- --skip-whisper         # Skip the local Whisper bootstrap
 ```
 
 ## Configuration
@@ -187,9 +190,18 @@ OpenCluely is under active development. The core is stable and improvements ship
 <details>
 <summary>Setup issues</summary>
 
-- **setup.sh will not run.** Make sure you are in the project folder (`cd OpenCluely`) and that the script is executable (`chmod +x setup.sh`). On Windows, use Git Bash.
-- **Setup stops with exit code 130.** That means Ctrl+C was pressed. Run `./setup.sh` again.
+- **`npm run setup` fails.** Make sure you are in the project folder (`cd OpenCluely`) and have Node.js 18+ installed. Check with `node -v`.
+- **`./setup.sh` will not run.** Make sure the script is executable (`chmod +x setup.sh`). On Windows, use `npm run setup` instead — it works without Bash.
+- **Setup stops with exit code 130.** That means Ctrl+C was pressed. Run `npm run setup` again.
 - **Node or npm not found.** Install Node.js 18 or newer from [nodejs.org](https://nodejs.org/), restart the terminal, and retry.
+
+</details>
+
+<details>
+<summary>macOS issues</summary>
+
+- **"OpenCluely is damaged and can't be opened."** This is macOS Gatekeeper blocking the unsigned app. Open Terminal and run: `xattr -rd com.apple.quarantine /Applications/OpenCluely.app`, then open the app again.
+- **macOS screen capture does not work.** Grant Screen Recording permission under System Settings, Privacy and Security, then relaunch the app.
 
 </details>
 
@@ -197,7 +209,6 @@ OpenCluely is under active development. The core is stable and improvements ship
 <summary>App issues</summary>
 
 - **Electron will not start or shows a blank window on Linux.** Try `npm run dev`, and make sure X11 or XWayland is available in headless setups.
-- **macOS screen capture does not work.** Grant Screen Recording permission under System Settings, Privacy and Security, then relaunch the app.
 - **Windows SmartScreen blocks the app.** Click More info, then Run anyway, or use `npm start` during development.
 - **Microphone or voice not working.** Voice is optional. For Azure, add valid keys to `.env`. For Whisper, install `openai-whisper`, `ffmpeg`, and `sox`, then set `SPEECH_PROVIDER=whisper`.
 

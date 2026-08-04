@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - os: ubuntu-latest
             script: linux
@@ -32,6 +32,11 @@ jobs:
             script: win
             artifact_glob: |
               dist/*.exe
+          - os: macos-latest
+            script: mac
+            artifact_glob: |
+              dist/*.dmg
+              dist/*.zip
 
     steps:
       - name: Checkout
@@ -180,14 +185,19 @@ jobs:
           | Platform | File | Notes |
           |---|---|---|
           | **Windows** | `OpenCluely-Setup-*.exe` | NSIS installer — installs app + adds to Start Menu |
+          | **macOS (Apple Silicon)** | `OpenCluely-*-arm64.dmg` | Drag to Applications, then run quarantine fix below |
+          | **macOS (Intel)** | `OpenCluely-*-x64.dmg` | Drag to Applications, then run quarantine fix below |
           | **Linux** | `*.deb` | Debian/Ubuntu — auto-pulls system deps (Python, ffmpeg, GTK) |
           | **Linux** | `*.AppImage` | Universal — no install, just `chmod +x` and run |
 
-          > **macOS:** no pre-built build is shipped. The app is unsigned/un-notarized, so macOS Gatekeeper blocks it as "damaged". Run OpenCluely from source instead:
+          > **macOS quarantine fix (one-time):** Since this app is unsigned, macOS Gatekeeper blocks it.
+          > After dragging OpenCluely to Applications, open Terminal and run:
           > ```bash
-          > git clone https://github.com/TechyCSR/OpenCluely && cd OpenCluely && ./setup.sh
+          > xattr -rd com.apple.quarantine /Applications/OpenCluely.app
           > ```
-          > Requires Node.js 18+. See the [README](https://github.com/TechyCSR/OpenCluely#quick-start) for details.
+          > The app will open normally from then on.
+
+          > **Run from source** (any platform): `git clone https://github.com/TechyCSR/OpenCluely && cd OpenCluely && npm run setup`
 
           ## First Run
 
@@ -235,6 +245,8 @@ jobs:
           #
           # The order below is the order files appear in the release page.
           find artifacts -type f -name 'OpenCluely-Setup-*.exe' \
+            -exec cp -v {} release/ \;
+          find artifacts -type f -name '*.dmg' \
             -exec cp -v {} release/ \;
           find artifacts -type f -name 'opencluely_*_amd64.deb' \
             -exec cp -v {} release/ \;
