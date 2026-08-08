@@ -25,7 +25,8 @@ class MainWindowUI {
         
         // Define available skills for navigation
         this.availableSkills = [
-            'dsa'
+            'dsa',
+            'quiz'
         ];
         
         this.init();
@@ -288,10 +289,12 @@ class MainWindowUI {
             }
         });
 
-        // Skill indicator click handler toggles DSA skill
+        // Skill indicator click handler cycles through available skills
         this.skillIndicator.addEventListener('click', () => {
             if (!this.isInteractive) return;
-            const newSkill = 'dsa';
+            const idx = this.availableSkills.indexOf(this.currentSkill);
+            const nextIdx = (idx + 1) % this.availableSkills.length;
+            const newSkill = this.availableSkills[nextIdx];
             if (window.electronAPI && window.electronAPI.updateActiveSkill) {
                 window.electronAPI.updateActiveSkill(newSkill).then(() => {
                     this.handleSkillActivated(newSkill);
@@ -520,6 +523,7 @@ class MainWindowUI {
         const skill = data.skill || data.metadata?.skill || 'General';
         const skillNames = {
             'dsa': 'DSA',
+            'quiz': 'Quiz',
             'behavioral': 'Behavioral', 
             'sales': 'Sales',
             'presentation': 'Presentation',
@@ -759,6 +763,7 @@ class MainWindowUI {
     updateSkillIndicator() {
         const skillNames = {
             'dsa': 'DSA',
+            'quiz': 'Quiz',
             'behavioral': 'Behavioral', 
             'sales': 'Sales',
             'presentation': 'Presentation',
