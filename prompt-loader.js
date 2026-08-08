@@ -28,7 +28,7 @@ class PromptLoader {
       for (const file of files) {
         if (file.endsWith('.md')) {
           const skillName = path.basename(file, '.md');
-          if (skillName !== 'dsa') continue; // only keep DSA
+          if (skillName !== 'dsa' && skillName !== 'quiz') continue;
           const filePath = path.join(promptsDir, file);
           const promptContent = fs.readFileSync(filePath, 'utf8');
           
@@ -328,6 +328,10 @@ STRICT REQUIREMENTS:
       'data-structures': 'dsa',
       'algorithms': 'dsa',
       'data-structures-algorithms': 'dsa',
+      'quiz': 'quiz',
+      'exam': 'quiz',
+      'mcq': 'quiz',
+      'test': 'quiz',
       'behavioral': 'behavioral',
       'behavioral-interview': 'behavioral',
       'behavior': 'behavioral',
@@ -368,7 +372,7 @@ STRICT REQUIREMENTS:
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
-    return ['dsa'];
+    return ['dsa', 'quiz'];
   }
 
   /**

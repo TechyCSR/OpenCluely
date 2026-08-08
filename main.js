@@ -1030,6 +1030,7 @@ class ApplicationController {
   navigateSkill(direction) {
     const availableSkills = [
       "dsa",
+      "quiz",
     ];
 
     const currentIndex = availableSkills.indexOf(this.activeSkill);
