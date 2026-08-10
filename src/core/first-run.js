@@ -8,10 +8,10 @@ const os = require('os');
  * Responsibilities:
  *   - Decide whether this is the user's first launch of OpenCluely
  *   - Auto-create a default `.env` from `env.example` if one is missing
- *   - Report whether a Gemini API key is configured (the only required key)
+ *   - Report whether the configured LLM provider is ready
  *   - Persist a "first-run completed" sentinel so we don't nag on every launch
  *
- * The settings UI is the source of truth for API-key entry. This module
+ * The settings UI is the source of truth for Google Cloud project setup. This module
  * only handles the bootstrap so the user has something to edit on first
  * launch.
  */
@@ -25,14 +25,17 @@ class FirstRunManager {
 
   /**
    * Returns true if this looks like a fresh install — no .env, no
-   * sentinel file, or .env exists but has no Gemini key.
+   * sentinel file, or .env exists but its selected LLM provider is not configured.
    */
   needsOnboarding() {
     if (!fs.existsSync(this.sentinelPath)) return true;
     if (!fs.existsSync(this.envPath)) return true;
     const content = this._readEnv();
-    const gemini = (content.GEMINI_API_KEY || '').trim();
-    return !gemini || gemini === 'your_gemini_api_key_here';
+    const provider = (content.LLM_PROVIDER || 'gemini').trim().toLowerCase();
+    if (provider === 'antigravity') {
+      return !(content.ANTIGRAVITY_COMMAND || '').trim();
+    }
+    return !(content.GOOGLE_CLOUD_PROJECT || '').trim();
   }
 
   /**
@@ -79,13 +82,16 @@ class FirstRunManager {
    */
   getStatus() {
     const env = this._readEnv();
-    const gemini = (env.GEMINI_API_KEY || '').trim();
+    const googleCloudProject = (env.GOOGLE_CLOUD_PROJECT || '').trim();
+    const llmProvider = (env.LLM_PROVIDER || 'gemini').trim().toLowerCase();
+    const antigravityConfigured = !!(env.ANTIGRAVITY_COMMAND || '').trim();
     return {
       envExists: fs.existsSync(this.envPath),
       sentinelExists: fs.existsSync(this.sentinelPath),
-      geminiConfigured: !!gemini && gemini !== 'your_gemini_api_key_here',
-      azureConfigured: !!(env.AZURE_SPEECH_KEY || '').trim() && !!(env.AZURE_SPEECH_REGION || '').trim(),
-      whisperConfigured: !!(env.WHISPER_COMMAND || '').trim(),
+      llmProvider,
+      antigravityConfigured,
+      geminiConfigured: !!googleCloudProject,
+      googleCloudProject,
       needsOnboarding: this.needsOnboarding()
     };
   }
@@ -139,29 +145,20 @@ class FirstRunManager {
     }
     return [
       '# OpenCluely configuration',
-      '# Add your Google Gemini API key below — the app picks it up immediately.',
-      '# Get a key from: https://aistudio.google.com/',
+      '# Choose "antigravity" for Google OAuth via agy, or "gemini" for Vertex AI.',
+      'LLM_PROVIDER=gemini',
+      'ANTIGRAVITY_COMMAND=',
+      'ANTIGRAVITY_MODEL=Gemini 3.1 Pro (Low)',
+      'ANTIGRAVITY_TIMEOUT_MS=120000',
       '',
-      'GEMINI_API_KEY=your_gemini_api_key_here',
+      '# Vertex AI project. Authenticate with: gcloud auth application-default login',
+      'GOOGLE_CLOUD_PROJECT=',
+      'GOOGLE_CLOUD_LOCATION=europe-west4',
+      'GEMINI_LIVE_MODEL=gemini-live-2.5-flash-native-audio',
       '',
-      '# Speech provider: "whisper" (local) or "azure" (cloud).',
-      '# WHISPER_COMMAND is auto-set to the project-local venv when you',
-      '# install Whisper through the onboarding wizard, so no PATH change',
-      '# or restart is needed.',
-      'SPEECH_PROVIDER=whisper',
-      'WHISPER_COMMAND=whisper',
-      '# WHISPER_MODEL_DIR is optional. Leave it unset and the app stores model',
-      '# weights in a stable app-data folder. Set an absolute path to override.',
-      '# WHISPER_MODEL_DIR=',
-      'WHISPER_MODEL=small',
-      'WHISPER_LANGUAGE=auto',
-      'WHISPER_DEVICE=auto',
-      'WHISPER_PYTHON=',
-      'WHISPER_CAPTURE_MODE=vad',
-      'WHISPER_RESPONSE_TARGET=both',
-      'WHISPER_MANUAL_MAX_MS=90000',
-      'WHISPER_GPU_IDLE_MS=60000',
-      'WHISPER_SEGMENT_MS=4000',
+      '# macOS system audio is sent directly to Gemini Live.',
+      'SYSTEM_AUDIO_COMMAND=',
+      'FFMPEG_COMMAND=ffmpeg',
       ''
     ].join(os.EOL);
   }

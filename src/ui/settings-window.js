@@ -1,4 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {    
+    // Gemini Live is the sole audio/AI path. Remove legacy provider controls
+    // from the DOM so they cannot be re-enabled or accidentally persisted.
+    document.querySelectorAll('.settings-section').forEach(section => {
+        const title = section.querySelector('.settings-section-title')?.textContent || '';
+        if (title.includes('Speech Recognition')) section.remove();
+    });
+    document.getElementById('antigravityFields')?.remove();
+    document.getElementById('llmProvider')?.closest('.settings-item')?.remove();
     const logger = {
         info: (...args) => console.log('[SettingsWindowUI]', ...args)
     };
@@ -16,7 +24,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const whisperCaptureModeSelect = document.getElementById('whisperCaptureMode');
     const whisperResponseTargetSelect = document.getElementById('whisperResponseTarget');
     const whisperSegmentMsInput = document.getElementById('whisperSegmentMs');
-    const geminiKeyInput = document.getElementById('geminiKey');
+    const llmProviderSelect = document.getElementById('llmProvider');
+    const antigravityCommandInput = document.getElementById('antigravityCommand');
+    const antigravityModelInput = document.getElementById('antigravityModel');
+    const googleCloudProjectInput = document.getElementById('googleCloudProject');
+    const googleCloudLocationInput = document.getElementById('googleCloudLocation');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
@@ -87,7 +99,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperCaptureModeSelect) whisperCaptureModeSelect.value = settings.whisperCaptureMode || 'vad';
         if (whisperResponseTargetSelect) whisperResponseTargetSelect.value = settings.whisperResponseTarget || 'both';
         if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
-        if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
+        if (llmProviderSelect) llmProviderSelect.value = settings.llmProvider || 'gemini';
+        if (antigravityCommandInput) antigravityCommandInput.value = settings.antigravityCommand || '';
+        if (antigravityModelInput) antigravityModelInput.value = settings.antigravityModel || 'Gemini 3.1 Pro (Low)';
+        if (googleCloudProjectInput) googleCloudProjectInput.value = settings.googleCloudProject || '';
+        if (googleCloudLocationInput) googleCloudLocationInput.value = settings.googleCloudLocation || 'europe-west4';
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
 
         // Set C++ as default if no coding language is specified
@@ -111,6 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updateSpeechFieldStates();
+        updateLlmFieldStates();
     };
 
     // Load settings when window opens
@@ -146,7 +163,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperCaptureModeSelect) settings.whisperCaptureMode = whisperCaptureModeSelect.value;
         if (whisperResponseTargetSelect) settings.whisperResponseTarget = whisperResponseTargetSelect.value;
         if (whisperSegmentMsInput) settings.whisperSegmentMs = whisperSegmentMsInput.value;
-        if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
+        if (llmProviderSelect) settings.llmProvider = llmProviderSelect.value;
+        if (antigravityCommandInput) settings.antigravityCommand = antigravityCommandInput.value;
+        if (antigravityModelInput) settings.antigravityModel = antigravityModelInput.value;
+        if (googleCloudProjectInput) settings.googleCloudProject = googleCloudProjectInput.value;
+        if (googleCloudLocationInput) settings.googleCloudLocation = googleCloudLocationInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
@@ -184,6 +205,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const updateLlmFieldStates = () => {
+        const provider = llmProviderSelect ? llmProviderSelect.value : 'gemini';
+        const antigravityFields = document.getElementById('antigravityFields');
+        const geminiFields = document.getElementById('geminiFields');
+        if (antigravityFields) antigravityFields.style.display = provider === 'antigravity' ? '' : 'none';
+        if (geminiFields) geminiFields.style.display = provider === 'gemini' ? '' : 'none';
+        [antigravityCommandInput, antigravityModelInput].forEach(input => {
+            if (input) input.disabled = provider !== 'antigravity';
+        });
+        [googleCloudProjectInput, googleCloudLocationInput].forEach(input => {
+            if (input) input.disabled = provider !== 'gemini';
+        });
+    };
+
     // Add event listeners for all inputs
     const inputs = [
         azureKeyInput,
@@ -195,7 +230,10 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperCaptureModeSelect,
         whisperResponseTargetSelect,
         whisperSegmentMsInput,
-        geminiKeyInput,
+        antigravityCommandInput,
+        antigravityModelInput,
+        googleCloudProjectInput,
+        googleCloudLocationInput,
         windowGapInput
     ];
 
@@ -209,6 +247,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (speechProviderSelect) {
         speechProviderSelect.addEventListener('change', () => {
             updateSpeechFieldStates();
+            saveSettings();
+        });
+    }
+
+    if (llmProviderSelect) {
+        llmProviderSelect.addEventListener('change', () => {
+            updateLlmFieldStates();
             saveSettings();
         });
     }

@@ -1,7 +1,8 @@
-const { BrowserWindow, screen, desktopCapturer, shell } = require('electron');
+const { app, BrowserWindow, screen, desktopCapturer, shell } = require('electron');
 const path = require('path');
 const logger = require('../core/logger').createServiceLogger('WINDOW');
 const config = require('../core/config');
+const browserBridgeService = require('../services/browser-bridge.service');
 
 class WindowManager {
   constructor() {
@@ -25,6 +26,7 @@ class WindowManager {
     this.isInitialized = false;
     this.isInitializing = false;
     this.isRecording = false;
+    this.hasLLMResponseContent = false;
     
     // Add debouncing to prevent excessive operations
     this.lastEnforceTime = 0;
@@ -38,7 +40,7 @@ class WindowManager {
     
     this.windowConfigs = {
       main: {
-        width: 520,
+        width: 620,
         height: 35,
         useContentSize: true,
         file: 'index.html',
@@ -51,8 +53,8 @@ class WindowManager {
         title: 'Chat'
       },
       llmResponse: {
-        width: 840,
-        height: 480,
+        width: 920,
+        height: 520,
         file: 'llm-response.html',
         title: 'AI Response',
         alwaysOnTop: true
@@ -100,6 +102,17 @@ class WindowManager {
     // ... existing initialization code ...
   }
 
+  isNonActivatingOverlay(type) {
+    return process.platform === 'darwin' && ['main', 'llmResponse', 'chat'].includes(type);
+  }
+
+  getWindowType(win) {
+    for (const [type, candidate] of this.windows.entries()) {
+      if (candidate && !candidate.isDestroyed() && candidate.id === win.id) return type;
+    }
+    return null;
+  }
+
   async initializeWindows(options = {}) {
     const { showMainWindow = true } = options;
     if (this.isInitialized || this.isInitializing) {
@@ -114,11 +127,10 @@ class WindowManager {
       // Pass autoShow so the main window doesn't flash visible during
       // first-run onboarding before the user has configured API keys.
       await this.createMainWindow({ autoShow: showMainWindow });
-      await this.createChatWindow();
-      await this.createLLMResponseWindow();
-      await this.createSettingsWindow();
-      
-      this.setupWindowEventHandlers();
+
+      // Secondary windows are created only when first used. Each BrowserWindow
+      // owns a Chromium renderer, so eagerly creating hidden chat, response,
+      // and settings windows wasted hundreds of MB at idle.
       this.setupScreenTracking();
       this.setupScreenCaptureAvailabilityWatcher();
 
@@ -278,8 +290,8 @@ class WindowManager {
         ...config.get('window.webPreferences'),
         nodeIntegration: false,
         contextIsolation: true,
-        backgroundThrottling: false,
-        devTools: true, // Enable DevTools for debugging
+        backgroundThrottling: true,
+        devTools: false,
       },
       show: false, // Never show during creation, use showOnCurrentDesktop instead
       title: windowConfig.title,
@@ -338,7 +350,7 @@ class WindowManager {
           disableAutoHideCursor: true
         })
       };
-  } else if (type === 'main') {
+    } else if (type === 'main') {
       // Main window configuration - fit to content, completely frameless
       browserWindowOptions = {
         ...baseOptions,
@@ -358,8 +370,11 @@ class WindowManager {
         hasShadow: false,
         useContentSize: windowConfig.useContentSize || false,
         thickFrame: false,
-        focusable: true,
+        // A click on the copilot must not deactivate an interview/browser tab.
+        // macOS non-activating panels still receive pointer events.
+        focusable: process.platform !== 'darwin',
         ...(process.platform === 'darwin' && {
+          type: 'panel',
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
           acceptFirstMouse: true,
@@ -381,7 +396,9 @@ class WindowManager {
         closable: false,
         hasShadow: false,
         thickFrame: false,
+        focusable: process.platform !== 'darwin',
         ...(process.platform === 'darwin' && {
+          type: 'panel',
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
           acceptFirstMouse: true
@@ -404,7 +421,9 @@ class WindowManager {
         maximizable: false,
         closable: false,
         hasShadow: true,
+        focusable: process.platform !== 'darwin',
         ...(process.platform === 'darwin' && {
+          type: 'panel',
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
           acceptFirstMouse: true
@@ -445,6 +464,7 @@ class WindowManager {
     browserWindowOptions.simpleFullscreen = false;
 
   const window = new BrowserWindow(browserWindowOptions);
+    this.attachWindowEventHandlers(window, type);
 
     // External links (GitHub, the website, Google AI Studio, etc.) must open in
     // the user's real browser, never inside the frameless overlay windows.
@@ -826,6 +846,8 @@ class WindowManager {
   showOnCurrentDesktop(win) {
     if (!win || win.isDestroyed()) return;
 
+    const windowType = this.getWindowType(win);
+    const nonActivating = this.isNonActivatingOverlay(windowType);
     const llmWin = this.windows.get('llmResponse');
     const isLLM = llmWin && !llmWin.isDestroyed() && win.id === llmWin.id;
 
@@ -849,16 +871,20 @@ class WindowManager {
 
       setTimeout(() => {
         if (win.isDestroyed()) return;
-        win.show();
-        win.focus();
+        if (nonActivating && typeof win.showInactive === 'function') {
+          win.setFocusable(false);
+          win.showInactive();
+        } else {
+          win.show();
+          win.focus();
+        }
         setMacOSAlwaysOnTop();
         setTimeout(() => { if (!win.isDestroyed()) setMacOSAlwaysOnTop(); }, 100);
-        // Keep LLM window visible across workspaces; others revert
+        // Keep every overlay available on all Spaces. Reverting this flag
+        // caused Cmd+Shift+V to restore windows on the desktop where they were
+        // created instead of the Space the user is currently viewing.
         setTimeout(() => {
           if (win.isDestroyed()) return;
-          if (!isLLM) {
-            win.setVisibleOnAllWorkspaces(false);
-          }
           setMacOSAlwaysOnTop();
         }, 300);
       }, 50);
@@ -870,9 +896,6 @@ class WindowManager {
       win.focus();
       setTimeout(() => {
         if (win.isDestroyed()) return;
-        if (!isLLM) {
-          win.setVisibleOnAllWorkspaces(false);
-        }
         win.setAlwaysOnTop(true);
       }, 500);
     }
@@ -880,12 +903,21 @@ class WindowManager {
     logger.debug('Showing window on current desktop with enhanced always-on-top', {
       platform: process.platform,
       windowId: win.id,
+      windowType,
+      nonActivating,
       isDestroyed: win.isDestroyed()
     });
   }
   
   setupWindowEventHandlers() {
     this.windows.forEach((window, type) => {
+      this.attachWindowEventHandlers(window, type);
+    });
+  }
+
+  attachWindowEventHandlers(window, type) {
+      if (!window || window.__openCluelyHandlersAttached) return;
+      window.__openCluelyHandlersAttached = true;
       window.on('closed', () => {
         logger.debug('Window closed', { type });
         this.windows.delete(type);
@@ -898,8 +930,10 @@ class WindowManager {
 
       // SIMPLIFIED blur handler - no aggressive re-focusing
       window.on('blur', () => {
-        // Only log, don't force focus back
         logger.debug('Window blurred', { type });
+        // macOS can reorder panels behind the newly focused app/Space. Raise
+        // without focusing so the user can keep typing in Chrome, Codex, etc.
+        setTimeout(() => this.raiseVisibleWindowsWithoutFocus(), 80);
       });
 
       window.on('show', () => {
@@ -920,13 +954,17 @@ class WindowManager {
         // Simplified restore handling
         logger.debug('Window restored', { type });
       });
-    });
   }
 
   setupScreenCaptureAvailabilityWatcher() {
-    // Avoid screencast portal errors on Linux/Wayland by disabling periodic detection
-    if (process.platform === 'linux') {
-      logger.info('Skipping screen capture availability watcher on Linux to avoid portal screencast errors');
+    // Never probe protected screen content at startup. On macOS this call can
+    // display the Screen Recording prompt on every launch, even though the
+    // user has not requested a screenshot or system-audio capture. The real
+    // capture paths already report permission errors when explicitly invoked.
+    if (process.platform === 'darwin' || process.platform === 'linux') {
+      logger.info('Skipping automatic screen capture availability watcher', {
+        platform: process.platform
+      });
       return;
     }
 
@@ -1025,7 +1063,7 @@ class WindowManager {
     }
   }
 
-  switchToWindow(windowType) {
+  async switchToWindow(windowType) {
     if (this.windows.has('chat') && this.windows.get('chat').isVisible()) {
       this.hideChatWindow();
       return;
@@ -1040,7 +1078,12 @@ class WindowManager {
       return;
     }
 
-    const targetWindow = this.windows.get(windowType);
+    let targetWindow = this.windows.get(windowType);
+    if (!targetWindow) {
+      if (windowType === 'chat') targetWindow = await this.createChatWindow();
+      else if (windowType === 'settings') targetWindow = await this.createSettingsWindow();
+      else if (windowType === 'llmResponse') targetWindow = await this.createLLMResponseWindow();
+    }
     if (targetWindow) {
       this.showOnCurrentDesktop(targetWindow);
 
@@ -1053,20 +1096,47 @@ class WindowManager {
     }
   }
 
-  showAllWindows() {
+  async showAllWindows() {
     if (this.isScreenBeingShared) {
       return;
     }
 
+    const llmWindow = await this.createLLMResponseWindow();
+    if (!this.hasLLMResponseContent) {
+      llmWindow.webContents.send('display-llm-response', {
+        content: 'Answer window ready. Ask a question or start Gemini Live.',
+        metadata: { skill: 'general', source: 'status' },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Rebase the overlay group to the display currently under the cursor
+    // before showing it. This makes the global shortcut behave like a summon
+    // command across monitors rather than restoring a stale desktop position.
+    const cursorPoint = screen.getCursorScreenPoint();
+    this.currentDisplay = screen.getDisplayNearestPoint(cursorPoint);
+    this.moveWindowsToActiveScreen();
+
     this.windows.forEach((window, type) => {
-      if (type !== 'llmResponse') { // Don't show LLM response unless it has content
-        this.showOnCurrentDesktop(window);
-      }
+      if (window.isDestroyed()) return;
+      const nonActivating = this.isNonActivatingOverlay(type);
+      window.setFocusable(!nonActivating);
+      window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      this.showOnCurrentDesktop(window);
+      setTimeout(() => {
+        if (window.isDestroyed()) return;
+        try {
+          window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+          window.setAlwaysOnTop(true, 'screen-saver', 2);
+          window.moveTop();
+          if (!nonActivating) window.focus();
+        } catch (_) {}
+      }, 120);
     });
     
     this.isVisible = true;
     const activeWindow = this.windows.get(this.activeWindow);
-    if (activeWindow) {
+    if (activeWindow && !this.isNonActivatingOverlay(this.activeWindow)) {
       activeWindow.focus();
     }
     
@@ -1256,7 +1326,7 @@ class WindowManager {
     return results;
   }
 
-  showLLMResponse(content, metadata = {}) {
+  async showLLMResponse(content, metadata = {}) {
     logger.debug('showLLMResponse called', {
       isScreenBeingShared: this.isScreenBeingShared,
       contentLength: content.length,
@@ -1268,11 +1338,8 @@ class WindowManager {
       return;
     }
 
-    const llmWindow = this.windows.get('llmResponse');
-    if (!llmWindow) {
-      logger.error('LLM response window not available');
-      return;
-    }
+    const llmWindow = await this.createLLMResponseWindow();
+    this.hasLLMResponseContent = true;
 
     // Ensure window is not destroyed before use
     if (llmWindow.isDestroyed()) {
@@ -1303,13 +1370,13 @@ class WindowManager {
     });
   }
 
-  showLLMLoading() {
+  async showLLMLoading() {
     if (this.isScreenBeingShared) {
       logger.warn('LLM loading blocked due to screen sharing mode');
       return;
     }
 
-    const llmWindow = this.windows.get('llmResponse');
+    const llmWindow = await this.createLLMResponseWindow();
     if (llmWindow) {
       logger.debug('Showing LLM loading state');
       llmWindow.webContents.send('show-loading');
@@ -1333,10 +1400,10 @@ class WindowManager {
     }
   }
 
-  showSettings() {
+  async showSettings() {
     if (this.isScreenBeingShared) return;
 
-    const settingsWindow = this.windows.get('settings');
+    const settingsWindow = await this.createSettingsWindow();
     if (settingsWindow) {
       this.showOnCurrentDesktop(settingsWindow);
       this.centerWindow(settingsWindow); // This now positions at top-center
@@ -1461,6 +1528,7 @@ class WindowManager {
   }
 
   broadcastToAllWindows(channel, data) {
+    browserBridgeService.broadcastChannel(channel, data);
     const windowStates = {};
     
     this.windows.forEach((window, type) => {
@@ -1608,12 +1676,15 @@ class WindowManager {
 
     const { x: displayX, y: displayY, width: displayWidth, height: displayHeight } = this.currentDisplay.workArea;
     
+    let boundPairHandled = false;
+
     // Handle bound windows specially
     if (this.bindWindows) {
       const mainWindow = this.windows.get('main');
       const llmWindow = this.windows.get('llmResponse');
       
       if (mainWindow && llmWindow && !mainWindow.isDestroyed() && !llmWindow.isDestroyed()) {
+        boundPairHandled = true;
         // Position bound windows on the new screen and ensure they appear on current desktop
         this.positionBoundWindows();
         if (mainWindow.isVisible()) this.showOnCurrentDesktop(mainWindow);
@@ -1624,7 +1695,7 @@ class WindowManager {
     this.windows.forEach((window, type) => {
       if (window && !window.isDestroyed()) {
         // Skip main and llmResponse if they're bound (already handled above)
-        if (this.bindWindows && (type === 'main' || type === 'llmResponse')) {
+        if (boundPairHandled && (type === 'main' || type === 'llmResponse')) {
           return;
         }
         
@@ -1686,10 +1757,10 @@ class WindowManager {
   }
 
   setupDesktopTracking() {
-    // MUCH less aggressive desktop tracking
     this.desktopWatcher = setInterval(() => {
       this.trackDesktopChanges();
-    }, 10000); // Changed from 1500ms to 10000ms (10 seconds)
+      this.raiseVisibleWindowsWithoutFocus();
+    }, 1000);
 
     logger.info('Desktop tracking initialized');
   }
@@ -1708,6 +1779,18 @@ class WindowManager {
       
       this.lastActiveSpace = currentSpaceSignature;
     }
+  }
+
+  raiseVisibleWindowsWithoutFocus() {
+    if (!this.isVisible || this.isScreenBeingShared) return;
+    this.windows.forEach(window => {
+      if (!window || window.isDestroyed() || !window.isVisible()) return;
+      try {
+        window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+        window.setAlwaysOnTop(true, 'screen-saver', 2);
+        window.moveTop();
+      } catch (_) {}
+    });
   }
 
   // REMOVED all the aggressive enforcement methods that were causing flickering:
@@ -1776,8 +1859,8 @@ class WindowManager {
     return this.windowGap;
   }
 
-  showChatWindow() {
-    const chatWindow = this.windows.get('chat');
+  async showChatWindow() {
+    const chatWindow = await this.createChatWindow();
     if (chatWindow && !chatWindow.isDestroyed()) {
       this.showOnCurrentDesktop(chatWindow);
       logger.debug('Chat window shown');

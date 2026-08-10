@@ -1,5 +1,6 @@
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const { fileURLToPath } = require("url");
 const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
 
@@ -101,8 +102,13 @@ process.on("unhandledRejection", (reason) => {
 // Services
 // Screen capture (image-based)
 const captureService = require("./src/services/capture.service");
-const speechService = require("./src/services/speech.service");
+// Legacy local Whisper/Azure transcription is intentionally disabled.
+// Gemini Live owns the real-time audio path.
+const speechService = require("./src/services/disabled-speech.service");
 const llmService = require("./src/services/llm.service");
+const systemAudioService = require("./src/services/system-audio.service");
+const geminiLiveService = require("./src/services/gemini-live.service");
+const browserBridgeService = require("./src/services/browser-bridge.service");
 
 // Managers
 const windowManager = require("./src/managers/window.manager");
@@ -126,9 +132,29 @@ class ApplicationController {
     this._utteranceDispatchInFlight = false;
     this._utteranceCoalesceMs = 800;
 
-    // First-run onboarding: detects missing .env / API key and triggers
+    // Call Copilot: continuously capture the remote/system-audio channel,
+    // transcribe utterances locally, and queue concise suggestions.
+    this.callCopilotResponseSeq = 0;
+    this.callCopilotMessageId = null;
+    this.callCopilotResponse = "";
+    this.callCopilotInput = "";
+    this.liveScreenTimer = null;
+    this.liveScreenCaptureInFlight = false;
+    this.liveScreenPromptSent = false;
+    this.liveScreenFrameCount = 0;
+    this.liveScreenLastAnalysisHash = "";
+    this.liveScreenLastAnalysisAt = 0;
+    this.liveScreenAnalysisInFlight = false;
+    this.liveScreenActiveTask = "";
+    this.liveAudioBuffers = {
+      system: Buffer.alloc(0),
+      microphone: Buffer.alloc(0)
+    };
+    this.liveAudioMixerTimer = null;
+
+    // First-run onboarding: detects missing .env / Google Cloud project and triggers
     // a settings-window prompt on first launch so users don't have to
-    // dig through docs to figure out they need a Gemini API key.
+    // dig through docs to figure out they need Vertex AI configuration.
     this.firstRunManager = new FirstRunManager({
       logger: logger,
       // .env and the sentinel both live in userData so they survive cwd
@@ -138,9 +164,6 @@ class ApplicationController {
       envPath: ENV_PATH,
       sentinelPath: path.join(app.getPath("userData"), ".opencluely-firstrun-completed"),
     });
-    // Lazily-initialised in getWhisperInstaller() so tests can mock
-    // the constructor without polluting main-process startup.
-    this._whisperInstaller = null;
     this.isFirstRun = false;
 
     // Window configurations for reference
@@ -152,7 +175,46 @@ class ApplicationController {
     };
 
     this.setupStealth();
+    this.setupBrowserBridge();
     this.setupEventHandlers();
+  }
+
+  setupBrowserBridge() {
+    browserBridgeService.on('command', async ({ command, payload, respond }) => {
+      try {
+        if (command === 'toggle-live-screen') {
+          return respond(await this.toggleLiveScreen());
+        }
+        if (command === 'toggle-call-copilot') {
+          return respond(await this.toggleCallCopilot());
+        }
+        if (command === 'send-chat-message') {
+          const text = String(payload?.text || '').trim().slice(0, 8000);
+          if (!text) return respond({ success: false, error: 'Message is empty' });
+          sessionManager.addUserInput(text, 'chat');
+          const sessionHistory = sessionManager.getOptimizedHistory();
+          this.processWithLLM(text, sessionHistory).catch(error => {
+            logger.error('Browser overlay chat failed', { error: error.message });
+          });
+          return respond({ success: true });
+        }
+        if (command === 'get-status') {
+          return respond({
+            success: true,
+            status: {
+              liveScreen: { active: !!this.liveScreenTimer },
+              callCopilot: {
+                ...systemAudioService.getStatus(),
+                liveConnected: geminiLiveService.connected
+              }
+            }
+          });
+        }
+      } catch (error) {
+        logger.error('Browser overlay command failed', { command, error: error.message });
+        respond({ success: false, error: error.message });
+      }
+    });
   }
 
   setupStealth() {
@@ -260,6 +322,7 @@ class ApplicationController {
       const isFirstRun = status.needsOnboarding;
 
       await windowManager.initializeWindows({ showMainWindow: !isFirstRun });
+      browserBridgeService.start();
       this.setupGlobalShortcuts();
 
       // Initialize default stealth mode with terminal icon
@@ -296,6 +359,18 @@ class ApplicationController {
       });
 
       sessionManager.addEvent("Application started");
+
+      // Opt-in diagnostic used by the packaged end-to-end verification flow.
+      // It is inert during normal launches.
+      if (process.argv.includes("--verify-live-screen")) {
+        setTimeout(() => {
+          this.toggleLiveScreen().catch(error => {
+            logger.error("Live Screen verification autostart failed", {
+              error: error.message
+            });
+          });
+        }, 1500);
+      }
     } catch (error) {
       this.starting = false;
       logger.error("Application initialization failed", {
@@ -391,13 +466,14 @@ class ApplicationController {
   setupGlobalShortcuts() {
     const shortcuts = {
       "CommandOrControl+Shift+S": () => this.triggerScreenshotOCR(),
-      "CommandOrControl+Shift+V": () => windowManager.toggleVisibility(),
+      "CommandOrControl+Shift+V": () => windowManager.showAllWindows(),
       "CommandOrControl+Shift+I": () => windowManager.toggleInteraction(),
       "CommandOrControl+Shift+C": () => windowManager.switchToWindow("chat"),
+      "CommandOrControl+Shift+L": () => this.toggleCallCopilot(),
+      "CommandOrControl+Shift+G": () => this.toggleLiveScreen(),
       "CommandOrControl+Shift+\\": () => this.clearSessionMemory(),
       "CommandOrControl+,": () => windowManager.showSettings(),
       "Alt+A": () => windowManager.toggleInteraction(),
-      "Alt+R": () => this.toggleSpeechRecognition(),
       "CommandOrControl+Shift+T": () => windowManager.forceAlwaysOnTopForAllWindows(),
       "CommandOrControl+Shift+Alt+T": () => {
         const results = windowManager.testAlwaysOnTopForAllWindows();
@@ -427,6 +503,80 @@ class ApplicationController {
 
     speechService.on("transcription", (text) => {
       this.handleTranscriptionFragment(text);
+    });
+
+    systemAudioService.on("started", status => {
+      windowManager.broadcastToAllWindows("call-copilot-status", {
+        ...status,
+        message: "Call Copilot listening to system audio"
+      });
+    });
+
+    systemAudioService.on("stopped", status => {
+      windowManager.broadcastToAllWindows("call-copilot-status", {
+        ...status,
+        message: "Call Copilot stopped"
+      });
+    });
+
+    systemAudioService.on("error", error => {
+      windowManager.broadcastToAllWindows("call-copilot-status", {
+        ...systemAudioService.getStatus(),
+        error: error.message,
+        message: "Call Copilot audio capture failed"
+      });
+    });
+
+    systemAudioService.on("audio-chunk", audioBuffer => {
+      this.enqueueLiveAudio("system", audioBuffer);
+    });
+
+    geminiLiveService.on("connected", () => {
+      windowManager.broadcastToAllWindows("call-copilot-status", {
+        ...systemAudioService.getStatus(),
+        liveConnected: true,
+        message: "Gemini Live connected"
+      });
+    });
+
+    geminiLiveService.on("input-transcription", delta => {
+      this.callCopilotInput += delta;
+    });
+
+    geminiLiveService.on("response-delta", delta => {
+      if (!this.callCopilotMessageId) {
+        this.callCopilotResponseSeq += 1;
+        this.callCopilotMessageId = `live-${Date.now()}-${this.callCopilotResponseSeq}`;
+        this.callCopilotResponse = "";
+        windowManager.broadcastToAllWindows("transcription-llm-response-start", {
+          messageId: this.callCopilotMessageId,
+          skill: "general"
+        });
+        windowManager.showLLMLoading();
+      }
+      this.callCopilotResponse += delta;
+      windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
+        messageId: this.callCopilotMessageId,
+        delta
+      });
+    });
+
+    geminiLiveService.on("turn-complete", turn => {
+      this.completeGeminiLiveTurn(turn);
+    });
+
+    geminiLiveService.on("interrupted", () => {
+      this.callCopilotMessageId = null;
+      this.callCopilotResponse = "";
+    });
+
+    geminiLiveService.on("service-error", error => {
+      windowManager.broadcastToAllWindows("call-copilot-status", {
+        ...systemAudioService.getStatus(),
+        liveConnected: false,
+        error: error.message,
+        message: "Gemini Live failed"
+      });
     });
 
     speechService.on("interim-transcription", (text) => {
@@ -476,6 +626,17 @@ class ApplicationController {
       return speechService.isAvailable ? speechService.isAvailable() : false;
     });
 
+    ipcMain.handle("toggle-call-copilot", () => this.toggleCallCopilot());
+    ipcMain.handle("toggle-live-screen", () => this.toggleLiveScreen());
+    ipcMain.handle("get-live-screen-status", () => ({
+      active: !!this.liveScreenTimer,
+      frameIntervalMs: 1000
+    }));
+    ipcMain.handle("get-call-copilot-status", () => ({
+      ...systemAudioService.getStatus(),
+      liveConnected: geminiLiveService.connected
+    }));
+
     ipcMain.handle("start-speech-recognition", () => {
       speechService.startRecording();
       return speechService.getStatus();
@@ -489,7 +650,12 @@ class ApplicationController {
     // Raw PCM audio captured by the renderer's Web Audio API (Windows Whisper path)
     ipcMain.on("audio-chunk", (_event, data) => {
       if (data && data.buffer) {
-        speechService.handleAudioChunkFromRenderer(Buffer.from(data.buffer));
+        const audioBuffer = Buffer.from(data.buffer);
+        if (geminiLiveService.connected) {
+          this.enqueueLiveAudio("microphone", audioBuffer);
+        } else {
+          speechService.handleAudioChunkFromRenderer(audioBuffer);
+        }
       }
     });
 
@@ -652,8 +818,8 @@ class ApplicationController {
       }
     });
 
-    ipcMain.handle("set-gemini-api-key", (event, apiKey) => {
-      llmService.updateApiKey(apiKey);
+    ipcMain.handle("set-google-cloud-project", (event, project) => {
+      this.saveSettings({ googleCloudProject: String(project || '').trim() });
       return llmService.getStats();
     });
 
@@ -753,7 +919,7 @@ class ApplicationController {
           ? speechService.isAvailable()
           : false;
         // Show the main overlay window now that onboarding is done
-        // and API keys are configured.
+        // and Google Cloud is configured.
         await windowManager.showMainWindow();
         // Broadcast speech availability so the mic button appears
         const { BrowserWindow } = require("electron");
@@ -791,52 +957,6 @@ class ApplicationController {
         return { success: true };
       } catch (e) {
         return { success: false, error: e.message };
-      }
-    });
-
-    // Detect an installed Whisper CLI across common locations.
-    ipcMain.handle("detect-whisper", async () => {
-      try {
-        const installer = this.getWhisperInstaller();
-        return await installer.detect();
-      } catch (e) {
-        logger.warn("Whisper detection failed", { error: e.message });
-        return { found: false, command: null, version: null, error: e.message };
-      }
-    });
-
-    // Install Whisper. Streams progress lines back via `webContents.send`
-    // so the renderer can paint them as they arrive.
-    ipcMain.handle("install-whisper", async (event) => {
-      try {
-        const installer = this.getWhisperInstaller();
-        const sender = event.sender;
-        const result = await installer.install({
-          onProgress: (line) => {
-            try { sender.send("install-progress", line); } catch (_) { /* ignore */ }
-          },
-        });
-        return result;
-      } catch (e) {
-        logger.error("Whisper install failed", { error: e.message });
-        return { ok: false, command: null, message: e.message, logs: "" };
-      }
-    });
-
-    // Download Whisper model. Streams progress lines back via `webContents.send`
-    ipcMain.handle("download-whisper-model", async (event, modelName) => {
-      try {
-        const installer = this.getWhisperInstaller();
-        const sender = event.sender;
-        const result = await installer.downloadModel(modelName || 'small', {
-          onProgress: (line) => {
-            try { sender.send("install-progress", line); } catch (_) { /* ignore */ }
-          },
-        });
-        return result;
-      } catch (e) {
-        logger.error("Whisper model download failed", { error: e.message });
-        return { ok: false, message: e.message, path: null };
       }
     });
 
@@ -973,6 +1093,345 @@ class ApplicationController {
     }
   }
 
+  async toggleCallCopilot() {
+    try {
+      if (systemAudioService.isCapturing || geminiLiveService.connected) {
+        this.stopLiveScreen();
+        windowManager.broadcastToAllWindows("live-microphone-command", {
+          active: false
+        });
+        this.stopLiveAudioMixer();
+        systemAudioService.stop();
+        geminiLiveService.disconnect();
+        this.resetGeminiLiveTurn();
+        return {
+          success: true,
+          ...systemAudioService.getStatus(),
+          liveConnected: false
+        };
+      }
+
+      await geminiLiveService.connect();
+      const recentContext = sessionManager
+        .getConversationHistory(12)
+        .map(event => `${event.role}: ${event.content}`)
+        .join("\n")
+        .slice(-5000);
+      if (recentContext) {
+        geminiLiveService.sendContext(
+          [
+            "RECENT DURABLE SESSION CONTEXT:",
+            recentContext,
+            "Preserve the most recent substantive task across brief detours.",
+            "Do not answer this context update now."
+          ].join("\n")
+        );
+      }
+      this.startLiveAudioMixer();
+      const status = systemAudioService.start();
+      windowManager.broadcastToAllWindows("live-microphone-command", {
+        active: true
+      });
+      this.resetGeminiLiveTurn();
+      windowManager.showChatWindow();
+      return {
+        success: true,
+        ...status,
+        liveConnected: true
+      };
+    } catch (error) {
+      windowManager.broadcastToAllWindows("live-microphone-command", {
+        active: false
+      });
+      this.stopLiveAudioMixer();
+      systemAudioService.stop();
+      geminiLiveService.disconnect();
+      logger.error("Could not toggle Call Copilot", {
+        error: error.message,
+        stack: error.stack
+      });
+      const status = {
+        success: false,
+        ...systemAudioService.getStatus(),
+        liveConnected: false,
+        error: error.message
+      };
+      windowManager.broadcastToAllWindows("call-copilot-status", status);
+      return status;
+    }
+  }
+
+  resetGeminiLiveTurn() {
+    this.callCopilotMessageId = null;
+    this.callCopilotResponse = "";
+    this.callCopilotInput = "";
+  }
+
+  enqueueLiveAudio(channel, buffer) {
+    if (!this.liveAudioMixerTimer || !buffer?.length ||
+        !Object.prototype.hasOwnProperty.call(this.liveAudioBuffers, channel)) {
+      return;
+    }
+    const combined = Buffer.concat([this.liveAudioBuffers[channel], buffer]);
+    // Keep at most one second per channel. Dropping stale audio is preferable
+    // to accumulating latency during a live conversation.
+    this.liveAudioBuffers[channel] = combined.length > 32000
+      ? combined.subarray(combined.length - 32000)
+      : combined;
+  }
+
+  startLiveAudioMixer() {
+    if (this.liveAudioMixerTimer) return;
+    this.liveAudioBuffers.system = Buffer.alloc(0);
+    this.liveAudioBuffers.microphone = Buffer.alloc(0);
+    const frameBytes = 3200; // 100 ms of mono 16-bit PCM at 16 kHz.
+
+    this.liveAudioMixerTimer = setInterval(() => {
+      const system = this.liveAudioBuffers.system.subarray(0, frameBytes);
+      const microphone = this.liveAudioBuffers.microphone.subarray(0, frameBytes);
+      this.liveAudioBuffers.system =
+        this.liveAudioBuffers.system.subarray(system.length);
+      this.liveAudioBuffers.microphone =
+        this.liveAudioBuffers.microphone.subarray(microphone.length);
+
+      if (!system.length && !microphone.length) return;
+      const mixed = Buffer.alloc(frameBytes);
+      for (let offset = 0; offset < frameBytes; offset += 2) {
+        const systemSample = offset + 1 < system.length
+          ? system.readInt16LE(offset)
+          : 0;
+        const microphoneSample = offset + 1 < microphone.length
+          ? microphone.readInt16LE(offset)
+          : 0;
+        const sample = Math.max(
+          -32768,
+          Math.min(32767, systemSample + microphoneSample)
+        );
+        mixed.writeInt16LE(sample, offset);
+      }
+      geminiLiveService.sendAudio(mixed);
+    }, 100);
+    logger.info("Gemini Live audio mixer started", {
+      channels: ["system", "microphone"],
+      format: "16kHz mono PCM",
+      frameMs: 100
+    });
+  }
+
+  stopLiveAudioMixer() {
+    if (this.liveAudioMixerTimer) clearInterval(this.liveAudioMixerTimer);
+    this.liveAudioMixerTimer = null;
+    this.liveAudioBuffers.system = Buffer.alloc(0);
+    this.liveAudioBuffers.microphone = Buffer.alloc(0);
+    logger.info("Gemini Live audio mixer stopped");
+  }
+
+  async toggleLiveScreen() {
+    if (this.liveScreenTimer) {
+      return this.stopLiveScreen();
+    }
+
+    if (!geminiLiveService.connected || !systemAudioService.isCapturing) {
+      const callStatus = await this.toggleCallCopilot();
+      if (!callStatus?.success) return callStatus;
+    }
+
+    const captureFrame = async () => {
+      if (!this.liveScreenTimer) return;
+      if (this.liveScreenCaptureInFlight) {
+        this.liveScreenTimer = setTimeout(captureFrame, 250);
+        return;
+      }
+      this.liveScreenCaptureInFlight = true;
+      try {
+        const frame = await captureService.captureLiveFrame({
+          maxWidth: 1600,
+          quality: 82
+        });
+        const sent = geminiLiveService.sendVideoFrame(frame.imageBuffer, frame.mimeType);
+        const frameHash = crypto
+          .createHash("sha256")
+          .update(frame.visualSignature || frame.imageBuffer)
+          .digest("hex");
+        if (!sent) {
+          logger.warn("Live screen frame was not sent because Gemini Live is unavailable");
+        } else {
+          this.liveScreenFrameCount += 1;
+          if (this.liveScreenFrameCount === 1 || this.liveScreenFrameCount % 10 === 0) {
+            logger.info("Gemini Live screen frame sent", {
+              frameCount: this.liveScreenFrameCount,
+              dimensions: frame.dimensions,
+              displayId: frame.displayId
+            });
+          }
+        }
+        const isFirstAnalysis = !this.liveScreenPromptSent;
+        const screenChanged = frameHash !== this.liveScreenLastAnalysisHash;
+        const readingIntervalElapsed =
+          Date.now() - this.liveScreenLastAnalysisAt >= 30000;
+
+        // Stay interactive without replacing a response every few seconds:
+        // analyze immediately once, then at most once per 30 seconds when the
+        // screen has actually changed. Cmd+Shift+S always forces a refresh.
+        if (sent && (isFirstAnalysis ||
+            (screenChanged && readingIntervalElapsed &&
+             !this.liveScreenAnalysisInFlight))) {
+          this.liveScreenPromptSent = true;
+          this.liveScreenLastAnalysisHash = frameHash;
+          this.liveScreenLastAnalysisAt = Date.now();
+          this.analyzeLiveScreenFrame(frame, isFirstAnalysis);
+        }
+      } catch (error) {
+        logger.warn("Live screen frame failed", { error: error.message });
+      } finally {
+        this.liveScreenCaptureInFlight = false;
+        if (this.liveScreenTimer) {
+          this.liveScreenTimer = setTimeout(captureFrame, 1000);
+        }
+      }
+    };
+
+    this.liveScreenFrameCount = 0;
+    this.liveScreenLastAnalysisHash = "";
+    this.liveScreenLastAnalysisAt = 0;
+    this.liveScreenTimer = setTimeout(captureFrame, 0);
+    windowManager.broadcastToAllWindows("live-screen-status", {
+      active: true,
+      frameIntervalMs: 1000
+    });
+    logger.info("Gemini Live screen context started", { frameIntervalMs: 1000 });
+    return { success: true, active: true, frameIntervalMs: 1000 };
+  }
+
+  async analyzeLiveScreenFrame(frame, isFirstPrompt = false) {
+    if (this.liveScreenAnalysisInFlight || !this.liveScreenTimer) return;
+    this.liveScreenAnalysisInFlight = true;
+    const startedAt = Date.now();
+    const skill = "general";
+    this._responseSeq = (this._responseSeq || 0) + 1;
+    const messageId = `live-screen-${Date.now()}-${this._responseSeq}`;
+
+    try {
+      windowManager.showLLMLoading();
+      windowManager.broadcastToAllWindows("transcription-llm-response-start", {
+        messageId,
+        skill
+      });
+
+      const sessionHistory = sessionManager.getOptimizedHistory();
+      const intentMemory = [
+        this.liveScreenActiveTask,
+        ...sessionHistory.important.map(event => event.content || event.summary || "")
+      ].filter(Boolean);
+      const llmResult = await llmService.processImageWithSkillStream(
+        frame.imageBuffer,
+        frame.mimeType || "image/jpeg",
+        skill,
+        intentMemory,
+        null,
+        delta => {
+          windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
+            messageId,
+            delta
+          });
+        }
+      );
+      llmResult.metadata = {
+        ...llmResult.metadata,
+        messageId,
+        isLiveScreenAnalysis: true,
+        isFirstPrompt
+      };
+
+      sessionManager.addModelResponse(llmResult.response, {
+        skill,
+        processingTime: llmResult.metadata.processingTime,
+        isImageAnalysis: true,
+        isLiveScreenAnalysis: true
+      });
+      this.liveScreenActiveTask = llmResult.response.slice(0, 5000);
+      geminiLiveService.sendContext(
+        [
+          'AUTHORITATIVE ACTIVE INTENT AND TASK MODEL FROM SCREEN ANALYSIS:',
+          llmResult.response.slice(0, 3500),
+          'Use this to answer spoken questions precisely and proactively.',
+          'Preserve the intent, constraints, approach, code signature, and unfinished step.',
+          'Preserve this task across brief unrelated conversation.',
+          'Resume it when the user says continue or returns to a related question.',
+          'Do not answer this context update now.'
+        ].join('\n')
+      );
+      this.broadcastTranscriptionLLMResponse(llmResult);
+      windowManager.showLLMResponse(llmResult.response, llmResult.metadata);
+      logger.info("Detailed Live Screen analysis completed", {
+        duration: Date.now() - startedAt,
+        responseLength: llmResult.response.length,
+        response: llmResult.response
+      });
+    } catch (error) {
+      logger.error("Detailed Live Screen analysis failed", {
+        error: error.message,
+        duration: Date.now() - startedAt
+      });
+    } finally {
+      this.liveScreenAnalysisInFlight = false;
+    }
+  }
+
+  stopLiveScreen() {
+    if (this.liveScreenTimer) clearTimeout(this.liveScreenTimer);
+    this.liveScreenTimer = null;
+    this.liveScreenCaptureInFlight = false;
+    this.liveScreenPromptSent = false;
+    this.liveScreenFrameCount = 0;
+    this.liveScreenLastAnalysisHash = "";
+    this.liveScreenLastAnalysisAt = 0;
+    this.liveScreenAnalysisInFlight = false;
+    this.liveScreenActiveTask = "";
+    windowManager.broadcastToAllWindows("live-screen-status", {
+      active: false,
+      frameIntervalMs: 1000
+    });
+    logger.info("Gemini Live screen context stopped");
+    return { success: true, active: false, frameIntervalMs: 1000 };
+  }
+
+  completeGeminiLiveTurn(turn = {}) {
+    const response = String(turn.response || this.callCopilotResponse || "").trim();
+    const transcript = String(turn.input || this.callCopilotInput || "").trim();
+    const messageId = this.callCopilotMessageId ||
+      `live-${Date.now()}-${++this.callCopilotResponseSeq}`;
+
+    if (transcript) {
+      sessionManager.addUserInput(transcript, "speech");
+      windowManager.broadcastToAllWindows("transcription-received", {
+        text: transcript,
+        source: "gemini-live"
+      });
+    }
+
+    if (response) {
+      const result = {
+        response,
+        metadata: {
+          provider: "vertex-gemini-live",
+          model: geminiLiveService.getStatus().model,
+          messageId,
+          skill: "general",
+          source: "gemini-live",
+          transcript,
+          processingTime: 0,
+          usedFallback: false
+        }
+      };
+      this.broadcastTranscriptionLLMResponse(result);
+      windowManager.showLLMResponse(response, result.metadata);
+      sessionManager.addModelResponse(response, result.metadata);
+    }
+
+    this.resetGeminiLiveTurn();
+  }
+
   clearSessionMemory() {
     try {
       sessionManager.clear();
@@ -1084,25 +1543,25 @@ class ApplicationController {
         return;
       }
 
-      // Use image directly with LLM and active skill; do not send chat messages here
+      // Screenshots are general-purpose visual context. Do not constrain them
+      // with the active conversational skill (for example, DSA), otherwise
+      // unrelated screens are incorrectly rejected.
       const sessionHistory = sessionManager.getOptimizedHistory();
-
-      const skillsRequiringProgrammingLanguage = ['dsa'];
-      const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
+      const screenshotSkill = 'general';
 
       this._responseSeq = (this._responseSeq || 0) + 1;
       const messageId = `img-${Date.now()}-${this._responseSeq}`;
       windowManager.broadcastToAllWindows("transcription-llm-response-start", {
         messageId,
-        skill: this.activeSkill
+        skill: screenshotSkill
       });
 
       const llmResult = await llmService.processImageWithSkillStream(
         capture.imageBuffer,
         capture.mimeType || 'image/png',
-        this.activeSkill,
+        screenshotSkill,
         sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null,
+        null,
         (delta) => {
           windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
             messageId,
@@ -1113,7 +1572,7 @@ class ApplicationController {
       llmResult.metadata = { ...llmResult.metadata, messageId };
 
       sessionManager.addModelResponse(llmResult.response, {
-        skill: this.activeSkill,
+        skill: screenshotSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
         isImageAnalysis: true
@@ -1122,7 +1581,7 @@ class ApplicationController {
       this.broadcastTranscriptionLLMResponse(llmResult);
 
       windowManager.showLLMResponse(llmResult.response, {
-        skill: this.activeSkill,
+        skill: screenshotSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
         isImageAnalysis: true
@@ -1472,17 +1931,18 @@ class ApplicationController {
   }
 
   broadcastTranscriptionLLMResponse(llmResult) {
+    const responseSkill = llmResult.metadata?.skill || this.activeSkill;
     const broadcastData = {
       response: llmResult.response,
       metadata: llmResult.metadata,
       messageId: llmResult.metadata && llmResult.metadata.messageId,
-      skill: this.activeSkill,
+      skill: responseSkill,
       isTranscriptionResponse: true
     };
 
     logger.info("Broadcasting transcription LLM response to all windows", {
       responseLength: llmResult.response.length,
-      skill: this.activeSkill,
+      skill: responseSkill,
       responsePreview: llmResult.response.substring(0, 100) + "..."
     });
 
@@ -1560,6 +2020,14 @@ class ApplicationController {
 
   onWillQuit() {
     globalShortcut.unregisterAll();
+    windowManager.broadcastToAllWindows("live-microphone-command", {
+      active: false
+    });
+    this.stopLiveAudioMixer();
+    systemAudioService.stop();
+    this.stopLiveScreen();
+    geminiLiveService.disconnect();
+    browserBridgeService.stop();
     speechService.shutdown();
     windowManager.destroyAllWindows();
 
@@ -1568,19 +2036,6 @@ class ApplicationController {
       sessionEvents: sessionStats.eventCount,
       sessionSize: sessionStats.approximateSize,
     });
-  }
-
-  getWhisperInstaller() {
-    if (!this._whisperInstaller) {
-      const WhisperInstaller = require("./src/core/whisper-installer");
-      const { app } = require("electron");
-      this._whisperInstaller = new WhisperInstaller({
-        cwd: process.cwd(),
-        dataDir: app.getPath("userData"),
-        platform: process.platform,
-      });
-    }
-    return this._whisperInstaller;
   }
 
   getSettings() {
@@ -1595,20 +2050,13 @@ class ApplicationController {
       selectedIcon: this.appIcon || "terminal",
       windowGap: windowManager.windowGap,
 
-      speechProvider: speechService.provider || "whisper",
-      azureKey: process.env.AZURE_SPEECH_KEY || "",
-      azureRegion: process.env.AZURE_SPEECH_REGION || "",
-      whisperCommand: process.env.WHISPER_COMMAND || "",
-      whisperModel: process.env.WHISPER_MODEL || "small",
-      whisperLanguage: process.env.WHISPER_LANGUAGE || "auto",
-      whisperDevice: process.env.WHISPER_DEVICE || "auto",
-      whisperCaptureMode: process.env.WHISPER_CAPTURE_MODE ||
-        (process.env.WHISPER_MANUAL_CAPTURE === "true" ? "manual" : "vad"),
-      whisperResponseTarget: process.env.WHISPER_RESPONSE_TARGET || "both",
-      whisperSegmentMs: process.env.WHISPER_SEGMENT_MS || "4000",
-      geminiKey: process.env.GEMINI_API_KEY || "",
+      speechProvider: "disabled",
+      llmProvider: "gemini",
+      antigravityCommand: process.env.ANTIGRAVITY_COMMAND || "",
+      antigravityModel: process.env.ANTIGRAVITY_MODEL || "Gemini 3.1 Pro (Low)",
+      googleCloudProject: process.env.GOOGLE_CLOUD_PROJECT || "",
+      googleCloudLocation: process.env.GOOGLE_CLOUD_LOCATION || "europe-west4",
 
-      azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
       speechAvailable: this.speechAvailable
     };
   }
@@ -1640,107 +2088,49 @@ class ApplicationController {
         if (Number.isFinite(gap)) windowManager.setWindowGap(gap);
       }
 
-      // ── Persist provider / API-key fields back to .env ──
+      // ── Persist provider and Google Cloud fields back to .env ──
       // The settings UI is now the source of truth for these values.
       // Writing to .env ensures they survive app restarts and are picked
       // up the next time the app boots.
       const envUpdates = {};
-      if (settings.speechProvider === "azure" || settings.speechProvider === "whisper") {
-        envUpdates.SPEECH_PROVIDER = settings.speechProvider;
+      if (settings.googleCloudProject !== undefined) {
+        envUpdates.GOOGLE_CLOUD_PROJECT = settings.googleCloudProject;
       }
-      if (settings.azureKey !== undefined) {
-        envUpdates.AZURE_SPEECH_KEY = settings.azureKey;
+      if (settings.googleCloudLocation !== undefined) {
+        envUpdates.GOOGLE_CLOUD_LOCATION = settings.googleCloudLocation;
       }
-      if (settings.azureRegion !== undefined) {
-        envUpdates.AZURE_SPEECH_REGION = settings.azureRegion;
+      envUpdates.LLM_PROVIDER = "gemini";
+      if (settings.antigravityCommand !== undefined) {
+        envUpdates.ANTIGRAVITY_COMMAND = settings.antigravityCommand;
       }
-      if (settings.whisperCommand !== undefined) {
-        envUpdates.WHISPER_COMMAND = settings.whisperCommand;
+      if (settings.antigravityModel !== undefined) {
+        envUpdates.ANTIGRAVITY_MODEL = settings.antigravityModel;
       }
-      if (settings.whisperModel !== undefined) {
-        envUpdates.WHISPER_MODEL = settings.whisperModel;
-      }
-      if (settings.whisperLanguage !== undefined) {
-        envUpdates.WHISPER_LANGUAGE = settings.whisperLanguage;
-      }
-      if (["auto", "cpu", "cuda"].includes(settings.whisperDevice)) {
-        envUpdates.WHISPER_DEVICE = settings.whisperDevice;
-      }
-      if (["manual", "vad"].includes(settings.whisperCaptureMode)) {
-        envUpdates.WHISPER_CAPTURE_MODE = settings.whisperCaptureMode;
-      }
-      if (["chat", "overlay", "both"].includes(settings.whisperResponseTarget)) {
-        envUpdates.WHISPER_RESPONSE_TARGET = settings.whisperResponseTarget;
-      }
-      if (settings.whisperSegmentMs !== undefined) {
-        envUpdates.WHISPER_SEGMENT_MS = String(settings.whisperSegmentMs);
-      }
-      if (settings.geminiKey !== undefined) {
-        envUpdates.GEMINI_API_KEY = settings.geminiKey;
-      }
-
-      // Capture the previous whisper command BEFORE persisting — persistEnvUpdates
-      // mutates process.env in place, so comparing afterwards would always read
-      // equal and skip the speech re-init below (the exact stale-mic-after-install
-      // bug the re-init guards against).
-      const prevWhisperCommand = process.env.WHISPER_COMMAND || '';
 
       const persistedKeys = this.persistEnvUpdates(envUpdates);
 
-      // If the Gemini key was just saved, reinitialize the LLM service
-      // so the new client picks up the key. Without this, the test-
-      // connection button in the onboarding wizard fails with
-      // "Service not initialized" because the client was first created
-      // at app startup, before any key was set.
-      if (settings.geminiKey !== undefined && envUpdates.GEMINI_API_KEY !== undefined) {
+      // Reinitialize the Vertex client after project or provider settings change.
+      const llmSettingsChanged = settings.googleCloudProject !== undefined ||
+        settings.googleCloudLocation !== undefined ||
+        settings.llmProvider !== undefined ||
+        settings.antigravityCommand !== undefined ||
+        settings.antigravityModel !== undefined;
+      if (llmSettingsChanged) {
         try {
           llmService.initializeClient();
-          logger.info("LLM service reinitialized after Gemini key update");
+          logger.info("LLM service reinitialized after provider settings update", {
+            provider: process.env.LLM_PROVIDER || "gemini"
+          });
         } catch (e) {
-          logger.warn("Failed to reinitialize LLM service after Gemini key update", {
+          logger.warn("Failed to reinitialize LLM service after provider settings update", {
             error: e.message
           });
         }
       }
 
-      // Reinitialize speech service when provider OR whisper command
-      // changes. Without the second check, the install flow (which
-      // writes a new whisperCommand after install but keeps the same
-      // provider) would leave the speech service pointing at a stale
-      // (or non-existent) binary, and the main overlay's mic button
-      // would stay hidden / non-functional.
-      const providerChanged = settings.speechProvider && speechService.provider !== settings.speechProvider;
-      const whisperCommandChanged = settings.whisperCommand !== undefined &&
-        prevWhisperCommand !== String(settings.whisperCommand || '');
-      if (providerChanged || whisperCommandChanged) {
-        try {
-          speechService.initializeClient();
-          this.speechAvailable = speechService.isAvailable
-            ? speechService.isAvailable()
-            : false;
-          // Broadcast so any open window (settings, overlay, chat)
-          // can react immediately — especially the main overlay's
-          // mic button, which queries availability on load.
-          const { BrowserWindow } = require("electron");
-          BrowserWindow.getAllWindows().forEach((win) => {
-            if (!win.isDestroyed()) {
-              win.webContents.send("speech-availability", { available: this.speechAvailable });
-            }
-          });
-          logger.info('Speech service reinitialized after settings change', {
-            providerChanged,
-            whisperCommandChanged,
-            speechAvailable: this.speechAvailable,
-          });
-        } catch (e) {
-          logger.warn("Failed to reinitialize speech service after settings change", {
-            error: e.message
-          });
-        }
-      }
-
+      const safeSettings = { ...settings };
       logger.info("Settings saved successfully", {
-        ...settings,
+        ...safeSettings,
         persistedEnvKeys: persistedKeys
       });
       return { success: true, persistedEnvKeys: persistedKeys };

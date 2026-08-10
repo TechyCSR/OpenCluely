@@ -7,6 +7,15 @@
     <script src="lib/markdown.js"></script>
     <script src="lib/mathrender.js"></script>
     <style>
+        :root {
+            --cue-bg: rgba(11, 14, 13, 0.94);
+            --cue-surface: rgba(25, 30, 28, 0.88);
+            --cue-text: #f6f7f5;
+            --cue-muted: #a9b2ad;
+            --cue-accent: #8ee3b3;
+            --cue-border: rgba(171, 239, 201, 0.18);
+            --cue-font: "Avenir Next", "Helvetica Neue", sans-serif;
+        }
         .text-white { color: white; }
         .text-gray-300 { color: #d1d5db; }
         .text-sm { font-size: 0.875rem; }
@@ -14,9 +23,14 @@
         .mr-2 { margin-right: 0.5rem; }
 
         body {
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(20, 20, 20, 0.5) 100%);;
+            background:
+                radial-gradient(circle at 8% 0%, rgba(83, 170, 124, 0.13), transparent 38%),
+                linear-gradient(145deg, rgba(8, 11, 10, 0.97), var(--cue-bg));
             -webkit-app-region: no-drag;
-            color: white;
+            color: var(--cue-text);
+            font-family: var(--cue-font);
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
             margin: 0;
             padding: 0;
             overflow: hidden;
@@ -27,22 +41,32 @@
             -webkit-app-region: no-drag;
         }
         .markdown-content {
-            line-height: 1.6;
-            color: white;
-            font-size: 0.875rem;
+            line-height: 1.42;
+            color: var(--cue-text);
+            font-family: var(--cue-font);
+            font-size: 15px;
+            font-weight: 450;
+            letter-spacing: -0.006em;
         }
         .markdown-content h1, .markdown-content h2, .markdown-content h3 {
-            margin-top: 1.2rem;
-            margin-bottom: 0.8rem;
-            font-weight: bold;
-            color: white;
+            margin-top: 0.9rem;
+            margin-bottom: 0.5rem;
+            font-weight: 650;
+            color: var(--cue-text);
+            letter-spacing: -0.025em;
         }
-        .markdown-content h1 { font-size: 1.2rem; }
-        .markdown-content h2 { font-size: 1.1rem; }
-        .markdown-content h3 { font-size: 1rem; }
-        .markdown-content p { margin-bottom: 0.8rem; color: white; font-size: 0.875rem; }
-        .markdown-content ul, .markdown-content ol { margin-bottom: 0.8rem; padding-left: 1.2rem; font-size: 0.875rem; }
-        .markdown-content li { margin-bottom: 0.4rem; color: white; font-size: 0.875rem; }
+        .markdown-content h1 { font-size: 21px; }
+        .markdown-content h2 { font-size: 19px; }
+        .markdown-content h3 { font-size: 17px; }
+        .markdown-content p { margin: 0 0 0.65rem; color: var(--cue-text); font-size: 15px; }
+        .markdown-content p:last-child { margin-bottom: 0; }
+        .markdown-content ul, .markdown-content ol {
+            margin: 0.45rem 0 0.7rem;
+            padding-left: 1.45rem;
+            font-size: 15px;
+        }
+        .markdown-content li { margin-bottom: 0.3rem; color: var(--cue-text); font-size: 15px; }
+        .markdown-content strong { color: #fff; font-weight: 700; }
         .markdown-content code { 
             background-color: rgba(0, 0, 0, 0.4); 
             padding: 0.2rem 0.4rem; 
@@ -52,9 +76,9 @@
         }
         .markdown-content pre { 
             background-color: rgba(0, 0, 0, 0.4); 
-            padding: 1rem; 
+            padding: 0.7rem;
             border-radius: 0.5rem; 
-            margin: 1rem 0;
+            margin: 0.65rem 0;
             overflow-x: auto;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
@@ -111,7 +135,7 @@
             height: 100%;
             overflow-y: auto;
             overflow-x: auto;
-            padding: 1rem;
+            padding: 1rem 1.15rem;
             box-sizing: border-box;
             scroll-behavior: smooth;
         }
@@ -127,15 +151,29 @@
 
         .full-content-inner {
             height: 100%;
-            background-color: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 0.5rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(145deg, rgba(35, 42, 39, 0.72), rgba(17, 21, 19, 0.88));
+            backdrop-filter: none;
+            border-radius: 14px;
+            border: 1px solid var(--cue-border);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                0 18px 60px rgba(0, 0, 0, 0.28);
             overflow-y: auto;
             overflow-x: auto;
-            padding: 1rem;
+            padding: 20px 22px 22px 28px;
             box-sizing: border-box;
             scroll-behavior: smooth;
+            position: relative;
+        }
+        .full-content-inner::before {
+            content: "";
+            position: absolute;
+            left: 14px;
+            top: 26px;
+            bottom: 26px;
+            width: 3px;
+            border-radius: 3px;
+            background: linear-gradient(180deg, var(--cue-accent), rgba(142, 227, 179, 0.08));
         }
 
         /* Hide scrollbars completely while maintaining scrollability */
@@ -200,8 +238,8 @@
             align-items: center;
             justify-content: center;
             height: 100vh;
-            background-color: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(8px);
+            background: var(--cue-bg);
+            backdrop-filter: none;
         }
         
         .loading-compact {
@@ -223,7 +261,8 @@
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background-color: #4CAF50;
+            background-color: var(--cue-accent);
+            box-shadow: 0 0 12px rgba(142, 227, 179, 0.45);
             animation: bounce 1.4s infinite ease-in-out;
         }
         
@@ -334,20 +373,33 @@
             top: 0;
             left: 0;
             right: 0;
-            height: 32px;
+            height: 38px;
             -webkit-app-region: drag;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 10px;
+            padding: 0 14px;
             box-sizing: border-box;
-            background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255,255,255,0.12);
+            background: rgba(10, 13, 12, 0.88);
+            backdrop-filter: none;
+            border-bottom: 1px solid var(--cue-border);
             z-index: 50;
             color: #e5e7eb;
+            font-family: var(--cue-font);
             font-size: 12px;
-            letter-spacing: 0.3px;
+            font-weight: 650;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .window-title::before {
+            content: "";
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            margin-right: 8px;
+            border-radius: 50%;
+            background: var(--cue-accent);
+            box-shadow: 0 0 12px rgba(142, 227, 179, 0.62);
         }
         .window-title {
             pointer-events: none;
@@ -387,12 +439,12 @@
         /* Push content below header */
         .has-header #response-content,
         .has-header #loading {
-            margin-top: 32px;
+            margin-top: 38px;
         }
         .has-header .split-layout,
         .has-header .full-content,
         .has-header .loading {
-            height: calc(100vh - 32px);
+            height: calc(100vh - 38px);
         }
 
         .copy-btn { 

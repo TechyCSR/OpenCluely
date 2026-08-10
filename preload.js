@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopSpeechRecognition: () => ipcRenderer.invoke('stop-speech-recognition'),
   sendAudioChunk: (buffer) => ipcRenderer.send('audio-chunk', { buffer }),
   getSpeechAvailability: () => ipcRenderer.invoke('get-speech-availability'),
+  toggleCallCopilot: () => ipcRenderer.invoke('toggle-call-copilot'),
+  getCallCopilotStatus: () => ipcRenderer.invoke('get-call-copilot-status'),
+  toggleLiveScreen: () => ipcRenderer.invoke('toggle-live-screen'),
+  getLiveScreenStatus: () => ipcRenderer.invoke('get-live-screen-status'),
   
   // Window management
   showAllWindows: () => ipcRenderer.invoke('show-all-windows'),
@@ -32,7 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSkillPrompt: (skillName) => ipcRenderer.invoke('get-skill-prompt', skillName),
   
   // Gemini LLM configuration
-  setGeminiApiKey: (apiKey) => ipcRenderer.invoke('set-gemini-api-key', apiKey),
+  setGoogleCloudProject: (project) => ipcRenderer.invoke('set-google-cloud-project', project),
   getGeminiStatus: () => ipcRenderer.invoke('get-gemini-status'),
   testGeminiConnection: () => ipcRenderer.invoke('test-gemini-connection'),
   
@@ -47,16 +51,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   completeFirstRun: () => ipcRenderer.invoke('complete-first-run'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   closeOnboarding: () => ipcRenderer.invoke('close-onboarding'),
-  detectWhisper: () => ipcRenderer.invoke('detect-whisper'),
-  installWhisper: () => ipcRenderer.invoke('install-whisper'),
-  downloadWhisperModel: (modelName) => ipcRenderer.invoke('download-whisper-model', modelName),
-  onInstallProgress: (callback) => {
-    const wrapped = (_event, line) => {
-      try { callback(line); } catch (e) { console.error('onInstallProgress error:', e); }
-    };
-    ipcRenderer.on('install-progress', wrapped);
-    return () => ipcRenderer.removeListener('install-progress', wrapped);
-  },
   updateAppIcon: (iconKey) => ipcRenderer.invoke('update-app-icon', iconKey),
   updateActiveSkill: (skill) => ipcRenderer.invoke('update-active-skill', skill),
   restartAppForStealth: () => ipcRenderer.invoke('restart-app-for-stealth'),
@@ -100,6 +94,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onSpeechStatus: (callback) => ipcRenderer.on('speech-status', callback),
   onSpeechError: (callback) => ipcRenderer.on('speech-error', callback),
   onSpeechAvailability: (callback) => ipcRenderer.on('speech-availability', callback),
+  onCallCopilotStatus: (callback) => ipcRenderer.on('call-copilot-status', callback),
+  onLiveScreenStatus: (callback) => ipcRenderer.on('live-screen-status', callback),
+  onLiveMicrophoneCommand: (callback) => ipcRenderer.on('live-microphone-command', callback),
   onSessionEvent: (callback) => ipcRenderer.on('session-event', callback),
   onSessionCleared: (callback) => ipcRenderer.on('session-cleared', callback),
   onOcrCompleted: (callback) => ipcRenderer.on('ocr-completed', callback),

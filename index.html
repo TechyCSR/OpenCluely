@@ -22,7 +22,7 @@
           rgba(0, 0, 0, 0.4) 0%,
           rgba(20, 20, 20, 0.5) 100%
         );
-        backdrop-filter: blur(20px);
+        backdrop-filter: none;
         border-radius: 8px;
         display: flex;
         align-items: center;
@@ -73,7 +73,7 @@
       .command-item.recording i {
         color: #ff4757;
         text-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
-        animation: pulse 2s infinite;
+        animation: none;
       }
 
       .command-item.active {
@@ -103,6 +103,32 @@
         box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.25) inset;
       }
 
+      #exitButton {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        color: rgba(248, 113, 113, 0.82);
+      }
+
+      #exitButton i {
+        font-size: 13px;
+      }
+
+      #exitButton:hover {
+        background: rgba(239, 68, 68, 0.18);
+        color: #fca5a5;
+        box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.28) inset;
+      }
+
+      #exitButton:focus-visible {
+        outline: 2px solid rgba(248, 113, 113, 0.72);
+        outline-offset: 2px;
+      }
+
       .command-separator {
         width: 1px;
         height: 16px;
@@ -127,7 +153,7 @@
       .status-dot.interactive {
         background-color: #10b981; /* Green for active/interactive */
         box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
-        animation: pulse-green 2s infinite;
+        animation: none;
       }
 
       .status-dot.non-interactive {
@@ -263,7 +289,7 @@
           rgba(20, 20, 20, 0.7) 0%,
           rgba(10, 10, 10, 0.6) 100%
         );
-        backdrop-filter: blur(18px);
+        backdrop-filter: none;
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 10px;
         color: rgba(255, 255, 255, 0.95);
@@ -358,28 +384,32 @@
         <span>⌘⇧S</span>
       </div>
       <div class="command-separator"></div>
+      <div class="command-item" id="liveScreenButton" title="Gemini Live Screen (⌘⇧G)">
+        <i class="fas fa-display"></i>
+        <span>⌘⇧G</span>
+      </div>
+      <div class="command-separator"></div>
       <div class="command-item" id="micButton">
         <i class="fas fa-microphone"></i>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="skillIndicator">
-        <i class="fas fa-brain"></i>
-        <span>DSA</span>
-      </div>
-      <div class="command-separator"></div>
-      <div class="command-item" id="languageSelector">
-        <i class="fas fa-code"></i>
-        <select id="codingLanguage">
-          <option value="cpp">C++</option>
-          <option value="c">C</option>
-          <option value="python">Python</option>
-          <option value="java">Java</option>
-          <option value="javascript">JavaScript</option>
-        </select>
+      <div class="command-item" id="callCopilotButton" title="Call Copilot — call + microphone (⌘⇧L)">
+        <i class="fas fa-headphones"></i>
       </div>
       <div class="command-separator"></div>
       <div class="command-item" id="infoButton" title="Shortcuts">
         <i class="fas fa-circle-info"></i>
+      </div>
+      <div class="command-separator"></div>
+      <div
+        class="command-item"
+        id="exitButton"
+        role="button"
+        tabindex="0"
+        aria-label="Exit OpenCluely"
+        title="Exit OpenCluely"
+      >
+        <i class="fas fa-power-off" aria-hidden="true"></i>
       </div>
       <div class="command-separator"></div>
       <div class="status-dot non-interactive" id="statusDot"></div>
@@ -432,6 +462,14 @@
               + <span class="kbd">C</span>
             </td>
             <td>Open chat</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Ctrl/Cmd</span>
+              + <span class="kbd">Shift</span>
+              + <span class="kbd">L</span>
+            </td>
+            <td>Toggle Call Copilot (system audio)</td>
           </tr>
           <tr>
             <td>

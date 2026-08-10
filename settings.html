@@ -459,15 +459,56 @@
             <div class="settings-section">
                 <div class="settings-section-title">
                     <i class="fas fa-robot"></i>
-                    Gemini Settings
+                    AI Provider
                 </div>
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Google API Key</div>
-                            <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            <div class="settings-item-label">Default Provider</div>
+                            <div class="settings-item-description">Use Antigravity OAuth or the Gemini API</div>
                         </div>
-                        <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        <select class="input-field" id="llmProvider">
+                            <option value="antigravity">Antigravity OAuth</option>
+                            <option value="gemini">Gemini on Vertex AI</option>
+                        </select>
+                    </div>
+                    <div id="antigravityFields">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Antigravity CLI</div>
+                                <div class="settings-item-description">Absolute path to the authenticated agy command</div>
+                            </div>
+                            <input type="text" class="input-field" id="antigravityCommand" placeholder="/Users/you/.local/bin/agy">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Antigravity Model</div>
+                                <div class="settings-item-description">Model name shown by <code>agy models</code></div>
+                            </div>
+                            <input type="text" class="input-field" id="antigravityModel" placeholder="Gemini 3.1 Pro (Low)">
+                        </div>
+                        <div class="settings-note">
+                            Antigravity uses your existing Google OAuth session. This provider is persisted in <code>.env</code> and remains the default after restarting OpenCluely.
+                        </div>
+                    </div>
+                    <div id="geminiFields">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Google Cloud Project</div>
+                            <div class="settings-item-description">A project with Vertex AI enabled and billing configured</div>
+                        </div>
+                        <input type="text" class="input-field" id="googleCloudProject" placeholder="your-gcp-project-id">
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Vertex AI Location</div>
+                            <div class="settings-item-description">Region used for Gemini and Gemini Live</div>
+                        </div>
+                        <input type="text" class="input-field" id="googleCloudLocation" placeholder="europe-west4">
+                    </div>
+                    <div class="settings-note">
+                        Authenticate locally with <code>gcloud auth application-default login</code>. OpenCluely never stores your Google password.
+                    </div>
                     </div>
                 </div>
             </div>

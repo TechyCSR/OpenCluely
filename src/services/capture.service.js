@@ -104,6 +104,36 @@ class CaptureService {
     };
   }
 
+  async captureLiveFrame(options = {}) {
+    const activeDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const { image } = await this.captureScreenshot({
+      displayId: options.displayId ?? activeDisplay.id
+    });
+    const original = image.getSize();
+    const maxWidth = Math.max(640, Number(options.maxWidth) || 1280);
+    const resized = original.width > maxWidth
+      ? image.resize({
+          width: maxWidth,
+          height: Math.round(original.height * (maxWidth / original.width)),
+          quality: 'good'
+        })
+      : image;
+    // A tiny, heavily quantized visual signature lets Live Screen detect real
+    // page changes without reacting to JPEG noise or a blinking text cursor.
+    const signatureBitmap = resized
+      .resize({ width: 16, height: 9, quality: 'good' })
+      .toBitmap();
+    const visualSignature = Buffer.from(signatureBitmap.map(value => value >> 5))
+      .toString('base64');
+    return {
+      imageBuffer: resized.toJPEG(Number(options.quality) || 68),
+      mimeType: 'image/jpeg',
+      dimensions: resized.getSize(),
+      displayId: activeDisplay.id,
+      visualSignature
+    };
+  }
+
   _getTargetDisplay(displayId) {
     const all = screen.getAllDisplays();
     if (!all || all.length === 0) return screen.getPrimaryDisplay();

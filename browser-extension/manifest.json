@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "OpenCluely Browser Rail",
+  "version": "1.1.0",
+  "description": "Shows local OpenCluely responses in the browser tab you explicitly activate.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Show OpenCluely rail in this tab"
+  }
+}

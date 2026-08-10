@@ -1,4 +1,5 @@
 node_modules/
+.opencluely-cache/
 .env
 .venv-whisper/
 .whisper-models/
@@ -7,3 +8,11 @@ dist/
 bin/
 .DS_Store
 *.log
+
+# Local coaching materials (not part of the application release)
+/MISSION.md
+/RESOURCES.md
+/learning-records/
+/lessons/
+/reference/
+/assets/course.css
