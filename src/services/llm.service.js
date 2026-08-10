@@ -2,6 +2,7 @@ const { GoogleGenAI } = require('@google/genai');
 const logger = require('../core/logger').createServiceLogger('LLM');
 const config = require('../core/config');
 const { promptLoader } = require('../../prompt-loader');
+const GLOBAL_SYSTEM_INSTRUCTION = 'Answer from first principles. Use simple sentences.';
 
 class LLMService {
   constructor() {
@@ -15,25 +16,28 @@ class LLMService {
   }
 
   initializeClient() {
-    const apiKey = config.getApiKey('GEMINI');
-    
-    if (!apiKey || apiKey === 'your-api-key-here') {
-      logger.warn('Gemini API key not configured', { 
-        keyExists: !!apiKey,
-        isPlaceholder: apiKey === 'your-api-key-here'
-      });
-      return;
-    }
+    this.isInitialized = false;
+    this.provider = 'gemini';
 
     try {
-      this.client = new GoogleGenAI({ apiKey });
-      
-      // Use the configured model name (default: gemini-3.5-flash)
+      const project = process.env.GOOGLE_CLOUD_PROJECT;
+      const location = process.env.GOOGLE_CLOUD_LOCATION || 'europe-west4';
+      if (!project) {
+        throw new Error('GOOGLE_CLOUD_PROJECT is required for Vertex Gemini');
+      }
+      this.client = new GoogleGenAI({
+        vertexai: true,
+        project,
+        location
+      });
+
       this.model = config.get('llm.gemini.model');
       this.isInitialized = true;
       
-      logger.info('Gemini AI client initialized successfully', {
-        model: this.model
+      logger.info('Vertex Gemini client initialized successfully', {
+        model: this.model,
+        project,
+        location
       });
     } catch (error) {
       logger.error('Failed to initialize Gemini client', { 
@@ -60,6 +64,20 @@ class LLMService {
 
   applyGenerationDefaults(request, overrides = {}) {
     request.generationConfig = this.getGenerationConfig({ ...(request.generationConfig || {}), ...overrides });
+    this.applyGlobalSystemInstruction(request);
+    return request;
+  }
+
+  applyGlobalSystemInstruction(request) {
+    const parts = Array.isArray(request.systemInstruction?.parts)
+      ? request.systemInstruction.parts
+      : [];
+    if (!parts.some(part => String(part?.text || '').includes(GLOBAL_SYSTEM_INSTRUCTION))) {
+      request.systemInstruction = {
+        ...(request.systemInstruction || {}),
+        parts: [...parts, { text: GLOBAL_SYSTEM_INSTRUCTION }]
+      };
+    }
     return request;
   }
 
@@ -123,7 +141,7 @@ class LLMService {
    */
   async processImageWithSkill(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null) {
     if (!this.isInitialized) {
-      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+      throw new Error('LLM service not initialized. Check the configured LLM provider.');
     }
 
     if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
@@ -146,7 +164,7 @@ class LLMService {
           {
             role: 'user',
             parts: [
-              { text: this.formatImageInstruction(activeSkill, programmingLanguage) },
+              { text: this.formatImageInstruction(activeSkill, programmingLanguage, sessionMemory) },
               { inlineData: { data: base64, mimeType } }
             ]
           }
@@ -159,31 +177,7 @@ class LLMService {
         request.systemInstruction = { parts: [{ text: skillPrompt }] };
       }
 
-      // Execute with retries/timeout - try alternative method first for network reliability
-      let responseText;
-      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
-      try {
-        if (preferAlternative) {
-          logger.debug('Attempting alternative HTTPS method first for reliability');
-          responseText = await this.executeAlternativeRequest(request);
-        } else {
-          responseText = await this.executeRequest(request);
-        }
-      } catch (error) {
-        const secondaryLabel = preferAlternative ? 'primary SDK method' : 'alternative HTTPS method';
-        logger.warn(`${preferAlternative ? 'Alternative' : 'Primary'} method failed, trying ${secondaryLabel}`, { error: error.message });
-        const secondaryFn = preferAlternative ? this.executeRequest.bind(this) : this.executeAlternativeRequest.bind(this);
-
-        try {
-          responseText = await secondaryFn(request);
-        } catch (secondaryError) {
-          logger.error('Both Gemini request methods failed', {
-            firstError: error.message,
-            secondError: secondaryError.message
-          });
-          throw secondaryError;
-        }
-      }
+      const responseText = await this.executeRequest(request);
 
       // Enforce language in code fences if provided
       const finalResponse = programmingLanguage
@@ -201,6 +195,8 @@ class LLMService {
       return {
         response: finalResponse,
         metadata: {
+          provider: this.provider,
+          model: this.model,
           skill: activeSkill,
           programmingLanguage,
           processingTime: Date.now() - startTime,
@@ -227,7 +223,7 @@ class LLMService {
 
   async processImageWithSkillStream(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
     if (!this.isInitialized) {
-      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+      throw new Error('LLM service not initialized. Check the configured LLM provider.');
     }
 
     if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
@@ -247,7 +243,7 @@ class LLMService {
           {
             role: 'user',
             parts: [
-              { text: this.formatImageInstruction(activeSkill, programmingLanguage) },
+              { text: this.formatImageInstruction(activeSkill, programmingLanguage, sessionMemory) },
               { inlineData: { data: base64, mimeType } }
             ]
           }
@@ -278,6 +274,8 @@ class LLMService {
       return {
         response: finalResponse,
         metadata: {
+          provider: this.provider,
+          model: this.model,
           skill: activeSkill,
           programmingLanguage,
           processingTime: Date.now() - startTime,
@@ -297,14 +295,90 @@ class LLMService {
     }
   }
 
-  formatImageInstruction(activeSkill, programmingLanguage) {
+  formatImageInstruction(activeSkill, programmingLanguage, sessionMemory = []) {
     const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
-    return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
+    const priorTask = Array.isArray(sessionMemory)
+      ? sessionMemory
+          .map(event => event?.content || event?.summary || event?.contextSummary || '')
+          .filter(Boolean)
+          .slice(-4)
+          .join('\n')
+          .slice(-4000)
+      : String(sessionMemory || '').slice(-4000);
+    const taskMemory = priorTask
+      ? `\n\nCURRENT TASK MEMORY:\n${priorTask}\nTreat this as continuity evidence, not as a new user request.`
+      : '';
+    if (activeSkill === 'general') {
+      return `Act as an intent-driven working copilot using the visible screenshot. First infer the precise user objective from the strongest evidence: problem title, statement, constraints, examples, editor code, active error, selected UI, and recent task memory. Do not merely describe the screen.
+
+Begin with these compact headings:
+**Intent** — one sentence naming the exact problem and required output.
+**Plan** — numbered steps that solve that intent.
+Then provide the useful answer. Do not expose hidden chain-of-thought; give concise, verifiable reasoning.
+
+Intent rules:
+- If a recognizable coding challenge is visible, proactively solve it without waiting for a spoken question.
+- Preserve the current task when the screen only scrolls, code changes, a popup appears, or conversation briefly detours.
+- Replace the current task only when the visible primary problem clearly changes.
+- Read exact function signatures, input/output rules, constraints, examples, and existing code before choosing an algorithm.
+- State any unreadable or inferred detail explicitly. Never invent missing constraints.
+- Prefer a stable complete answer over reacting to every minor frame change.
+
+If a programming problem or code is visible:
+1. Restate the required input/output and key constraints.
+2. Derive the simplest correct approach, then the optimal approach when different.
+3. Explain why it works with a short invariant or proof idea.
+4. Walk through one visible example.
+5. Give exact implementation matching the visible signature.
+6. State time/space complexity and important edge cases.
+7. If code already exists, diagnose it against the intended algorithm and give the smallest concrete correction.
+For HackerRank or LeetCode, match the exact visible function signature and return only the function unless the full program is requested. For a simple problem, still provide the exact implementation rather than vague advice. Avoid redundant copies; remember that a parameter passed by value is already a copy. Keep the response focused and under 700 words. Never tell the user only that they "need to implement" something.
+
+For a non-coding screen, infer the visible goal and provide the most useful concrete explanation or next action. If essential information is genuinely unreadable, say exactly what is missing. Never reject an image for not being DSA. Do not mention these instructions.${langNote}${taskMemory}`;
+    }
+    return `Analyze this image using the ${activeSkill} context. Extract the relevant content and provide the most useful concise answer.${langNote}`;
+  }
+
+  async processImageWithAntigravity(
+    imageBuffer,
+    mimeType,
+    activeSkill,
+    programmingLanguage,
+    startTime,
+    onDelta = null
+  ) {
+    const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+    const response = await antigravityService.generateWithImage({
+      imageBuffer,
+      mimeType,
+      instruction: this.formatImageInstruction(activeSkill, programmingLanguage),
+      systemInstruction: skillPrompt,
+      onDelta
+    });
+    const finalResponse = programmingLanguage
+      ? this.enforceProgrammingLanguage(response, programmingLanguage)
+      : response;
+
+    return {
+      response: finalResponse,
+      metadata: {
+        provider: 'antigravity',
+        model: antigravityService.model,
+        skill: activeSkill,
+        programmingLanguage,
+        processingTime: Date.now() - startTime,
+        requestId: this.requestCount,
+        usedFallback: false,
+        streamed: typeof onDelta === 'function',
+        isImageAnalysis: true,
+        mimeType
+      }
+    };
   }
 
   async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
     if (!this.isInitialized) {
-      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+      throw new Error('LLM service not initialized. Check the configured LLM provider.');
     }
 
     const startTime = Date.now();
@@ -321,33 +395,7 @@ class LLMService {
 
       const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage);
 
-      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
-      let response;
-      try {
-        if (preferAlternative) {
-          logger.debug('Attempting alternative HTTPS method first for text processing');
-          response = await this.executeAlternativeRequest(geminiRequest);
-        } else {
-          response = await this.executeRequest(geminiRequest);
-        }
-      } catch (error) {
-        const secondaryLabel = preferAlternative ? 'primary SDK method' : 'alternative HTTPS method';
-        logger.warn(`${preferAlternative ? 'Alternative' : 'Primary'} method failed, trying ${secondaryLabel}`, {
-          error: error.message,
-          requestId: this.requestCount
-        });
-        const secondaryFn = preferAlternative ? this.executeRequest.bind(this) : this.executeAlternativeRequest.bind(this);
-        try {
-          response = await secondaryFn(geminiRequest);
-        } catch (secondaryError) {
-          logger.error('Both Gemini request methods failed for text processing', {
-            firstError: error.message,
-            secondError: secondaryError.message,
-            requestId: this.requestCount
-          });
-          throw secondaryError;
-        }
-      }
+      const response = await this.executeRequest(geminiRequest);
       
       // Enforce language in code fences if programmingLanguage specified
       const finalResponse = programmingLanguage
@@ -365,6 +413,8 @@ class LLMService {
       return {
         response: finalResponse,
         metadata: {
+          provider: this.provider,
+          model: this.model,
           skill: activeSkill,
           programmingLanguage,
           processingTime: Date.now() - startTime,
@@ -389,9 +439,68 @@ class LLMService {
     }
   }
 
+  /**
+   * Process domain-neutral text without injecting an interview skill prompt.
+   * Call Copilot uses this path so the currently selected UI skill (historically
+   * DSA) cannot reject unrelated conversation or emit a skill-specific greeting.
+   */
+  async processGeneralText(text) {
+    if (!this.isInitialized) {
+      throw new Error('LLM service not initialized. Check the configured LLM provider.');
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+    const requestId = this.requestCount;
+    const request = {
+      contents: [{
+        role: 'user',
+        parts: [{ text: String(text || '').trim() }]
+      }]
+    };
+    this.applyGenerationDefaults(request);
+
+    try {
+      const response = await this.executeRequest(request);
+      logger.logPerformance('LLM general text processing', startTime, {
+        textLength: text.length,
+        responseLength: response.length,
+        requestId
+      });
+      return {
+        response,
+        metadata: {
+          provider: this.provider,
+          model: this.model,
+          skill: 'general',
+          processingTime: Date.now() - startTime,
+          requestId,
+          usedFallback: false
+        }
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('General LLM processing failed', {
+        error: error.message,
+        requestId
+      });
+      return {
+        response: 'I could not generate a suggestion for that segment.',
+        metadata: {
+          provider: this.provider,
+          model: this.model,
+          skill: 'general',
+          processingTime: Date.now() - startTime,
+          requestId,
+          usedFallback: true
+        }
+      };
+    }
+  }
+
   async processTextWithSkillStream(text, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
     if (!this.isInitialized) {
-      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+      throw new Error('LLM service not initialized. Check the configured LLM provider.');
     }
 
     const startTime = Date.now();
@@ -439,7 +548,7 @@ class LLMService {
 
   async processTranscriptionWithIntelligentResponse(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
     if (!this.isInitialized) {
-      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+      throw new Error('LLM service not initialized. Check the configured LLM provider.');
     }
 
     const startTime = Date.now();
@@ -456,33 +565,7 @@ class LLMService {
 
       const geminiRequest = this.buildIntelligentTranscriptionRequest(text, activeSkill, sessionMemory, programmingLanguage);
 
-      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
-      let response;
-      try {
-        if (preferAlternative) {
-          logger.debug('Attempting alternative HTTPS method first for transcription processing');
-          response = await this.executeAlternativeRequest(geminiRequest);
-        } else {
-          response = await this.executeRequest(geminiRequest);
-        }
-      } catch (error) {
-        const secondaryLabel = preferAlternative ? 'primary SDK method' : 'alternative HTTPS method';
-        logger.warn(`${preferAlternative ? 'Alternative' : 'Primary'} method failed, trying ${secondaryLabel}`, {
-          error: error.message,
-          requestId: this.requestCount
-        });
-        const secondaryFn = preferAlternative ? this.executeRequest.bind(this) : this.executeAlternativeRequest.bind(this);
-        try {
-          response = await secondaryFn(geminiRequest);
-        } catch (secondaryError) {
-          logger.error('Both Gemini request methods failed for transcription processing', {
-            firstError: error.message,
-            secondError: secondaryError.message,
-            requestId: this.requestCount
-          });
-          throw secondaryError;
-        }
-      }
+      const response = await this.executeRequest(geminiRequest);
       
       // Enforce language in code fences if programmingLanguage specified
       const finalResponse = programmingLanguage
@@ -839,6 +922,11 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   }
 
   async executeRequest(geminiRequest) {
+    this.applyGlobalSystemInstruction(geminiRequest);
+    if (this.provider === 'antigravity') {
+      return antigravityService.generateFromRequest(geminiRequest);
+    }
+
     const maxRetries = config.get('llm.gemini.maxRetries');
     const timeout = config.get('llm.gemini.timeout');
     const primaryModel = this.model;
@@ -980,7 +1068,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
    */
   async processTranscriptionWithIntelligentResponseStream(text, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
     if (!this.isInitialized) {
-      throw new Error('LLM service not initialized. Check Gemini API key configuration.');
+      throw new Error('LLM service not initialized. Check the configured LLM provider.');
     }
 
     const startTime = Date.now();
@@ -1054,8 +1142,12 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
    * for each chunk.
    */
   async executeStreamingRequest(geminiRequest, onDelta) {
+    this.applyGlobalSystemInstruction(geminiRequest);
+    if (this.provider === 'antigravity') {
+      return antigravityService.generateFromRequest(geminiRequest, onDelta);
+    }
+
     const maxRetries = config.get('llm.gemini.maxRetries');
-    const apiKey = config.getApiKey('GEMINI');
     const primaryModel = this.model;
     const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
     const modelsToTry = [primaryModel, ...fallbackModels];
@@ -1065,7 +1157,19 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     for (const modelName of modelsToTry) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          const fullText = await this._streamRequestForModel(geminiRequest, modelName, apiKey, onDelta);
+          const stream = await this.client.models.generateContentStream({
+            model: modelName,
+            contents: geminiRequest.contents,
+            config: geminiRequest.generationConfig,
+            systemInstruction: geminiRequest.systemInstruction
+          });
+          let fullText = '';
+          for await (const chunk of stream) {
+            const delta = this._extractChunkText(chunk);
+            if (!delta) continue;
+            fullText += delta;
+            if (typeof onDelta === 'function') onDelta(delta);
+          }
 
           if (!fullText) {
             throw new Error('Empty streamed response from Gemini API');
@@ -1110,82 +1214,6 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     }
 
     throw lastError || new Error('Gemini streaming request failed');
-  }
-
-  _streamRequestForModel(geminiRequest, modelName, apiKey, onDelta) {
-    const https = require('https');
-    const timeout = config.get('llm.gemini.timeout');
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse`;
-    const postData = JSON.stringify(geminiRequest);
-    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
-
-    const options = {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-        'Content-Length': Buffer.byteLength(postData),
-        'User-Agent': this.getUserAgent()
-      },
-      timeout,
-      agent
-    };
-
-    return new Promise((resolve, reject) => {
-      const req = https.request(url, options, (res) => {
-        if (res.statusCode !== 200) {
-          let errBody = '';
-          res.on('data', (c) => { errBody += c; });
-          res.on('end', () => reject(new Error(`HTTP ${res.statusCode}: ${errBody}`)));
-          return;
-        }
-
-        let fullText = '';
-        let buffer = '';
-
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => {
-          buffer += chunk;
-          let idx;
-          while ((idx = buffer.indexOf('\n')) !== -1) {
-            const line = buffer.slice(0, idx).trim();
-            buffer = buffer.slice(idx + 1);
-            if (!line.startsWith('data:')) {
-              continue;
-            }
-            const payload = line.slice(5).trim();
-            if (!payload || payload === '[DONE]') {
-              continue;
-            }
-            try {
-              const json = JSON.parse(payload);
-              const piece = this._extractChunkText(json);
-              if (piece) {
-                fullText += piece;
-                if (typeof onDelta === 'function') {
-                  onDelta(piece);
-                }
-              }
-            } catch (_) {
-              // Partial JSON across chunk boundaries is rare with line framing;
-              // skip anything that doesn't parse cleanly.
-            }
-          }
-        });
-
-        res.on('end', () => resolve(fullText.trim()));
-        res.on('error', (error) => reject(new Error(`Streaming response error: ${error.message}`)));
-      });
-
-      req.on('error', (error) => reject(new Error(`Streaming request failed: ${error.message}`)));
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('Streaming request timeout'));
-      });
-
-      req.write(postData);
-      req.end();
-    });
   }
 
   async performPreflightCheck() {
@@ -1394,6 +1422,33 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
       return { success: false, error: 'Service not initialized' };
     }
 
+    if (this.provider === 'antigravity') {
+      const startTime = Date.now();
+      try {
+        const response = await antigravityService.generate(
+          'Reply with exactly: OK'
+        );
+        return {
+          success: true,
+          response,
+          latency: Date.now() - startTime,
+          provider: 'antigravity',
+          model: antigravityService.model
+        };
+      } catch (error) {
+        logger.error('Antigravity connection test failed', {
+          error: error.message,
+          model: antigravityService.model
+        });
+        return {
+          success: false,
+          error: error.message,
+          provider: 'antigravity',
+          model: antigravityService.model
+        };
+      }
+    }
+
     try {
       // First check network connectivity
       const networkCheck = await this.checkNetworkConnectivity();
@@ -1509,21 +1564,25 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     return (error?.message || 'Connection failed').replace(/^\[(GoogleGenerativeAI|GoogleGenAI) Error\]:\s*/i, '');
   }
 
-  updateApiKey(newApiKey) {
-    process.env.GEMINI_API_KEY = newApiKey;
-    this.isInitialized = false;
-    this.initializeClient();
-    
-    logger.info('API key updated and client reinitialized');
-  }
-
   getStats() {
     return {
+      provider: this.provider || 'gemini',
       isInitialized: this.isInitialized,
       requestCount: this.requestCount,
       errorCount: this.errorCount,
       successRate: this.requestCount > 0 ? ((this.requestCount - this.errorCount) / this.requestCount) * 100 : 0,
-      config: config.get('llm.gemini')
+      model: this.model,
+      config: this.provider === 'antigravity'
+        ? {
+          command: antigravityService.command,
+          model: antigravityService.model,
+          timeoutMs: antigravityService.timeoutMs
+        }
+        : {
+          ...config.get('llm.gemini'),
+          project: process.env.GOOGLE_CLOUD_PROJECT || '',
+          location: process.env.GOOGLE_CLOUD_LOCATION || 'europe-west4'
+        }
     };
   }
 
@@ -1531,126 +1590,6 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async executeAlternativeRequest(geminiRequest) {
-    const https = require('https');
-    const apiKey = config.getApiKey('GEMINI');
-    const primaryModel = config.get('llm.gemini.model');
-    const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
-    const modelsToTry = [primaryModel, ...fallbackModels];
-
-    logger.info('Using alternative HTTPS request method', { modelsToTry });
-
-    let lastError = null;
-
-    for (const modelName of modelsToTry) {
-      try {
-        const result = await this._executeAlternativeRequestForModel(geminiRequest, modelName, apiKey);
-        return result;
-      } catch (error) {
-        lastError = error;
-        logger.warn(`Alternative HTTPS request failed for model ${modelName}`, {
-          error: error.message,
-          model: modelName
-        });
-
-        const isModelUnavailable = error.message.includes('503') ||
-          error.message.includes('UNAVAILABLE') ||
-          error.message.includes('high demand');
-
-        if (!isModelUnavailable && modelName === primaryModel) {
-          break;
-        }
-      }
-    }
-
-    throw lastError || new Error('Alternative HTTPS request failed for all models');
-  }
-
-  async _executeAlternativeRequestForModel(geminiRequest, modelName, apiKey) {
-    const https = require('https');
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
-
-    const postData = JSON.stringify(geminiRequest);
-
-    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
-
-    const options = {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-        'Content-Length': Buffer.byteLength(postData),
-        'User-Agent': this.getUserAgent()
-      },
-      timeout: config.get('llm.gemini.timeout'),
-      agent
-    };
-
-    return new Promise((resolve, reject) => {
-      const req = https.request(url, options, (res) => {
-        let data = '';
-        
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-        
-        res.on('end', () => {
-          try {
-            if (res.statusCode !== 200) {
-              reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-              return;
-            }
-            
-            const response = JSON.parse(data);
-            
-            logger.debug('Alternative request response structure', {
-              hasResponse: !!response,
-              hasCandidates: !!response.candidates,
-              candidatesLength: response.candidates?.length,
-              responseKeys: Object.keys(response || {}),
-              firstCandidateKeys: response.candidates?.[0] ? Object.keys(response.candidates[0]) : []
-            });
-
-            const { text, finishReason } = this.extractTextFromCandidates(response);
-
-            if (finishReason === 'MAX_TOKENS') {
-              logger.warn('Gemini alternative response reached max tokens limit', {
-                finishReason
-              });
-            }
-            
-            logger.info('Alternative request successful', {
-              responseLength: text.length,
-              statusCode: res.statusCode,
-              finishReason
-            });
-            
-            resolve(text.trim());
-          } catch (parseError) {
-            logger.error('Failed to parse alternative response', {
-              error: parseError.message,
-              rawResponse: data.substring(0, 500),
-              statusCode: res.statusCode
-            });
-            reject(new Error(`Failed to parse response: ${parseError.message}`));
-          }
-        });
-      });
-      
-      req.on('error', (error) => {
-        reject(new Error(`Alternative request failed: ${error.message}`));
-      });
-      
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('Alternative request timeout'));
-      });
-      
-      req.write(postData);
-      req.end();
-    });
-  }
 }
 
 module.exports = new LLMService();

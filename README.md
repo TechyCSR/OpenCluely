@@ -75,11 +75,17 @@ If you would rather build from source, three steps are all it takes.
    ./setup.sh
    ```
 
-   The script installs Node dependencies, creates your `.env` from the example, sets up a local Whisper virtual environment, points the config at it, and launches the app.
+   The script installs Node dependencies, creates your `.env` from the example, and launches the app.
 
-3. Add your Gemini key.
+3. Configure Google Cloud authentication.
 
-   On first launch the Settings window opens automatically. Get a free key from [Google AI Studio](https://aistudio.google.com/) and paste it in, or edit `.env` directly. Both work, and changes are picked up without a restart.
+   Set `GOOGLE_CLOUD_PROJECT` in `.env`, then create local Application Default Credentials:
+
+   ```bash
+   gcloud auth application-default login
+   ```
+
+   The selected project needs Vertex AI access and billing. Credentials remain in your normal local Google Cloud configuration and are not committed to this repository.
 
 ### Platform notes
 
@@ -94,64 +100,49 @@ If you would rather build from source, three steps are all it takes.
 ./setup.sh --build                # Build a distributable for your OS
 ./setup.sh --ci                   # Use npm ci instead of npm install
 ./setup.sh --no-run               # Set up only, do not launch
-./setup.sh --install-system-deps  # Install sox for the microphone (optional)
-./setup.sh --skip-whisper         # Skip the local Whisper bootstrap
+./setup.sh --install-system-deps  # Install optional platform audio tools
 ```
 
 ## Configuration
 
-The setup script writes sensible defaults. The only required value is a Gemini API key.
+The setup script writes sensible defaults. Gemini Live requires a Google Cloud project and local ADC authentication.
 
 ```bash
-# Required
-GEMINI_API_KEY=your_gemini_api_key_here
+# Required for Vertex AI and Gemini Live
+GOOGLE_CLOUD_PROJECT=your-billed-gcp-project
+GOOGLE_CLOUD_LOCATION=europe-west4
+GEMINI_LIVE_MODEL=gemini-live-2.5-flash-native-audio
 
-# Optional speech provider. Pick one.
-SPEECH_PROVIDER=whisper
-
-# Azure option
-AZURE_SPEECH_KEY=your_azure_speech_key
-AZURE_SPEECH_REGION=your_region
-
-# Local Whisper option
-WHISPER_COMMAND=whisper
-WHISPER_MODEL_DIR=.whisper-models
-WHISPER_MODEL=small
-WHISPER_LANGUAGE=auto
-WHISPER_DEVICE=auto
-WHISPER_PYTHON=
-WHISPER_CAPTURE_MODE=vad
-WHISPER_RESPONSE_TARGET=both
-WHISPER_MANUAL_MAX_MS=90000
-WHISPER_GPU_IDLE_MS=60000
+# macOS Call Copilot system audio
+SYSTEM_AUDIO_COMMAND=bin/SystemAudioDump
+FFMPEG_COMMAND=ffmpeg
+CALL_COPILOT_SILENCE_MS=800
 ```
 
-Speech is optional. If no provider is configured, the microphone button hides itself across the app.
-
-## Optional voice setup
-
-You can use local Whisper for offline transcription or Azure Speech for a cloud option.
-
-For local Whisper, `./setup.sh` handles the full setup. It creates `.venv-whisper`, installs `openai-whisper`, points `.env` at the virtual environment, creates `.whisper-models`, and runs a quick speech test. The app reads its own PCM WAV recordings directly; ffmpeg is only needed when transcribing other audio formats through the CLI fallback.
-
-For Azure Speech, create a Speech resource in the [Azure Portal](https://portal.azure.com/), then add the key and region to `.env` with `SPEECH_PROVIDER=azure`.
+Live audio is optional. On macOS it requires the bundled `SystemAudioDump` helper, `ffmpeg`, Screen Recording permission, and an authenticated Gemini Live project.
 
 ## How it works
 
-1. **Ask.** Use automatic pause detection, choose manual start/stop capture in Settings, or use the screenshot shortcut.
-2. **Reason.** Gemini reads the audio or image with full conversation context and works toward a precise answer.
-3. **Answer.** Voice responses stream to chat, the overlay, or both, according to Settings.
+1. **Observe.** Start Live Screen, Live Audio, or use the one-shot screenshot shortcut.
+2. **Reason.** Gemini maintains the active task while combining recent screen and conversation context.
+3. **Assist.** Responses stream to the native overlay, chat window, or optional CoderPad browser rail.
 
 ## Keyboard shortcuts
 
 | Action | Shortcut | Description |
 |---|---|---|
 | Screenshot capture | `Cmd/Ctrl + Shift + S` | Capture the screen and analyze it with Gemini |
-| Toggle speech | `Alt + R` | Start or stop voice recognition, if configured |
+| Toggle speech | `Alt + R` | Legacy shortcut; live call assistance uses Call Copilot |
 | Toggle visibility | `Cmd/Ctrl + Shift + V` | Show or hide all windows |
 | Toggle interaction | `Cmd/Ctrl + Shift + I` or `Alt + A` | Enable or disable click through |
 | Open chat | `Cmd/Ctrl + Shift + C` | Open the interactive chat window |
+| Toggle Call Copilot | `Cmd/Ctrl + Shift + L` | Listen to macOS system audio and suggest concise responses |
 | Settings | `Cmd/Ctrl + ,` | Open the settings panel |
+
+Call Copilot captures the remote/system-audio channel on macOS and streams it
+to Gemini Live for real-time transcription and assistance. It starts only when
+explicitly toggled and requires Screen Recording permission. Use it only on
+calls where recording and AI assistance are permitted.
 
 ## Project status
 
@@ -162,15 +153,14 @@ OpenCluely is under active development. The core is stable and improvements ship
 - Stealth overlay with a draggable command bar and a click through toggle
 - Hidden during screen share, with automatic hiding when a share begins
 - Screenshot capture with direct Gemini analysis, no OCR step
-- Configurable manual or VAD-driven voice capture
-- Persistent local Whisper worker with optional CUDA acceleration and idle GPU release
-- Configurable chat/overlay routing for streamed voice answers
-- Whisper hallucination filter that drops phantom phrases on silence
+- Stateful Gemini Live audio and screen context
+- Intent anchoring across short conversational detours
+- Configurable chat/overlay routing for streamed answers
 - AI response window with markdown and syntax highlighting
 - Global shortcuts for capture, visibility, interaction, chat, and settings
 - Session memory and a full chat UI
 - Language picker and a DSA skill prompt
-- Optional Azure Speech and local Whisper, with an auto hiding mic button
+- Optional browser-native response rail for CoderPad
 - Multi-monitor and area capture support
 - Window binding and positioning
 - Settings management with disguise and stealth modes
@@ -199,7 +189,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 - **Electron will not start or shows a blank window on Linux.** Try `npm run dev`, and make sure X11 or XWayland is available in headless setups.
 - **macOS screen capture does not work.** Grant Screen Recording permission under System Settings, Privacy and Security, then relaunch the app.
 - **Windows SmartScreen blocks the app.** Click More info, then Run anyway, or use `npm start` during development.
-- **Microphone or voice not working.** Voice is optional. For Azure, add valid keys to `.env`. For Whisper, install `openai-whisper`, `ffmpeg`, and `sox`, then set `SPEECH_PROVIDER=whisper`.
+- **Gemini Live is not connecting.** Run `gcloud auth application-default login`, set `GOOGLE_CLOUD_PROJECT`, confirm Vertex AI access and billing, then restart OpenCluely.
 
 </details>
 
@@ -221,12 +211,12 @@ The app is built for learning and practice. You are responsible for following th
 
 ## License
 
-Released under the MIT License. See [LICENSE](LICENSE) for details.
+Released under the Apache License 2.0. See [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
 - Google Gemini for the AI reasoning
-- Azure Speech and OpenAI Whisper for optional voice input
+- Google Cloud Vertex AI and Gemini Live for real-time assistance
 - Electron for the cross platform desktop runtime
 - [Vysper by varun-singhh](https://github.com/varun-singhh/Vysper) for UI and structure inspiration
 

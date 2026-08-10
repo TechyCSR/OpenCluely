@@ -5,18 +5,9 @@ DO_BUILD=0
 DO_RUN=1
 USE_CI=0
 INSTALL_SYSTEM_DEPS=0
-SETUP_WHISPER=1
-WHISPER_MODEL="${WHISPER_MODEL:-base}"
-WHISPER_LANGUAGE="${WHISPER_LANGUAGE:-en}"
-WHISPER_SEGMENT_MS="${WHISPER_SEGMENT_MS:-4000}"
-WHISPER_VENV_DIR=".venv-whisper"
-WHISPER_MODEL_DIR=".whisper-models"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OS_NAME="unknown"
 PLATFORM_BUILD_SCRIPT="build"
-PYTHON_BIN="python3"
-WHISPER_PIP_PATH=""
-WHISPER_COMMAND_PATH=""
 
 print_header() {
   echo "========================================"
@@ -31,10 +22,9 @@ Usage: ./setup.sh [options]
 This script will:
 1. Create .env from env.example when needed
 2. Install Node dependencies
-3. Optionally set up local Whisper in ${WHISPER_VENV_DIR}
-4. Optionally install system audio dependencies
-5. Optionally build the app
-6. Optionally run OpenCluely
+3. Optionally install system audio dependencies
+4. Optionally build the app
+5. Optionally run OpenCluely
 
 Options:
   --build                 Build a distributable for this OS
@@ -42,17 +32,13 @@ Options:
   --run                   Start the app after setup (default)
   --ci                    Use 'npm ci' instead of 'npm install'
   --install-system-deps   Attempt to install sox where possible
-  --skip-whisper          Skip local Whisper environment setup
   -h, --help              Show this help
 
 Environment variables:
-  GEMINI_API_KEY          If provided, writes into .env
-  WHISPER_MODEL           Whisper model to configure (default: turbo)
-  WHISPER_LANGUAGE        Whisper language to configure (default: en)
-  WHISPER_SEGMENT_MS      Segment size in ms (default: 4000)
+  GOOGLE_CLOUD_PROJECT    Vertex AI project to write into .env
 
 Example:
-  GEMINI_API_KEY=your_key_here ./setup.sh --install-system-deps
+  GOOGLE_CLOUD_PROJECT=your-project ./setup.sh --install-system-deps
 EOF
 }
 
@@ -63,7 +49,6 @@ for arg in "$@"; do
     --run) DO_RUN=1 ;;
     --ci) USE_CI=1 ;;
     --install-system-deps) INSTALL_SYSTEM_DEPS=1 ;;
-    --skip-whisper) SETUP_WHISPER=0 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg"; usage; exit 1 ;;
   esac
@@ -89,18 +74,6 @@ detect_os() {
     *) PLATFORM_BUILD_SCRIPT="build" ;;
   esac
 
-  case "$OS_NAME" in
-    windows)
-      PYTHON_BIN="python"
-      WHISPER_PIP_PATH="${WHISPER_VENV_DIR}/Scripts/pip.exe"
-      WHISPER_COMMAND_PATH="${WHISPER_VENV_DIR}/Scripts/whisper.exe"
-      ;;
-    *)
-      PYTHON_BIN="python3"
-      WHISPER_PIP_PATH="${WHISPER_VENV_DIR}/bin/pip"
-      WHISPER_COMMAND_PATH="${WHISPER_VENV_DIR}/bin/whisper"
-      ;;
-  esac
 }
 
 require_command() {
@@ -135,32 +108,19 @@ upsert_env() {
   fi
 }
 
-ensure_gemini_key() {
-  if [[ -n "${GEMINI_API_KEY:-}" ]]; then
-    upsert_env "GEMINI_API_KEY" "$GEMINI_API_KEY"
+ensure_google_cloud_config() {
+  if [[ -n "${GOOGLE_CLOUD_PROJECT:-}" ]]; then
+    upsert_env "GOOGLE_CLOUD_PROJECT" "$GOOGLE_CLOUD_PROJECT"
   fi
 
-  # GEMINI_API_KEY is now OPTIONAL during setup. The app's first-run
-  # flow will auto-open the Settings window if the key is missing and
-  # guide the user to enter it. Hard-blocking at install time makes
-  # CI / packaging / scripted installs harder for no real benefit.
-
-  if ! grep -q '^GEMINI_API_KEY=' .env 2>/dev/null; then
-    # Make sure the key exists in .env even if unset — the app reads
-    # this on first-run to know whether onboarding is needed.
-    echo "GEMINI_API_KEY=your_gemini_api_key_here" >> .env
-  fi
-
-  if grep -q 'your_gemini_api_key_here' .env 2>/dev/null; then
+  if ! grep -Eq '^GOOGLE_CLOUD_PROJECT=.+$' .env 2>/dev/null; then
     echo ""
     echo "=========================================="
-    echo " No Gemini API key detected"
+    echo " No Google Cloud project configured"
     echo "=========================================="
     echo ""
-    echo "The app will start, but AI features won't work until you set"
-    echo "GEMINI_API_KEY in .env (or via the Settings window on first launch)."
-    echo ""
-    echo "Get a free key from: https://aistudio.google.com/"
+    echo "Set GOOGLE_CLOUD_PROJECT in .env and authenticate with:"
+    echo "  gcloud auth application-default login"
     echo ""
     echo "Setup will continue without blocking."
     echo ""
@@ -216,76 +176,6 @@ install_node_deps() {
   fi
 }
 
-setup_whisper_env() {
-  if [[ "$SETUP_WHISPER" -ne 1 ]]; then
-    echo "Skipping local Whisper setup"
-    return
-  fi
-
-  # Skip whisper setup when only building (build distributions don't need local whisper)
-  if [[ "$DO_BUILD" -eq 1 && "$DO_RUN" -eq 0 ]]; then
-    echo "Skipping local Whisper setup (build-only mode)"
-    return
-  fi
-
-  require_command "$PYTHON_BIN" "Python 3 is required for local Whisper setup."
-
-  if [[ ! -d "$WHISPER_VENV_DIR" ]]; then
-    echo "Creating Whisper virtual environment at $WHISPER_VENV_DIR"
-    "$PYTHON_BIN" -m venv "$WHISPER_VENV_DIR"
-  fi
-
-  echo "Installing local Whisper into $WHISPER_VENV_DIR"
-  "$WHISPER_PIP_PATH" install --upgrade pip || true
-  "$WHISPER_PIP_PATH" install openai-whisper || {
-    echo "WARNING: pip install openai-whisper failed. Whisper may be unavailable."
-    echo "Common causes: insufficient disk space (needs ~3-5 GB), missing Python headers, or network issues."
-  }
-
-  mkdir -p "$WHISPER_MODEL_DIR"
-
-  # Verify the Whisper CLI actually exists before claiming it's configured
-  local whisper_found=0
-  if [[ -f "$WHISPER_COMMAND_PATH" ]]; then
-    echo "Whisper CLI found at: $WHISPER_COMMAND_PATH"
-    whisper_found=1
-  else
-    # Fallback: try python -m whisper inside the venv
-    local venv_python
-    if [[ "$OS_NAME" == "windows" ]]; then
-      venv_python="${WHISPER_VENV_DIR}/Scripts/python.exe"
-    else
-      venv_python="${WHISPER_VENV_DIR}/bin/python"
-    fi
-    if [[ -f "$venv_python" ]] && "$venv_python" -m whisper --help >/dev/null 2>&1; then
-      echo "Whisper CLI not found as standalone script, but 'python -m whisper' works."
-      echo "Adjusting WHISPER_COMMAND to use venv Python module."
-      WHISPER_COMMAND_PATH="$venv_python"
-      whisper_found=1
-    else
-      echo "WARNING: Whisper CLI not found at $WHISPER_COMMAND_PATH"
-      echo "Speech recognition will be unavailable until Whisper is properly installed."
-      echo "You can skip this with: ./setup.sh --skip-whisper"
-    fi
-  fi
-
-  upsert_env "SPEECH_PROVIDER" "whisper"
-  upsert_env "AZURE_SPEECH_KEY" ""
-  upsert_env "AZURE_SPEECH_REGION" ""
-  upsert_env "WHISPER_COMMAND" "${WHISPER_COMMAND_PATH}"
-  upsert_env "WHISPER_MODEL_DIR" "${WHISPER_MODEL_DIR}"
-  upsert_env "WHISPER_MODEL" "${WHISPER_MODEL}"
-  upsert_env "WHISPER_LANGUAGE" "${WHISPER_LANGUAGE}"
-  upsert_env "WHISPER_SEGMENT_MS" "${WHISPER_SEGMENT_MS}"
-
-  if [[ "$whisper_found" -eq 1 ]]; then
-    echo "Running Whisper smoke test"
-    npm run test-speech
-  else
-    echo "Skipping Whisper smoke test (CLI not found)"
-  fi
-}
-
 build_app() {
   if [[ "$DO_BUILD" -eq 1 ]]; then
     echo "Building app for $OS_NAME with npm run $PLATFORM_BUILD_SCRIPT"
@@ -310,9 +200,8 @@ echo "Node: $(node -v)"
 echo "npm:  $(npm -v)"
 
 ensure_env_file
-ensure_gemini_key
+ensure_google_cloud_config
 install_system_deps
 install_node_deps
-setup_whisper_env
 build_app
 run_app

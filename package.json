@@ -6,7 +6,6 @@
   "scripts": {
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "dev": "env -u ELECTRON_RUN_AS_NODE electron . --no-sandbox --disable-gpu",
-    "test-speech": "node scripts/test-speech.js",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
@@ -28,18 +27,17 @@
     "type": "git",
     "url": "https://github.com/TechyCSR/OpenCluely"
   },
-  "license": "ISC",
+  "license": "Apache-2.0",
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.2.0",
     "@google/genai": "^2.9.0",
     "dotenv": "^16.3.1",
     "markdown": "^0.5.0",
     "marked": "^15.0.12",
-    "microsoft-cognitiveservices-speech-sdk": "^1.40.0",
-    "node-record-lpcm16": "^1.0.1",
     "prismjs": "^1.30.0",
     "winston": "^3.17.0",
-    "winston-daily-rotate-file": "^4.7.1"
+    "winston-daily-rotate-file": "^4.7.1",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "electron": "^29.1.0",
@@ -59,15 +57,26 @@
       "!.env*",
       "!.venv-whisper/**/*",
       "!.whisper-models/**/*",
-      "!bin/**/*",
       "!scripts/__pycache__/**/*",
       "!**/*.pyc",
-      "!eng.traineddata"
+      "!eng.traineddata",
+      "!scripts/test-speech.js",
+      "!MISSION.md",
+      "!RESOURCES.md",
+      "!learning-records/**/*",
+      "!lessons/**/*",
+      "!reference/**/*",
+      "!assets/course.css",
+      "!scripts/whisper_worker.py",
+      "!src/core/whisper-installer.js",
+      "!src/services/speech.service.js",
+      "!src/services/whisper-worker.service.js",
+      "!src/services/antigravity.service.js"
     ],
     "asarUnpack": [
       "assests/icons/**/*",
-      "prompts/**/*",
-      "scripts/whisper_worker.py"
+      "bin/SystemAudioDump",
+      "prompts/**/*"
     ],
     "mac": {
       "category": "public.app-category.utilities",
@@ -91,7 +100,7 @@
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "OpenCluely uses the microphone to transcribe your speech locally with Whisper.",
+        "NSMicrophoneUsageDescription": "OpenCluely uses the microphone so Gemini Live can understand your questions during a call.",
         "NSCameraUsageDescription": "OpenCluely does not record video; this entitlement is only present for media-capture compatibility.",
         "NSScreenCaptureUsageDescription": "OpenCluely captures the screen to read on-screen content for AI assistance."
       }

@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "OpenCluely Browser Rail",
+  "version": "1.0.1",
+  "description": "Shows local OpenCluely responses inside supported browser tabs.",
+  "permissions": [],
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://coderpad.io/*",
+        "https://*.coderpad.io/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

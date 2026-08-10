@@ -14,8 +14,9 @@
         margin: 0;
         padding: 0;
         overflow: hidden;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          sans-serif;
+        font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
       }
 
       .chat-container {
@@ -26,7 +27,7 @@
           rgba(0, 0, 0, 0.3) 0%,
           rgba(20, 20, 20, 0.4) 100%
         );
-        backdrop-filter: blur(25px);
+        backdrop-filter: none;
         border-radius: 12px;
         border: 1px solid rgba(255, 255, 255, 0.1);
         box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
@@ -42,7 +43,7 @@
         justify-content: space-between;
         -webkit-app-region: drag;
         background: rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(10px);
+        backdrop-filter: none;
         cursor: move;
         flex-shrink: 0;
       }
@@ -80,7 +81,7 @@
         height: 8px;
         border-radius: 50%;
         background: #ff4757;
-        animation: pulse 2s infinite;
+        animation: none;
         display: none;
         box-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
       }
@@ -161,8 +162,15 @@
         background: rgba(255, 152, 0, 0.1);
       }
       .message.assistant {
-        background: rgba(156, 39, 176, 0.1);
-        border-left: 3px solid #9c27b0;
+        background: linear-gradient(145deg, rgba(31, 44, 38, 0.92), rgba(18, 23, 21, 0.92));
+        border: 1px solid rgba(142, 227, 179, 0.16);
+        border-left: 4px solid #8ee3b3;
+        border-radius: 10px;
+        padding: 16px 18px;
+        color: #f6f7f5;
+        font-size: 17px;
+        line-height: 1.55;
+        letter-spacing: -0.01em;
         /* Removed all height restrictions and overflow hidden */
         display: block;
       }
@@ -173,6 +181,8 @@
         word-wrap: break-word;
         word-break: break-word;
         overflow-wrap: break-word;
+        font-size: 17px;
+        line-height: 1.55;
       }
       
       /* Ensure all content in assistant messages is fully visible */
@@ -323,12 +333,12 @@
         color: rgba(255, 255, 255, 1);
       }
       
-      .message.assistant h1 { font-size: 16px; }
-      .message.assistant h2 { font-size: 15px; }
-      .message.assistant h3 { font-size: 14px; }
+      .message.assistant h1 { font-size: 24px; }
+      .message.assistant h2 { font-size: 21px; }
+      .message.assistant h3 { font-size: 19px; }
       .message.assistant h4,
       .message.assistant h5,
-      .message.assistant h6 { font-size: 13px; }
+      .message.assistant h6 { font-size: 17px; }
       
       /* Ensure paragraphs are fully visible */
       .message.assistant p {

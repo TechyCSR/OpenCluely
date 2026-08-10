@@ -14,7 +14,13 @@ class MainWindowUI {
         this.statusDot = null;
         this.skillIndicator = null;
         this.micButton = null;
+        this.callCopilotButton = null;
+        this.liveScreenButton = null;
+        this.exitButton = null;
+        this.isLiveScreenActive = false;
         this.isRecording = false;
+        this.isCallCopilotActive = false;
+        this.isLiveMicrophoneActive = false;
         this.speechAvailable = false; // track availability
         this._popoverHideTimeout = null;
         // Renderer-side audio capture state (used for Whisper on Windows)
@@ -44,6 +50,14 @@ class MainWindowUI {
             
             // Fetch speech availability
             await this.loadSpeechAvailability();
+
+            if (window.electronAPI?.getCallCopilotStatus) {
+                const callStatus = await window.electronAPI.getCallCopilotStatus();
+                this.isCallCopilotActive = !!callStatus?.isCapturing;
+                if (this.callCopilotButton) {
+                    this.callCopilotButton.classList.toggle('recording', this.isCallCopilotActive);
+                }
+            }
             
             this.updateSkillIndicator();
             this.updateAllElementStates(); // Update all elements with current state
@@ -270,14 +284,17 @@ class MainWindowUI {
         this.skillIndicator = document.getElementById('skillIndicator');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
-    this.infoButton = document.getElementById('infoButton');
-    this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.callCopilotButton = document.getElementById('callCopilotButton');
+        this.liveScreenButton = document.getElementById('liveScreenButton');
+        this.infoButton = document.getElementById('infoButton');
+        this.exitButton = document.getElementById('exitButton');
+        this.shortcutsPopover = document.getElementById('shortcutsPopover');
 
         // NEW: Screenshot button is the first .command-item without id
         const commandItems = document.querySelectorAll('.command-item');
         this.screenshotButton = commandItems && commandItems[0];
 
-    if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
+    if (!this.statusDot || !this.micButton || !this.screenshotButton) {
             throw new Error('Required UI elements not found');
         }
 
@@ -288,18 +305,18 @@ class MainWindowUI {
             }
         });
 
-        // Skill indicator click handler toggles DSA skill
-        this.skillIndicator.addEventListener('click', () => {
-            if (!this.isInteractive) return;
-            const newSkill = 'dsa';
-            if (window.electronAPI && window.electronAPI.updateActiveSkill) {
-                window.electronAPI.updateActiveSkill(newSkill).then(() => {
-                    this.handleSkillActivated(newSkill);
-                });
-            } else {
-                this.handleSkillActivated(newSkill);
-            }
-        });
+        if (this.liveScreenButton) {
+            this.liveScreenButton.addEventListener('click', async () => {
+                if (!this.isInteractive || !window.electronAPI?.toggleLiveScreen) return;
+                const result = await window.electronAPI.toggleLiveScreen();
+                this.isLiveScreenActive = !!result?.active;
+                this.liveScreenButton.classList.toggle('recording', this.isLiveScreenActive);
+            });
+            window.electronAPI?.onLiveScreenStatus?.((_event, status) => {
+                this.isLiveScreenActive = !!status?.active;
+                this.liveScreenButton.classList.toggle('recording', this.isLiveScreenActive);
+            });
+        }
 
         // Check for required elements (settingsIndicator is optional)
         if (this.settingsIndicator) {
@@ -334,6 +351,35 @@ class MainWindowUI {
                 this.loadSpeechAvailability();
             }
         });
+
+        if (this.callCopilotButton) {
+            this.callCopilotButton.addEventListener('click', async () => {
+                if (!this.isInteractive || !window.electronAPI?.toggleCallCopilot) return;
+                const result = await window.electronAPI.toggleCallCopilot();
+                if (result && result.error) {
+                    logger.error('Call Copilot toggle failed', {
+                        component: 'MainWindowUI',
+                        error: result.error
+                    });
+                }
+            });
+        }
+
+        if (this.exitButton) {
+            const exitApp = () => {
+                if (!this.isInteractive || !window.electronAPI?.quit) return;
+                this.exitButton.setAttribute('aria-disabled', 'true');
+                this.exitButton.style.pointerEvents = 'none';
+                window.electronAPI.quit();
+            };
+            this.exitButton.addEventListener('click', exitApp);
+            this.exitButton.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    exitApp();
+                }
+            });
+        }
 
         // Language dropdown
         this.languageSelect = document.getElementById('codingLanguage');
@@ -442,6 +488,27 @@ class MainWindowUI {
             window.electronAPI.onSpeechAvailability((event, data) => {
                 this.speechAvailable = !!(data && data.available);
                 this.applyMicVisibility();
+            });
+
+            window.electronAPI.onCallCopilotStatus((event, data) => {
+                this.isCallCopilotActive = !!data?.isCapturing;
+                if (this.callCopilotButton) {
+                    this.callCopilotButton.classList.toggle('recording', this.isCallCopilotActive);
+                    this.callCopilotButton.title = data?.error ||
+                        (this.isCallCopilotActive
+                            ? 'Call Copilot listening — click or press ⌘⇧L to stop'
+                            : 'Call Copilot — call + microphone (⌘⇧L)');
+                }
+            });
+
+            window.electronAPI.onLiveMicrophoneCommand?.((_event, data) => {
+                const active = !!data?.active;
+                this.isLiveMicrophoneActive = active;
+                if (active) {
+                    this._startRendererAudioCapture();
+                } else {
+                    this._stopRendererAudioCapture();
+                }
             });
 
             // Listen for coding language changes from other windows
@@ -701,7 +768,8 @@ class MainWindowUI {
             this._scriptNode = scriptNode;
 
             scriptNode.onaudioprocess = (event) => {
-                if (!this.isRecording || !window.electronAPI || !window.electronAPI.sendAudioChunk) {
+                if ((!this.isRecording && !this.isLiveMicrophoneActive) ||
+                    !window.electronAPI || !window.electronAPI.sendAudioChunk) {
                     return;
                 }
                 const inputData = event.inputBuffer.getChannelData(0);
@@ -722,10 +790,7 @@ class MainWindowUI {
                 component: 'MainWindowUI',
                 error: error.message
             });
-            // Notify main process so it can stop the recording state
-            try {
-                await window.electronAPI.stopSpeechRecognition();
-            } catch (_) { /* ignore */ }
+            this.isLiveMicrophoneActive = false;
         }
     }
 
@@ -1024,21 +1089,21 @@ class MainWindowUI {
         modal.innerHTML = `
             <div class="bg-gray-900 text-white p-6 rounded-lg max-w-md w-full">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold">🤖 Gemini Flash 1.5 Configuration</h2>
+                    <h2 class="text-xl font-bold">🤖 Gemini on Vertex AI</h2>
                     <button class="text-gray-400 hover:text-white" onclick="this.closest('.fixed').remove()">✕</button>
                 </div>
                 
-                <div class="mb-4 p-3 rounded ${status.hasApiKey ? 'bg-green-900' : 'bg-red-900'}">
-                    <p><strong>Status:</strong> ${status.hasApiKey ? 'Configured' : 'Not Configured'}</p>
+                <div class="mb-4 p-3 rounded ${status.config?.project ? 'bg-green-900' : 'bg-red-900'}">
+                    <p><strong>Status:</strong> ${status.config?.project ? 'Project configured' : 'Project not configured'}</p>
                     <p><strong>Model:</strong> ${status.model}</p>
                 </div>
                 
                 <div class="mb-4">
-                    <label class="block text-sm font-medium mb-2">API Key:</label>
-                    <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key" 
+                    <label class="block text-sm font-medium mb-2">Google Cloud project:</label>
+                    <input type="text" id="googleCloudProject" value="${status.config?.project || ''}" placeholder="your-gcp-project-id"
                            class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
                     <p class="text-xs text-gray-400 mt-1">
-                        Get your API key from: <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400">Google AI Studio</a>
+                        Authenticate once in Terminal with <code>gcloud auth application-default login</code>.
                     </p>
                 </div>
                 
@@ -1062,19 +1127,19 @@ class MainWindowUI {
     }
 
     async configureGemini() {
-        const apiKey = document.getElementById('geminiApiKey').value.trim();
-        if (!apiKey) {
-            this.showNotification('Please enter an API key', 'error');
+        const project = document.getElementById('googleCloudProject').value.trim();
+        if (!project) {
+            this.showNotification('Please enter a Google Cloud project ID', 'error');
             return;
         }
         
         try {
-            const result = await window.electronAPI.setGeminiApiKey(apiKey);
-            if (result.success) {
-                this.showNotification('Gemini API key configured successfully!', 'success');
+            const result = await window.electronAPI.setGoogleCloudProject(project);
+            if (result.isInitialized) {
+                this.showNotification('Google Cloud project configured successfully!', 'success');
                 document.querySelector('.fixed').remove();
                 
-                logger.info('Gemini API key configured', { component: 'MainWindowUI' });
+                logger.info('Google Cloud project configured', { component: 'MainWindowUI' });
             } else {
                 this.showNotification(`Configuration failed: ${result.error}`, 'error');
                 logger.error('Gemini configuration failed', {
