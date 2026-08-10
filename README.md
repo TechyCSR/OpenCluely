@@ -125,7 +125,7 @@ Live audio is optional. On macOS it requires the bundled `SystemAudioDump` helpe
 
 1. **Observe.** Start Live Screen, Live Audio, or use the one-shot screenshot shortcut.
 2. **Reason.** Gemini maintains the active task while combining recent screen and conversation context.
-3. **Assist.** Responses stream to the native overlay, chat window, or optional CoderPad browser rail.
+3. **Assist.** Responses stream to the native overlay, chat window, or optional browser rail.
 
 ## Keyboard shortcuts
 
@@ -160,7 +160,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 - Global shortcuts for capture, visibility, interaction, chat, and settings
 - Session memory and a full chat UI
 - Language picker and a DSA skill prompt
-- Optional browser-native response rail for CoderPad
+- Optional browser-native response rail, activated explicitly for the current tab
 - Multi-monitor and area capture support
 - Window binding and positioning
 - Settings management with disguise and stealth modes

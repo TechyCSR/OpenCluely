@@ -6,7 +6,6 @@ const HOST = '127.0.0.1';
 const PORT = 17321;
 const TOKEN = 'oc_local_7f86c1d293b74b5eb8ae3fd4';
 const ALLOWED_ORIGINS = [
-  /^https:\/\/(?:[a-z0-9-]+\.)?coderpad\.io$/i,
   /^chrome-extension:\/\/[a-z]{32}$/i
 ];
 

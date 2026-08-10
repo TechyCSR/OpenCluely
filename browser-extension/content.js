@@ -1,7 +1,6 @@
 (() => {
   if (document.getElementById('opencluely-browser-rail-host')) return;
 
-  const WS_URL = 'ws://127.0.0.1:17321/?token=oc_local_7f86c1d293b74b5eb8ae3fd4';
   const host = document.createElement('div');
   host.id = 'opencluely-browser-rail-host';
   host.style.cssText = 'all:initial;position:fixed;inset:0 0 auto auto;z-index:2147483647;pointer-events:none;';
@@ -190,10 +189,7 @@
   const input = root.querySelector('textarea');
   const send = root.querySelector('.send');
 
-  let socket;
-  let reconnectTimer;
   let currentText = '';
-  let requestSequence = 0;
 
   const setConnection = connected => {
     mark.classList.toggle('connected', connected);
@@ -213,13 +209,7 @@
   };
 
   const command = (name, payload = {}) => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    socket.send(JSON.stringify({
-      type: 'command',
-      command: name,
-      payload,
-      requestId: String(++requestSequence)
-    }));
+    chrome.runtime.sendMessage({ type: 'bridge-command', command: name, payload });
   };
 
   const handleEvent = ({ channel, data = {} }) => {
@@ -252,34 +242,13 @@
     }
   };
 
-  const connect = () => {
-    clearTimeout(reconnectTimer);
-    try { socket = new WebSocket(WS_URL); } catch (_) { return scheduleReconnect(); }
-    socket.addEventListener('open', () => {
-      setConnection(true);
-      command('get-status');
-    });
-    socket.addEventListener('message', event => {
-      try {
-        const message = JSON.parse(event.data);
-        if (message.type === 'event') handleEvent(message);
-        if (message.type === 'command-result' && message.result?.status) {
-          const statusResult = message.result.status;
-          handleEvent({ channel: 'live-screen-status', data: statusResult.liveScreen || {} });
-          handleEvent({ channel: 'call-copilot-status', data: statusResult.callCopilot || {} });
-        }
-      } catch (_) {}
-    });
-    socket.addEventListener('close', () => {
-      setConnection(false);
-      scheduleReconnect();
-    });
-    socket.addEventListener('error', () => socket.close());
-  };
-
-  const scheduleReconnect = () => {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(connect, 1500);
+  const handleBridgeMessage = message => {
+    if (message.type === 'event') handleEvent(message);
+    if (message.type === 'command-result' && message.result?.status) {
+      const statusResult = message.result.status;
+      handleEvent({ channel: 'live-screen-status', data: statusResult.liveScreen || {} });
+      handleEvent({ channel: 'call-copilot-status', data: statusResult.callCopilot || {} });
+    }
   };
 
   const setCollapsed = collapsed => {
@@ -307,5 +276,11 @@
   });
   root.addEventListener('click', event => event.stopPropagation());
   root.addEventListener('keydown', event => event.stopPropagation());
-  connect();
+  chrome.runtime.onMessage.addListener(message => {
+    if (message?.type === 'bridge-connection') setConnection(!!message.connected);
+    if (message?.type === 'bridge-message' && message.message) handleBridgeMessage(message.message);
+  });
+  chrome.runtime.sendMessage({ type: 'rail-ready' }, response => {
+    setConnection(!!response?.connected);
+  });
 })();
