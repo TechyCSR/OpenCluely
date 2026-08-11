@@ -25,6 +25,8 @@ class WindowManager {
     this.isInitialized = false;
     this.isInitializing = false;
     this.isRecording = false;
+    this.assessmentMode = false;
+    this.assessmentWatchdog = null;
     
     // Add debouncing to prevent excessive operations
     this.lastEnforceTime = 0;
@@ -1543,6 +1545,11 @@ class WindowManager {
       this.screenCaptureAvailabilityWatcher = null;
     }
     
+    if (this.assessmentWatchdog) {
+      clearInterval(this.assessmentWatchdog);
+      this.assessmentWatchdog = null;
+    }
+    
     logger.info('All windows destroyed');
   }
 
@@ -1818,7 +1825,68 @@ class WindowManager {
       skill,
       windowCount: this.windows.size 
     });
+  }
+
+  toggleAssessmentMode() {
+    this.assessmentMode = !this.assessmentMode;
+    
+    if (this.assessmentMode) {
+      logger.info('Assessment Mode enabled - activating watchdog');
+      this.startAssessmentWatchdog();
+      this.broadcastToAllWindows('assessment-mode-changed', { enabled: true });
+    } else {
+      logger.info('Assessment Mode disabled - deactivating watchdog');
+      this.stopAssessmentWatchdog();
+      this.broadcastToAllWindows('assessment-mode-changed', { enabled: false });
     }
+    
+    return this.assessmentMode;
+  }
+
+  startAssessmentWatchdog() {
+    if (this.assessmentWatchdog) {
+      clearInterval(this.assessmentWatchdog);
+    }
+    
+    this.assessmentWatchdog = setInterval(() => {
+      if (this.isVisible && !this.isScreenBeingShared) {
+        // Essential windows that MUST be visible when app is visible
+        const essentialWindows = ['main', 'chat'];
+        
+        this.windows.forEach((window, type) => {
+          if (!window.isDestroyed()) {
+            
+            // If it's an essential window, ensure it is completely visible
+            if (essentialWindows.includes(type) && !window.isVisible()) {
+                window.showInactive();
+            }
+            
+            if (window.isMinimized()) {
+              window.restore();
+            }
+            
+            // Re-assert always-on-top for any visible window
+            if (window.isVisible()) {
+              try {
+                if (process.platform === 'darwin') {
+                  window.setAlwaysOnTop(true, 'screen-saver', 2);
+                } else {
+                  window.setAlwaysOnTop(true);
+                }
+              } catch (e) {}
+            }
+          }
+        });
+      }
+    }, 1000);
+  }
+
+  stopAssessmentWatchdog() {
+    if (this.assessmentWatchdog) {
+      clearInterval(this.assessmentWatchdog);
+      this.assessmentWatchdog = null;
+    }
+  }
 }
 
 module.exports = new WindowManager();

@@ -318,6 +318,9 @@
                         </div>
                         <select class="input-field" id="activeSkill">
                             <option value="dsa">Data Structures & Algorithms</option>
+                            <option value="system-design">System Design</option>
+                            <option value="code-explanation">Code Explanation</option>
+                            <option value="aptitude">Aptitude</option>
                         </select>
                     </div>
                 </div>
@@ -459,15 +462,50 @@
             <div class="settings-section">
                 <div class="settings-section-title">
                     <i class="fas fa-robot"></i>
-                    Gemini Settings
+                    AI Provider
                 </div>
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Google API Key</div>
-                            <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            <div class="settings-item-label">LLM Provider</div>
+                            <div class="settings-item-description">Choose your AI backend (restart required to switch)</div>
                         </div>
-                        <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        <select class="input-field" id="llmProvider">
+                            <option value="gemini">Google Gemini</option>
+                            <option value="openrouter">OpenRouter</option>
+                        </select>
+                    </div>
+
+                    <!-- Gemini fields (shown when gemini is selected) -->
+                    <div id="geminiFields">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Google API Key</div>
+                                <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            </div>
+                            <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        </div>
+                    </div>
+
+                    <!-- OpenRouter fields (shown when openrouter is selected) -->
+                    <div id="openrouterFields">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">OpenRouter API Key</div>
+                                <div class="settings-item-description">Get your key at <a href="https://openrouter.ai/keys" target="_blank" style="color:rgba(255,255,255,0.7)">openrouter.ai/keys</a></div>
+                            </div>
+                            <input type="password" class="input-field" id="openrouterKey" placeholder="Enter your OpenRouter key">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">OpenRouter Model</div>
+                                <div class="settings-item-description">Vision-capable model ID (e.g. anthropic/claude-sonnet-4)</div>
+                            </div>
+                            <input type="text" class="input-field" id="openrouterModel" placeholder="anthropic/claude-sonnet-4">
+                        </div>
+                        <div class="settings-note" style="margin-top:8px;">
+                            Provider change takes effect after <strong>restarting the app</strong>. API key and model updates apply immediately if OpenRouter is already active.
+                        </div>
                     </div>
                 </div>
             </div>

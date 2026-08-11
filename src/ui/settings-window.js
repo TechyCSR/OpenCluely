@@ -21,6 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
     const iconGrid = document.getElementById('iconGrid');
+    // OpenRouter provider elements
+    const llmProviderSelect = document.getElementById('llmProvider');
+    const openrouterKeyInput = document.getElementById('openrouterKey');
+    const openrouterModelInput = document.getElementById('openrouterModel');
 
     // Check if window.api exists
     if (!window.api) {
@@ -89,6 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
         if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
+        // OpenRouter / provider fields
+        if (llmProviderSelect) llmProviderSelect.value = settings.llmProvider || 'gemini';
+        if (openrouterKeyInput) openrouterKeyInput.value = settings.openrouterKey || '';
+        if (openrouterModelInput) openrouterModelInput.value = settings.openrouterModel || '';
 
         // Set C++ as default if no coding language is specified
         if (codingLanguageSelect) {
@@ -111,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updateSpeechFieldStates();
+        updateLLMProviderFieldStates();
     };
 
     // Load settings when window opens
@@ -150,6 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
+        // OpenRouter / provider fields
+        if (llmProviderSelect) settings.llmProvider = llmProviderSelect.value;
+        if (openrouterKeyInput) settings.openrouterKey = openrouterKeyInput.value;
+        if (openrouterModelInput) settings.openrouterModel = openrouterModelInput.value;
         
         window.api.send('save-settings', settings);
     };
@@ -184,6 +197,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const updateLLMProviderFieldStates = () => {
+        const selectedProvider = llmProviderSelect ? llmProviderSelect.value : 'gemini';
+        const geminiGroup = document.getElementById('geminiFields');
+        const openrouterGroup = document.getElementById('openrouterFields');
+        if (geminiGroup) geminiGroup.style.display = selectedProvider === 'gemini' ? '' : 'none';
+        if (openrouterGroup) openrouterGroup.style.display = selectedProvider === 'openrouter' ? '' : 'none';
+        if (geminiKeyInput) geminiKeyInput.disabled = selectedProvider !== 'gemini';
+        if (openrouterKeyInput) openrouterKeyInput.disabled = selectedProvider !== 'openrouter';
+        if (openrouterModelInput) openrouterModelInput.disabled = selectedProvider !== 'openrouter';
+    };
+
     // Add event listeners for all inputs
     const inputs = [
         azureKeyInput,
@@ -196,7 +220,9 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperResponseTargetSelect,
         whisperSegmentMsInput,
         geminiKeyInput,
-        windowGapInput
+        windowGapInput,
+        openrouterKeyInput,
+        openrouterModelInput
     ];
 
     inputs.forEach(input => {
@@ -209,6 +235,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (speechProviderSelect) {
         speechProviderSelect.addEventListener('change', () => {
             updateSpeechFieldStates();
+            saveSettings();
+        });
+    }
+
+    if (llmProviderSelect) {
+        llmProviderSelect.addEventListener('change', () => {
+            updateLLMProviderFieldStates();
             saveSettings();
         });
     }
@@ -237,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateSpeechFieldStates();
+    updateLLMProviderFieldStates();
 
     // Initialize icon grid with correct paths
     const initializeIconGrid = () => {

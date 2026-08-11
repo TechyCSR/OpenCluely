@@ -270,8 +270,9 @@ class MainWindowUI {
         this.skillIndicator = document.getElementById('skillIndicator');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
-    this.infoButton = document.getElementById('infoButton');
-    this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.infoButton = document.getElementById('infoButton');
+        this.quitButton = document.getElementById('quitButton');
+        this.shortcutsPopover = document.getElementById('shortcutsPopover');
 
         // NEW: Screenshot button is the first .command-item without id
         const commandItems = document.querySelectorAll('.command-item');
@@ -375,11 +376,21 @@ class MainWindowUI {
 
         // Info button / shortcuts popover
         if (this.infoButton && this.shortcutsPopover) {
-            this.infoButton.addEventListener('click', (e) => {
+                this.infoButton.addEventListener('click', (e) => {
                 if (!this.isInteractive) return;
                 e.stopPropagation();
                 this.toggleShortcutsPopover();
             });
+
+            // Quit button handler
+            if (this.quitButton) {
+                this.quitButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (window.electronAPI && window.electronAPI.quit) {
+                        window.electronAPI.quit();
+                    }
+                });
+            }
 
             // Hover to show
             this.infoButton.addEventListener('mouseenter', () => {
@@ -527,7 +538,9 @@ class MainWindowUI {
             'programming': 'Programming',
             'devops': 'DevOps',
             'system-design': 'System Design',
-            'negotiation': 'Negotiation'
+            'negotiation': 'Negotiation',
+            'code-explanation': 'Code Explanation',
+            'aptitude': 'Aptitude'
         };
         
         const displaySkill = skillNames[skill] || skill.toUpperCase();
@@ -766,7 +779,9 @@ class MainWindowUI {
             'programming': 'Programming',
             'devops': 'DevOps',
             'system-design': 'System Design',
-            'negotiation': 'Negotiation'
+            'negotiation': 'Negotiation',
+            'code-explanation': 'Code Explanation',
+            'aptitude': 'Aptitude'
         };
         
         logger.info('Updating skill indicator', {
@@ -879,7 +894,9 @@ class MainWindowUI {
             'programming': 'Programming',
             'devops': 'DevOps',
             'system-design': 'System Design',
-            'negotiation': 'Negotiation'
+            'negotiation': 'Negotiation',
+            'code-explanation': 'Code Explanation',
+            'aptitude': 'Aptitude'
         };
         
         const displayName = skillNames[skill] || skill.toUpperCase();

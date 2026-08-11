@@ -31,6 +31,15 @@ class FirstRunManager {
     if (!fs.existsSync(this.sentinelPath)) return true;
     if (!fs.existsSync(this.envPath)) return true;
     const content = this._readEnv();
+    const provider = (content.LLM_PROVIDER || 'gemini').trim();
+    if (provider === 'openrouter') {
+      // The onboarding wizard only has a Gemini key screen; running it when
+      // OpenRouter is selected would leave the user in an infinite loop
+      // (wizard completes but OPENROUTER_API_KEY is still unset → needsOnboarding
+      // returns true again on every launch). Direct OpenRouter users to
+      // Settings > AI Provider instead — never trigger wizard for them.
+      return false;
+    }
     const gemini = (content.GEMINI_API_KEY || '').trim();
     return !gemini || gemini === 'your_gemini_api_key_here';
   }
@@ -80,10 +89,13 @@ class FirstRunManager {
   getStatus() {
     const env = this._readEnv();
     const gemini = (env.GEMINI_API_KEY || '').trim();
+    const openrouter = (env.OPENROUTER_API_KEY || '').trim();
     return {
       envExists: fs.existsSync(this.envPath),
       sentinelExists: fs.existsSync(this.sentinelPath),
       geminiConfigured: !!gemini && gemini !== 'your_gemini_api_key_here',
+      openrouterConfigured: !!openrouter && openrouter !== 'your_openrouter_key_here',
+      llmProvider: (env.LLM_PROVIDER || 'gemini').trim(),
       azureConfigured: !!(env.AZURE_SPEECH_KEY || '').trim() && !!(env.AZURE_SPEECH_REGION || '').trim(),
       whisperConfigured: !!(env.WHISPER_COMMAND || '').trim(),
       needsOnboarding: this.needsOnboarding()
@@ -143,6 +155,11 @@ class FirstRunManager {
       '# Get a key from: https://aistudio.google.com/',
       '',
       'GEMINI_API_KEY=your_gemini_api_key_here',
+      '',
+      '# LLM Provider: gemini (default) | openrouter (restart required to switch)',
+      '# LLM_PROVIDER=gemini',
+      '# OPENROUTER_API_KEY=your_openrouter_key_here',
+      '# OPENROUTER_MODEL=anthropic/claude-sonnet-4',
       '',
       '# Speech provider: "whisper" (local) or "azure" (cloud).',
       '# WHISPER_COMMAND is auto-set to the project-local venv when you',

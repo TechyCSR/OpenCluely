@@ -102,7 +102,8 @@ process.on("unhandledRejection", (reason) => {
 // Screen capture (image-based)
 const captureService = require("./src/services/capture.service");
 const speechService = require("./src/services/speech.service");
-const llmService = require("./src/services/llm.service");
+// llm.factory selects openrouter.service or llm.service based on LLM_PROVIDER env var.
+const llmService = require("./src/services/llm.factory");
 
 // Managers
 const windowManager = require("./src/managers/window.manager");
@@ -392,6 +393,7 @@ class ApplicationController {
     const shortcuts = {
       "CommandOrControl+Shift+S": () => this.triggerScreenshotOCR(),
       "CommandOrControl+Shift+V": () => windowManager.toggleVisibility(),
+      "CommandOrControl+Shift+A": () => windowManager.toggleAssessmentMode(),
       "CommandOrControl+Shift+I": () => windowManager.toggleInteraction(),
       "CommandOrControl+Shift+C": () => windowManager.switchToWindow("chat"),
       "CommandOrControl+Shift+\\": () => this.clearSessionMemory(),
@@ -1087,7 +1089,7 @@ class ApplicationController {
       // Use image directly with LLM and active skill; do not send chat messages here
       const sessionHistory = sessionManager.getOptimizedHistory();
 
-      const skillsRequiringProgrammingLanguage = ['dsa'];
+      const skillsRequiringProgrammingLanguage = ['dsa', 'code-explanation'];
       const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
 
       this._responseSeq = (this._responseSeq || 0) + 1;
@@ -1153,7 +1155,7 @@ class ApplicationController {
       sessionManager.addUserInput(text, 'llm_input');
 
       // Check if current skill needs programming language context
-      const skillsRequiringProgrammingLanguage = ['dsa'];
+      const skillsRequiringProgrammingLanguage = ['dsa', 'code-explanation'];
       const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
 
       this._responseSeq = (this._responseSeq || 0) + 1;
@@ -1322,7 +1324,7 @@ class ApplicationController {
       });
 
       // Check if current skill needs programming language context
-      const skillsRequiringProgrammingLanguage = ['dsa'];
+      const skillsRequiringProgrammingLanguage = ['dsa', 'code-explanation'];
       const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
 
       // Stream the answer progressively to the configured speech target.
@@ -1608,6 +1610,11 @@ class ApplicationController {
       whisperSegmentMs: process.env.WHISPER_SEGMENT_MS || "4000",
       geminiKey: process.env.GEMINI_API_KEY || "",
 
+      // OpenRouter provider fields
+      llmProvider: process.env.LLM_PROVIDER || "gemini",
+      openrouterKey: process.env.OPENROUTER_API_KEY || "",
+      openrouterModel: process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4",
+
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
       speechAvailable: this.speechAvailable
     };
@@ -1679,6 +1686,17 @@ class ApplicationController {
         envUpdates.GEMINI_API_KEY = settings.geminiKey;
       }
 
+      // OpenRouter provider settings
+      if (settings.llmProvider === "openrouter" || settings.llmProvider === "gemini") {
+        envUpdates.LLM_PROVIDER = settings.llmProvider;
+      }
+      if (settings.openrouterKey !== undefined) {
+        envUpdates.OPENROUTER_API_KEY = settings.openrouterKey;
+      }
+      if (settings.openrouterModel !== undefined) {
+        envUpdates.OPENROUTER_MODEL = String(settings.openrouterModel || '').trim();
+      }
+
       // Capture the previous whisper command BEFORE persisting — persistEnvUpdates
       // mutates process.env in place, so comparing afterwards would always read
       // equal and skip the speech re-init below (the exact stale-mic-after-install
@@ -1701,6 +1719,28 @@ class ApplicationController {
             error: e.message
           });
         }
+      }
+
+      // If the OpenRouter key or model was saved and the current runtime service is
+      // OpenRouter, reinitialize its client so changes take effect immediately.
+      if (envUpdates.OPENROUTER_API_KEY !== undefined || envUpdates.OPENROUTER_MODEL !== undefined) {
+        try {
+          if (llmService.constructor && llmService.constructor.name === 'OpenRouterService') {
+            llmService.initializeClient();
+            logger.info("OpenRouter service reinitialized after settings update");
+          }
+        } catch (e) {
+          logger.warn("Failed to reinitialize OpenRouter service after settings update", { error: e.message });
+        }
+      }
+
+      // Notify UI about provider change (restart still required for factory to switch)
+      if (settings.llmProvider !== undefined) {
+        windowManager.broadcastToAllWindows("llm-provider-changed", {
+          provider: settings.llmProvider,
+          requiresRestart: true
+        });
+        logger.info("LLM provider setting updated; restart required for factory to reload", { provider: settings.llmProvider });
       }
 
       // Reinitialize speech service when provider OR whisper command

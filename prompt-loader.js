@@ -6,8 +6,7 @@ class PromptLoader {
     this.prompts = new Map();
     this.promptsLoaded = false;
     this.skillPromptSent = new Set();
-    // Focus only on DSA
-    this.skillsRequiringProgrammingLanguage = ['dsa'];
+    this.skillsRequiringProgrammingLanguage = ['dsa', 'code-explanation'];
   }
 
   /**
@@ -28,7 +27,6 @@ class PromptLoader {
       for (const file of files) {
         if (file.endsWith('.md')) {
           const skillName = path.basename(file, '.md');
-          if (skillName !== 'dsa') continue; // only keep DSA
           const filePath = path.join(promptsDir, file);
           const promptContent = fs.readFileSync(filePath, 'utf8');
           
@@ -354,7 +352,9 @@ STRICT REQUIREMENTS:
       'distributed-systems': 'system-design',
       'negotiation': 'negotiation',
       'negotiating': 'negotiation',
-      'conflict-resolution': 'negotiation'
+      'conflict-resolution': 'negotiation',
+      'code-explanation': 'code-explanation',
+      'aptitude': 'aptitude'
     };
 
     return skillMap[normalized] || normalized;
@@ -368,7 +368,7 @@ STRICT REQUIREMENTS:
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
-    return ['dsa'];
+    return Array.from(this.prompts.keys());
   }
 
   /**
