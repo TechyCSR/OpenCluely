@@ -1403,6 +1403,47 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
         logger.warn('Network connectivity issues detected', networkCheck);
       }
 
+      // Prefer the same raw-HTTPS path real requests use (executeAlternativeRequest)
+      // over the @google/genai SDK client, matching the enableFallbackMethod
+      // preference used everywhere else in this file. The SDK client's own
+      // networking has been observed to fail with a bare "fetch failed" in
+      // some Electron main-process environments even when the raw HTTPS path
+      // — and thus real chat/image/voice requests — works fine, which made
+      // this diagnostic report false negatives ("can't reach Google") while
+      // the app was actually working correctly end to end.
+      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
+      if (preferAlternative) {
+        try {
+          const startTime = Date.now();
+          const testRequest = {
+            contents: [{ role: 'user', parts: [{ text: 'Test connection. Please respond with "OK".' }] }]
+          };
+          this.applyGenerationDefaults(testRequest, { temperature: 0, maxOutputTokens: 64 });
+          const text = await this.executeAlternativeRequest(testRequest);
+          const latency = Date.now() - startTime;
+
+          logger.info('Connection test successful (alternative HTTPS method)', {
+            response: text,
+            latency,
+            model: this.model,
+            networkCheck: hasNetworkIssues ? 'issues_detected' : 'healthy'
+          });
+
+          return {
+            success: true,
+            response: text,
+            latency,
+            model: this.model,
+            networkConnectivity: networkCheck
+          };
+        } catch (altError) {
+          logger.warn('Alternative HTTPS connection test failed, trying SDK method', {
+            error: altError.message
+          });
+          // Fall through to the SDK-based loop below.
+        }
+      }
+
       const generationConfig = this.getGenerationConfig({ temperature: 0, maxOutputTokens: 64 });
       const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
       const modelsToTry = [this.model, ...fallbackModels];
