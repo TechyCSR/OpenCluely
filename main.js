@@ -120,7 +120,9 @@ class ApplicationController {
   constructor() {
     this.isReady = false;
     this.starting = false;
-    this.activeSkill = "dsa";
+    // Persisted via ACTIVE_SKILL in .env (see saveSettings/getSettings) so a
+    // chosen skill survives an app restart, not just the current session.
+    this.activeSkill = process.env.ACTIVE_SKILL || "dsa";
   // Default to C++ so language is enforced from first run
   this.codingLanguage = "cpp";
     this.speechAvailable = false;
@@ -1059,6 +1061,7 @@ class ApplicationController {
   navigateSkill(direction) {
     const availableSkills = [
       "dsa",
+      "home-depot",
     ];
 
     const currentIndex = availableSkills.indexOf(this.activeSkill);
@@ -1619,7 +1622,7 @@ class ApplicationController {
     // distinguish "unset" from "stale value from a previous load".
     return {
       codingLanguage: this.codingLanguage || "cpp",
-      activeSkill: this.activeSkill || "dsa",
+      activeSkill: this.activeSkill || process.env.ACTIVE_SKILL || "dsa",
       appIcon: this.appIcon || "terminal",
       selectedIcon: this.appIcon || "terminal",
       windowGap: windowManager.windowGap,
@@ -1719,6 +1722,11 @@ class ApplicationController {
       }
       if (settings.ollamaModel !== undefined) {
         envUpdates.OLLAMA_MODEL = settings.ollamaModel;
+      }
+      if (settings.activeSkill) {
+        // Persisted so a chosen skill (e.g. an interview-prep skill) survives
+        // an app restart instead of resetting to the "dsa" default.
+        envUpdates.ACTIVE_SKILL = settings.activeSkill;
       }
 
       // Capture the previous whisper command BEFORE persisting — persistEnvUpdates
