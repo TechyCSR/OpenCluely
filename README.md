@@ -36,7 +36,8 @@ It is free and open source. Processing stays on your machine, and the only thing
 - **Hidden during screen share.** When a share starts, the app can hide every window on its own.
 - **Flexible local voice.** Choose manual start/stop capture or automatic voice-activity detection without fixed-timer sentence cuts.
 - **Configurable streamed answers.** Route voice replies to chat, the floating overlay, or both.
-- **Direct image analysis.** Screenshots go straight to Gemini for visual reasoning, with no slow OCR step in between.
+- **Direct image analysis.** Screenshots go straight to your active provider for visual reasoning, with no slow OCR step in between.
+- **Local LLM option.** Point OpenCluely at a local [Ollama](https://ollama.com) server instead of Gemini for fully offline, no-API-key text and voice answers. Switch providers anytime in Settings.
 - **Session memory.** The whole conversation is remembered, so follow-ups, edge cases, and optimizations keep their context.
 - **Language aware.** Tailored answers for C++, C, Python, Java, and JavaScript.
 - **Stealthy by design.** Runs under ordinary system names, ships with no telemetry, and keeps your session local.
@@ -100,11 +101,18 @@ If you would rather build from source, three steps are all it takes.
 
 ## Configuration
 
-The setup script writes sensible defaults. The only required value is a Gemini API key.
+The setup script writes sensible defaults. With the default `gemini` provider, the only required value is a Gemini API key.
 
 ```bash
-# Required
+# LLM provider. Pick one.
+LLM_PROVIDER=gemini
+
+# Gemini option (required when LLM_PROVIDER=gemini)
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Local Ollama option (used when LLM_PROVIDER=ollama)
+OLLAMA_HOST=http://127.0.0.1:11434
+OLLAMA_MODEL=phi3.5:3.8b
 
 # Optional speech provider. Pick one.
 SPEECH_PROVIDER=whisper
@@ -127,6 +135,19 @@ WHISPER_GPU_IDLE_MS=60000
 ```
 
 Speech is optional. If no provider is configured, the microphone button hides itself across the app.
+
+## Optional local LLM (Ollama)
+
+Instead of Gemini, you can run the whole thing offline against a local [Ollama](https://ollama.com) server — no API key, no data leaving your machine.
+
+1. [Install Ollama](https://ollama.com/download) and pull a model, e.g. `ollama pull phi3.5:3.8b` (small/fast) or `ollama pull llama3.1:8b` (higher quality, needs more RAM/VRAM).
+2. Open Settings in OpenCluely → **LLM Provider** → switch to **Ollama (local)**.
+3. Set the host (default `http://127.0.0.1:11434` works for a local install) and pick your pulled model, then hit **Test & refresh models** to confirm it's reachable.
+
+Notes:
+- Screenshot analysis requires a vision-capable model (e.g. `llava`, `qwen2.5vl`). Text-only models work fine for chat and voice but will fall back to a generic response for screenshots.
+- Switching providers takes effect immediately — no restart needed.
+- You can flip back to Gemini at any time; both configurations are kept, so nothing is lost switching between them.
 
 ## Optional voice setup
 

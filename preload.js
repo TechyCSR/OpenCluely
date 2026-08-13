@@ -35,6 +35,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setGeminiApiKey: (apiKey) => ipcRenderer.invoke('set-gemini-api-key', apiKey),
   getGeminiStatus: () => ipcRenderer.invoke('get-gemini-status'),
   testGeminiConnection: () => ipcRenderer.invoke('test-gemini-connection'),
+
+  // LLM provider selection + Ollama (local) configuration
+  getLLMProvider: () => ipcRenderer.invoke('get-llm-provider'),
+  getOllamaStatus: () => ipcRenderer.invoke('get-ollama-status'),
+  testOllamaConnection: () => ipcRenderer.invoke('test-ollama-connection'),
+  listOllamaModels: () => ipcRenderer.invoke('list-ollama-models'),
   
   // Settings
   showSettings: () => ipcRenderer.invoke('show-settings'),

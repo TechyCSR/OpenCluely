@@ -17,6 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const whisperResponseTargetSelect = document.getElementById('whisperResponseTarget');
     const whisperSegmentMsInput = document.getElementById('whisperSegmentMs');
     const geminiKeyInput = document.getElementById('geminiKey');
+    const llmProviderSelect = document.getElementById('llmProvider');
+    const ollamaHostInput = document.getElementById('ollamaHost');
+    const ollamaModelSelect = document.getElementById('ollamaModel');
+    const testOllamaButton = document.getElementById('testOllamaButton');
+    const ollamaStatusText = document.getElementById('ollamaStatusText');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
@@ -88,6 +93,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperResponseTargetSelect) whisperResponseTargetSelect.value = settings.whisperResponseTarget || 'both';
         if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
         if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
+        if (llmProviderSelect) llmProviderSelect.value = settings.llmProvider || 'gemini';
+        if (ollamaHostInput) ollamaHostInput.value = settings.ollamaHost || 'http://127.0.0.1:11434';
+        // Seed the model dropdown with just the configured value until "Test &
+        // refresh models" populates it from the live server — avoids showing an
+        // empty select before the user has tested the connection.
+        if (ollamaModelSelect) {
+            const currentModel = settings.ollamaModel || 'phi3.5:3.8b';
+            ollamaModelSelect.textContent = '';
+            const option = document.createElement('option');
+            option.value = currentModel;
+            option.textContent = currentModel;
+            ollamaModelSelect.appendChild(option);
+            ollamaModelSelect.value = currentModel;
+        }
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
 
         // Set C++ as default if no coding language is specified
@@ -111,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updateSpeechFieldStates();
+        updateLLMProviderFieldStates();
     };
 
     // Load settings when window opens
@@ -147,6 +167,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperResponseTargetSelect) settings.whisperResponseTarget = whisperResponseTargetSelect.value;
         if (whisperSegmentMsInput) settings.whisperSegmentMs = whisperSegmentMsInput.value;
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
+        if (llmProviderSelect) settings.llmProvider = llmProviderSelect.value;
+        if (ollamaHostInput) settings.ollamaHost = ollamaHostInput.value;
+        if (ollamaModelSelect) settings.ollamaModel = ollamaModelSelect.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
@@ -184,6 +207,61 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const updateLLMProviderFieldStates = () => {
+        const provider = llmProviderSelect ? llmProviderSelect.value : 'gemini';
+
+        const geminiGroup = document.getElementById('geminiFields');
+        const ollamaGroup = document.getElementById('ollamaFields');
+
+        if (geminiGroup) geminiGroup.style.display = provider === 'gemini' ? '' : 'none';
+        if (ollamaGroup) ollamaGroup.style.display = provider === 'ollama' ? '' : 'none';
+
+        if (geminiKeyInput) geminiKeyInput.disabled = provider !== 'gemini';
+        [ollamaHostInput, ollamaModelSelect].forEach(input => {
+            if (input) input.disabled = provider !== 'ollama';
+        });
+    };
+
+    // Test the configured Ollama server and refresh the model dropdown from
+    // whatever's actually pulled there — avoids the user having to type a
+    // model name by hand and get it wrong.
+    const testOllamaConnection = () => {
+        if (!window.electronAPI || !window.electronAPI.testOllamaConnection) return;
+        if (ollamaStatusText) ollamaStatusText.textContent = 'Testing…';
+        if (testOllamaButton) testOllamaButton.disabled = true;
+
+        window.electronAPI.testOllamaConnection().then(result => {
+            if (ollamaStatusText) {
+                ollamaStatusText.textContent = result.success
+                    ? `Connected (${result.latency}ms)`
+                    : (result.error || 'Connection failed');
+            }
+            return window.electronAPI.listOllamaModels ? window.electronAPI.listOllamaModels() : null;
+        }).then(modelsResult => {
+            if (!modelsResult || !modelsResult.success || !ollamaModelSelect) return;
+            const previousValue = ollamaModelSelect.value;
+            ollamaModelSelect.textContent = '';
+            modelsResult.models.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.name;
+                option.textContent = m.name;
+                ollamaModelSelect.appendChild(option);
+            });
+            // Keep the previously selected/configured model if it's still in
+            // the list; otherwise fall back to whatever the server returned first.
+            if (modelsResult.models.some(m => m.name === previousValue)) {
+                ollamaModelSelect.value = previousValue;
+            } else if (modelsResult.models.length > 0) {
+                ollamaModelSelect.value = modelsResult.models[0].name;
+                saveSettings();
+            }
+        }).catch(error => {
+            if (ollamaStatusText) ollamaStatusText.textContent = error.message || 'Connection failed';
+        }).finally(() => {
+            if (testOllamaButton) testOllamaButton.disabled = false;
+        });
+    };
+
     // Add event listeners for all inputs
     const inputs = [
         azureKeyInput,
@@ -196,6 +274,8 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperResponseTargetSelect,
         whisperSegmentMsInput,
         geminiKeyInput,
+        ollamaHostInput,
+        ollamaModelSelect,
         windowGapInput
     ];
 
@@ -211,6 +291,17 @@ document.addEventListener('DOMContentLoaded', () => {
             updateSpeechFieldStates();
             saveSettings();
         });
+    }
+
+    if (llmProviderSelect) {
+        llmProviderSelect.addEventListener('change', () => {
+            updateLLMProviderFieldStates();
+            saveSettings();
+        });
+    }
+
+    if (testOllamaButton) {
+        testOllamaButton.addEventListener('click', testOllamaConnection);
     }
 
     // Language selection handler
@@ -237,6 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateSpeechFieldStates();
+    updateLLMProviderFieldStates();
 
     // Initialize icon grid with correct paths
     const initializeIconGrid = () => {

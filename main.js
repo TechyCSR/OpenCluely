@@ -102,7 +102,15 @@ process.on("unhandledRejection", (reason) => {
 // Screen capture (image-based)
 const captureService = require("./src/services/capture.service");
 const speechService = require("./src/services/speech.service");
-const llmService = require("./src/services/llm.service");
+// `llmService` is a Proxy that transparently routes every call to whichever
+// provider is active (Gemini or Ollama) — every existing call site below
+// keeps working unmodified regardless of the selection in Settings.
+// `geminiService` is the real Gemini singleton, used directly for
+// Gemini-specific admin actions (API key entry, Gemini connection test) that
+// should always act on Gemini no matter which provider is currently active.
+const providerManager = require("./src/services/provider.manager");
+const llmService = providerManager;
+const geminiService = providerManager.gemini;
 
 // Managers
 const windowManager = require("./src/managers/window.manager");
@@ -653,12 +661,33 @@ class ApplicationController {
     });
 
     ipcMain.handle("set-gemini-api-key", (event, apiKey) => {
-      llmService.updateApiKey(apiKey);
-      return llmService.getStats();
+      geminiService.updateApiKey(apiKey);
+      return geminiService.getStats();
     });
 
     ipcMain.handle("get-gemini-status", () => {
-      return llmService.getStats();
+      return geminiService.getStats();
+    });
+
+    ipcMain.handle("get-llm-provider", () => {
+      return providerManager.getProvider();
+    });
+
+    ipcMain.handle("get-ollama-status", () => {
+      return providerManager.ollama.getStats();
+    });
+
+    ipcMain.handle("test-ollama-connection", async () => {
+      return await providerManager.ollama.testConnection();
+    });
+
+    ipcMain.handle("list-ollama-models", async () => {
+      try {
+        const models = await providerManager.ollama.listModels();
+        return { success: true, models };
+      } catch (error) {
+        return { success: false, error: error.message, models: [] };
+      }
     });
 
     // Window binding IPC handlers
@@ -688,13 +717,13 @@ class ApplicationController {
     });
 
     ipcMain.handle("test-gemini-connection", async () => {
-      return await llmService.testConnection();
+      return await geminiService.testConnection();
     });
 
     ipcMain.handle("run-gemini-diagnostics", async () => {
       try {
-        const connectivity = await llmService.checkNetworkConnectivity();
-        const apiTest = await llmService.testConnection();
+        const connectivity = await geminiService.checkNetworkConnectivity();
+        const apiTest = await geminiService.testConnection();
         
         return {
           success: true,
@@ -1608,6 +1637,10 @@ class ApplicationController {
       whisperSegmentMs: process.env.WHISPER_SEGMENT_MS || "4000",
       geminiKey: process.env.GEMINI_API_KEY || "",
 
+      llmProvider: providerManager.getProvider(),
+      ollamaHost: process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
+      ollamaModel: process.env.OLLAMA_MODEL || "phi3.5:3.8b",
+
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
       speechAvailable: this.speechAvailable
     };
@@ -1678,6 +1711,15 @@ class ApplicationController {
       if (settings.geminiKey !== undefined) {
         envUpdates.GEMINI_API_KEY = settings.geminiKey;
       }
+      if (settings.llmProvider !== undefined) {
+        envUpdates.LLM_PROVIDER = settings.llmProvider;
+      }
+      if (settings.ollamaHost !== undefined) {
+        envUpdates.OLLAMA_HOST = settings.ollamaHost;
+      }
+      if (settings.ollamaModel !== undefined) {
+        envUpdates.OLLAMA_MODEL = settings.ollamaModel;
+      }
 
       // Capture the previous whisper command BEFORE persisting — persistEnvUpdates
       // mutates process.env in place, so comparing afterwards would always read
@@ -1694,13 +1736,26 @@ class ApplicationController {
       // at app startup, before any key was set.
       if (settings.geminiKey !== undefined && envUpdates.GEMINI_API_KEY !== undefined) {
         try {
-          llmService.initializeClient();
+          geminiService.initializeClient();
           logger.info("LLM service reinitialized after Gemini key update");
         } catch (e) {
           logger.warn("Failed to reinitialize LLM service after Gemini key update", {
             error: e.message
           });
         }
+      }
+
+      // Apply LLM provider selection + Ollama config live, so the active
+      // chat/screenshot/voice pipeline picks it up on the very next request
+      // without needing an app restart.
+      if (settings.llmProvider !== undefined) {
+        providerManager.setProvider(settings.llmProvider);
+      }
+      if (settings.ollamaHost !== undefined || settings.ollamaModel !== undefined) {
+        providerManager.ollama.updateConfig({
+          host: settings.ollamaHost,
+          model: settings.ollamaModel
+        });
       }
 
       // Reinitialize speech service when provider OR whisper command
