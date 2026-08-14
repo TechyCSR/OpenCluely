@@ -104,6 +104,7 @@ const captureService = require("./src/services/capture.service");
 const speechService = require("./src/services/speech.service");
 const llmService = require("./src/services/llm.service");
 const resumeService = require("./src/services/resume.service");
+const { routeIntent } = require("./src/services/intent-router");
 
 // Managers
 const windowManager = require("./src/managers/window.manager");
@@ -1166,9 +1167,10 @@ class ApplicationController {
       // Add user input to session memory
       sessionManager.addUserInput(text, 'llm_input');
 
-      // Check if current skill needs programming language context
-      const skillsRequiringProgrammingLanguage = ['dsa'];
-      const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
+      // Route intent: only pass programmingLanguage when the question is a coding request.
+      const { mode: intentMode, reason: intentReason } = routeIntent(text, this.activeSkill);
+      const programmingLanguage = (intentMode === 'code') ? this.codingLanguage : null;
+      logger.debug('Intent routed for chat message', { intentMode, intentReason, skill: this.activeSkill });
 
       this._responseSeq = (this._responseSeq || 0) + 1;
       const messageId = `chat-${Date.now()}-${this._responseSeq}`;
@@ -1182,7 +1184,7 @@ class ApplicationController {
         text,
         this.activeSkill,
         sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null,
+        programmingLanguage,
         (delta) => {
           windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
             messageId,
@@ -1195,7 +1197,8 @@ class ApplicationController {
       logger.info("LLM processing completed, showing response", {
         responseLength: llmResult.response.length,
         skill: this.activeSkill,
-        programmingLanguage: needsProgrammingLanguage ? this.codingLanguage : 'not applicable',
+        intentMode,
+        programmingLanguage: programmingLanguage || 'not applicable',
         processingTime: llmResult.metadata.processingTime,
         responsePreview: llmResult.response.substring(0, 200) + "...",
       });
@@ -1335,9 +1338,10 @@ class ApplicationController {
         textPreview: cleanText.substring(0, 100) + "..."
       });
 
-      // Check if current skill needs programming language context
-      const skillsRequiringProgrammingLanguage = ['dsa'];
-      const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
+      // Route intent: only pass programmingLanguage when the question is a coding request.
+      const { mode: intentMode, reason: intentReason } = routeIntent(cleanText, this.activeSkill);
+      const programmingLanguage = (intentMode === 'code') ? this.codingLanguage : null;
+      logger.debug('Intent routed for transcription', { intentMode, intentReason, skill: this.activeSkill });
 
       // Stream the answer progressively to the configured speech target.
       // A unique messageId ties the start/chunk/final events to one bubble so
@@ -1355,7 +1359,7 @@ class ApplicationController {
         cleanText,
         this.activeSkill,
         sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null,
+        programmingLanguage,
         (delta) => {
           this.sendToVoiceResponseWindows("transcription-llm-response-chunk", {
             messageId,
@@ -1386,7 +1390,8 @@ class ApplicationController {
       logger.info("Transcription LLM response completed", {
         responseLength: llmResult.response.length,
         skill: this.activeSkill,
-        programmingLanguage: needsProgrammingLanguage ? this.codingLanguage : 'not applicable',
+        intentMode,
+        programmingLanguage: programmingLanguage || 'not applicable',
         processingTime: llmResult.metadata.processingTime
       });
 

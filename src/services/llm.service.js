@@ -844,15 +844,14 @@ Always respond to the point, do not repeat the question or unnecessary informati
 - Be encouraging and helpful
 - Stay focused on ${activeSkill}
 
-If the user's input is a coding or DSA problem statement and contains no code, produce a complete, runnable solution in the selected programming language without asking for more details. Always include the final implementation in a properly tagged code block.
-
 Remember: Be intelligent about filtering - only provide detailed responses when the user actually needs help with ${activeSkill}.`;
 
     return prompt;
   }
 
-  formatUserMessage(text, activeSkill) {
-    return `Context: ${activeSkill.toUpperCase()} analysis request\n\nText to analyze:\n${text}`;
+  formatUserMessage(text, _activeSkill) {
+    // Do not pre-frame the message; the system instruction already sets context.
+    return text;
   }
 
   async executeRequest(geminiRequest) {
