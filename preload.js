@@ -93,6 +93,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Display management
   listDisplays: () => ipcRenderer.invoke('list-displays'),
   captureArea: (options) => ipcRenderer.invoke('capture-area', options),
+
+  // Resume
+  uploadResume: (text) => ipcRenderer.invoke('upload-resume', text),
+  getResumeMeta: () => ipcRenderer.invoke('get-resume-meta'),
+  deleteResume: () => ipcRenderer.invoke('delete-resume'),
   
   // Event listeners
   onTranscriptionReceived: (callback) => ipcRenderer.on('transcription-received', callback),

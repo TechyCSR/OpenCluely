@@ -487,9 +487,119 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Resume section -->
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-file-alt"></i>
+                    Resume
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item" style="flex-direction:column; align-items:flex-start; gap:10px;">
+                        <div>
+                            <div class="settings-item-label">Upload Resume (.txt)</div>
+                            <div class="settings-item-description">
+                                Relevant snippets are automatically injected into AI prompts — the full resume is never sent.
+                            </div>
+                        </div>
+
+                        <!-- Drop zone -->
+                        <label id="resumeDropZone" style="
+                            width:100%; padding:18px; border-radius:8px;
+                            border:1.5px dashed rgba(255,255,255,0.25);
+                            background:rgba(255,255,255,0.04);
+                            display:flex; flex-direction:column; align-items:center;
+                            gap:6px; cursor:pointer; transition:border-color .2s;
+                        ">
+                            <i class="fas fa-upload" style="font-size:18px; opacity:.6;"></i>
+                            <span style="font-size:12px; opacity:.7;">Click or drag a <strong>.txt</strong> file here</span>
+                            <input type="file" id="resumeFileInput" accept=".txt" style="display:none;">
+                        </label>
+
+                        <!-- Status row -->
+                        <div id="resumeStatus" style="font-size:12px; opacity:.75; min-height:18px;"></div>
+
+                        <!-- Delete -->
+                        <button id="resumeDeleteBtn" style="
+                            display:none; padding:6px 14px; border-radius:6px;
+                            background:rgba(220,50,50,.25); border:1px solid rgba(220,50,50,.4);
+                            color:rgba(255,255,255,.85); font-size:12px; cursor:pointer;
+                        ">Delete resume</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script src="./src/ui/settings-window.js"></script>
+    <script>
+    // ── Resume panel ──────────────────────────────────────────────────────────
+    (function () {
+        const dropZone   = document.getElementById('resumeDropZone');
+        const fileInput  = document.getElementById('resumeFileInput');
+        const statusEl   = document.getElementById('resumeStatus');
+        const deleteBtn  = document.getElementById('resumeDeleteBtn');
+
+        function setStatus(meta) {
+            if (!meta || !meta.hasResume) {
+                statusEl.textContent = 'No resume uploaded.';
+                deleteBtn.style.display = 'none';
+            } else {
+                const d = new Date(meta.savedAt);
+                statusEl.textContent = `\u2713 ${meta.wordCount} words \u00b7 saved ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+                deleteBtn.style.display = 'inline-block';
+            }
+        }
+
+        async function uploadText(text) {
+            statusEl.textContent = 'Uploading\u2026';
+            const result = await window.electronAPI.uploadResume(text);
+            if (result && result.error) {
+                statusEl.textContent = 'Error: ' + result.error;
+            } else {
+                setStatus({ hasResume: true, wordCount: result.wordCount, savedAt: result.savedAt });
+            }
+        }
+
+        // Load current state
+        window.electronAPI.getResumeMeta().then(setStatus).catch(() => setStatus(null));
+
+        // Click to pick file
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => uploadText(e.target.result);
+            reader.readAsText(file);
+        });
+
+        // Drag & drop
+        dropZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'rgba(255,255,255,0.6)';
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = 'rgba(255,255,255,0.25)';
+        });
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'rgba(255,255,255,0.25)';
+            const file = e.dataTransfer.files[0];
+            if (!file || !file.name.endsWith('.txt')) {
+                statusEl.textContent = 'Only .txt files are supported.';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = ev => uploadText(ev.target.result);
+            reader.readAsText(file);
+        });
+
+        // Delete
+        deleteBtn.addEventListener('click', async () => {
+            await window.electronAPI.deleteResume();
+            setStatus(null);
+        });
+    })();
+    </script>
 </body>
 </html>

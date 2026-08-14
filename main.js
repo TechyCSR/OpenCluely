@@ -103,6 +103,7 @@ process.on("unhandledRejection", (reason) => {
 const captureService = require("./src/services/capture.service");
 const speechService = require("./src/services/speech.service");
 const llmService = require("./src/services/llm.service");
+const resumeService = require("./src/services/resume.service");
 
 // Managers
 const windowManager = require("./src/managers/window.manager");
@@ -288,6 +289,9 @@ class ApplicationController {
       } else {
         // Already configured — mark completed so we never nag again.
         this.firstRunManager.markCompleted();
+        setTimeout(() => {
+          try { windowManager.showSettings(); } catch (_) { /* ignore */ }
+        }, 500);
       }
 
       logger.info("Application initialized successfully", {
@@ -883,6 +887,16 @@ class ApplicationController {
       windowManager.expandLLMWindow(contentMetrics);
       return { success: true, contentMetrics };
     });
+
+    // ── Resume handlers ────────────────────────────────────────────────────
+    ipcMain.handle("upload-resume", (_event, text) => {
+      try { return resumeService.saveResume(text); }
+      catch (e) { return { error: e.message }; }
+    });
+
+    ipcMain.handle("get-resume-meta", () => resumeService.getMeta());
+
+    ipcMain.handle("delete-resume", () => resumeService.deleteResume());
 
     ipcMain.handle("quit-app", () => {
       logger.info("Quit app requested via IPC");

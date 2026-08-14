@@ -2,6 +2,7 @@ const { GoogleGenAI } = require('@google/genai');
 const logger = require('../core/logger').createServiceLogger('LLM');
 const config = require('../core/config');
 const { promptLoader } = require('../../prompt-loader');
+const resumeService = require('./resume.service');
 
 class LLMService {
   constructor() {
@@ -582,12 +583,20 @@ class LLMService {
       request.systemInstruction = {
         parts: [{ text: requestComponents.skillPrompt }]
       };
+
+      // Append resume snippet (only relevant lines, no-op if no resume loaded)
+      const resumeSnippet = resumeService.getRelevantSnippet(text);
+      if (resumeSnippet) {
+        request.systemInstruction.parts[0].text +=
+          `\n\n## CANDIDATE CONTEXT (from resume)\nUse only if directly relevant. Do not invent details not present below:\n${resumeSnippet}`;
+      }
       
       logger.debug('Using language-enhanced system instruction for skill', {
         skill: activeSkill,
         programmingLanguage: programmingLanguage || 'not specified',
         promptLength: requestComponents.skillPrompt.length,
-        requiresProgrammingLanguage: requestComponents.requiresProgrammingLanguage
+        requiresProgrammingLanguage: requestComponents.requiresProgrammingLanguage,
+        hasResumeSnippet: !!resumeSnippet
       });
     }
 
@@ -611,13 +620,21 @@ class LLMService {
       request.systemInstruction = {
         parts: [{ text: skillContext.skillPrompt }]
       };
+
+      // Append resume snippet (only relevant lines, no-op if no resume loaded)
+      const resumeSnippet = resumeService.getRelevantSnippet(text);
+      if (resumeSnippet) {
+        request.systemInstruction.parts[0].text +=
+          `\n\n## CANDIDATE CONTEXT (from resume)\nUse only if directly relevant. Do not invent details not present below:\n${resumeSnippet}`;
+      }
       
       logger.debug('Using skill context prompt as system instruction', {
         skill: activeSkill,
         programmingLanguage: programmingLanguage || 'not specified',
         promptLength: skillContext.skillPrompt.length,
         requiresProgrammingLanguage: skillContext.requiresProgrammingLanguage || false,
-        hasLanguageInjection: programmingLanguage && skillContext.requiresProgrammingLanguage
+        hasLanguageInjection: programmingLanguage && skillContext.requiresProgrammingLanguage,
+        hasResumeSnippet: !!resumeSnippet
       });
     }
 
