@@ -1190,7 +1190,8 @@ class ApplicationController {
             messageId,
             delta
           });
-        }
+        },
+        intentMode
       );
       llmResult.metadata = { ...llmResult.metadata, messageId };
 

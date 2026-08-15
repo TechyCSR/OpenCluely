@@ -390,7 +390,7 @@ class LLMService {
     }
   }
 
-  async processTextWithSkillStream(text, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
+  async processTextWithSkillStream(text, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null, intentMode = 'general') {
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -399,7 +399,7 @@ class LLMService {
     this.requestCount++;
 
     try {
-      const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage);
+      const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage, intentMode);
 
       const fullText = await this.executeStreamingRequest(geminiRequest, (delta) => {
         if (typeof onDelta === 'function' && delta) {
@@ -554,14 +554,105 @@ class LLMService {
     }
   }
 
-  buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage) {
+  /**
+   * Central persona + context assembler.
+   * Reads prompt files from disk (cached after first read), layers them in order,
+   * and injects resume grounding at the correct priority.
+   *
+   * Assembly order for non-DSA:
+   *   interview_base.md  (candidate voice, no-code hard rules)
+   *   + mode file        (resume.md | behavioral.md | explain.md)
+   *   + CANDIDATE CONTEXT  (from resumeService.getGroundingContext)
+   *
+   * For CODE_DSA:
+   *   dsa.md + language injection only. No base persona (conflicting rules).
+   *
+   * @param {string} intentMode  - 'CODE_DSA'|'RESUME_PROJECT'|'BEHAVIORAL'|'EXPLAIN'|'general'
+   * @param {string} text        - Raw user question (used for grounding retrieval)
+   * @param {string|null} programmingLanguage
+   * @returns {string} Assembled system instruction text
+   */
+  _buildSystemInstruction(intentMode, text, programmingLanguage) {
+    const fs = require('fs');
+    const path = require('path');
+    const promptsDir = path.join(__dirname, '../../prompts');
+
+    // Map old router values to new enum (backward-compat until Step 2 router expansion)
+    const modeNormalizer = {
+      'code':    'CODE_DSA',
+      'explain': 'EXPLAIN',
+      'general': 'RESUME_PROJECT',  // conservative: treat unclassified as candidate voice
+    };
+    const resolvedMode = modeNormalizer[intentMode] || intentMode;
+
+    const readPrompt = (filename) => {
+      if (!this._promptCache) this._promptCache = {};
+      if (this._promptCache[filename]) return this._promptCache[filename];
+      try {
+        const content = fs.readFileSync(path.join(promptsDir, filename), 'utf8');
+        this._promptCache[filename] = content;
+        return content;
+      } catch (_) {
+        logger.warn(`Prompt file not found: ${filename}`);
+        return '';
+      }
+    };
+
+    // ── CODE_DSA ─────────────────────────────────────────────────────────────
+    // Use dsa.md as the complete persona. Append language injection if needed.
+    if (resolvedMode === 'CODE_DSA') {
+      let dsaPrompt = readPrompt('dsa.md');
+      if (programmingLanguage) {
+        dsaPrompt = promptLoader.getSkillPrompt('dsa', programmingLanguage) || dsaPrompt;
+      }
+      logger.debug('_buildSystemInstruction: CODE_DSA', { programmingLanguage });
+      return dsaPrompt;
+    }
+
+    // ── Non-DSA modes ─────────────────────────────────────────────────────────
+    const base = readPrompt('interview_base.md');
+
+    const modeFileMap = {
+      'RESUME_PROJECT': 'resume.md',
+      'BEHAVIORAL':     'behavioral.md',
+      'EXPLAIN':        'explain.md',
+    };
+    const modeFile = modeFileMap[resolvedMode];
+    const modePrompt = modeFile ? readPrompt(modeFile) : '';
+
+    // Resume grounding — only for modes where candidate context is relevant
+    let groundingBlock = '';
+    if (resolvedMode === 'RESUME_PROJECT' || resolvedMode === 'BEHAVIORAL') {
+      const grounding = resumeService.getGroundingContext(text, resolvedMode);
+      if (grounding.hasResume && grounding.context) {
+        groundingBlock = `\n\n## CANDIDATE CONTEXT\n` +
+          `Use only the facts below. Do not invent details not present here.\n` +
+          `Type: ${grounding.type}\n\n${grounding.context}`;
+      }
+    }
+
+    const parts = [base, modePrompt, groundingBlock].filter(Boolean);
+    const assembled = parts.join('\n\n---\n\n').trim();
+
+    logger.debug('_buildSystemInstruction: non-DSA', {
+      intentMode,
+      resolvedMode,
+      modeFile: modeFile || 'none',
+      hasGrounding: !!groundingBlock,
+      totalLength: assembled.length
+    });
+
+    return assembled;
+  }
+
+  buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage, intentMode = 'general') {
     // Check if we have the new conversation history format
     const sessionManager = require('../managers/session.manager');
     
     if (sessionManager && typeof sessionManager.getConversationHistory === 'function') {
       const conversationHistory = sessionManager.getConversationHistory(15);
       const skillContext = sessionManager.getSkillContext(activeSkill, programmingLanguage);
-      return this.buildGeminiRequestWithHistory(text, activeSkill, conversationHistory, skillContext, programmingLanguage);
+      return this.buildGeminiRequestWithHistory(text, activeSkill, conversationHistory, skillContext, programmingLanguage, intentMode);
     }
 
     // Fallback to old method for compatibility - now with programming language support
@@ -608,34 +699,18 @@ class LLMService {
     return request;
   }
 
-  buildGeminiRequestWithHistory(text, activeSkill, conversationHistory, skillContext, programmingLanguage) {
+  buildGeminiRequestWithHistory(text, activeSkill, conversationHistory, skillContext, programmingLanguage, intentMode = 'general') {
     const request = {
       contents: []
     };
 
     this.applyGenerationDefaults(request);
 
-    // Use the skill prompt from context (which may already include programming language)
-    if (skillContext.skillPrompt) {
-      request.systemInstruction = {
-        parts: [{ text: skillContext.skillPrompt }]
-      };
-
-      // Append resume snippet (only relevant lines, no-op if no resume loaded)
-      const resumeSnippet = resumeService.getRelevantSnippet(text);
-      if (resumeSnippet) {
-        request.systemInstruction.parts[0].text +=
-          `\n\n## CANDIDATE CONTEXT (from resume)\nUse only if directly relevant. Do not invent details not present below:\n${resumeSnippet}`;
-      }
-      
-      logger.debug('Using skill context prompt as system instruction', {
-        skill: activeSkill,
-        programmingLanguage: programmingLanguage || 'not specified',
-        promptLength: skillContext.skillPrompt.length,
-        requiresProgrammingLanguage: skillContext.requiresProgrammingLanguage || false,
-        hasLanguageInjection: programmingLanguage && skillContext.requiresProgrammingLanguage,
-        hasResumeSnippet: !!resumeSnippet
-      });
+    // Build system instruction driven by intent, not by the active skill name.
+    // _buildSystemInstruction handles persona selection, file layering, and grounding.
+    const systemInstructionText = this._buildSystemInstruction(intentMode, text, programmingLanguage);
+    if (systemInstructionText) {
+      request.systemInstruction = { parts: [{ text: systemInstructionText }] };
     }
 
     // Add conversation history (excluding system messages) with validation
