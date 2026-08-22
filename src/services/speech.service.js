@@ -385,6 +385,30 @@ const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const { EventEmitter } = require('events');
 const logger = require('../core/logger').createServiceLogger('SPEECH');
+const {
+  PcmRingBuffer,
+  StablePrefixStabilizer,
+  RING_MS,
+  DECODE_MS,
+  MIN_DECODE_MS,
+  INTERVAL_MS,
+  OVERLAP_MS,
+  UTTERANCE_MS
+} = require('./rolling-caption');
+const {
+  InterviewTurnBuffer,
+  TURN_MS,
+  TRAILING_SILENCE_MS
+} = require('./interview-turn-buffer');
+const {
+  DeepgramLiveClient,
+  buildListenUrl,
+  formatSpaceLogLine,
+  transcribePrerecorded,
+  LOOPBACK_MIN_RMS,
+  DEEPGRAM_SPACE_SILENCE_MS,
+  DEEPGRAM_SPACE_MAX_WAIT_MS
+} = require('./deepgram-live');
 const config = require('../core/config');
 const WhisperWorkerService = require('./whisper-worker.service');
 
@@ -393,6 +417,24 @@ try {
   sdk = require('microsoft-cognitiveservices-speech-sdk');
 } catch (error) {
   logger.warn('Azure Speech SDK unavailable', { error: error.message });
+}
+
+const WHISPER_MODEL_IDS = new Set([
+  'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en',
+  'medium', 'medium.en', 'large', 'large-v1', 'large-v2', 'large-v3',
+  'large-v3-turbo', 'turbo'
+]);
+
+function sanitizeWhisperLanguage(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  if (!value || value === 'auto' || value === 'detect') {
+    return 'auto';
+  }
+  // Settings used to persist the model name into WHISPER_LANGUAGE.
+  if (WHISPER_MODEL_IDS.has(value)) {
+    return 'auto';
+  }
+  return value;
 }
 
 let recorder = null;
@@ -428,6 +470,39 @@ class SpeechService extends EventEmitter {
     this.whisperWorker = new WhisperWorkerService();
     this.isProcessingAudio = false;
     this.manualStopRequested = false;
+    this.whisperKeepAlive = false;
+    this._interimInFlight = false;
+    this._lastInterimAt = 0;
+    this._lastInterimBytes = 0;
+    this._speechOnsetAt = 0;
+    this._firstCaptionAt = 0;
+    this.rollingEnabled = false;
+    this.rollingCaptionsPaused = false;
+    this._rollingIntervalMsValue = INTERVAL_MS;
+    this._rollingTimer = null;
+    this._rollingRing = new PcmRingBuffer(RING_MS);
+    this._utteranceRing = new PcmRingBuffer(UTTERANCE_MS);
+    this._turnBuffer = new InterviewTurnBuffer(TURN_MS);
+    this._turnFinalText = '';
+    this._captionInterim = '';
+    this._deepgramLive = null;
+    this._deepgramActive = false;
+    this.interviewCapture = false;
+    this._deepgramCaptionsPaused = false;
+    this._gotLoopbackAudio = false;
+    this._lastLoopbackRms = 0;
+    this._lastChunkSource = 'mic';
+    this._audioCaptureSource = 'mic';
+    this.WebSocketImpl = null;
+    this._deepgramFetchImpl = null;
+    this._deepgramReconnectTimer = null;
+    this._deepgramSpaceSilenceMs = DEEPGRAM_SPACE_SILENCE_MS;
+    this._deepgramSpaceMaxWaitMs = DEEPGRAM_SPACE_MAX_WAIT_MS;
+    this._rollingStabilizer = new StablePrefixStabilizer();
+    this._rollingDropped = 0;
+    this._rollingEmitted = 0;
+    this._rollingWindowStartedAt = 0;
+    this._rollingLanguage = null;
     this._resetVadState();
 
     this.initializeClient();
@@ -448,14 +523,43 @@ class SpeechService extends EventEmitter {
       return;
     }
 
+    if (provider === 'deepgram') {
+      if (this._hasDeepgramKey()) {
+        this._initializeDeepgramClient();
+        try {
+          this._initializeWhisperClient();
+        } catch (_) { /* Whisper remains offline fallback only */ }
+        return;
+      }
+      logger.warn('SPEECH_PROVIDER=deepgram but DEEPGRAM_API_KEY is missing; using Whisper fallback');
+      this.provider = 'whisper';
+      this._initializeWhisperClient();
+      return;
+    }
+
     if (provider === 'whisper') {
       this._initializeWhisperClient();
       return;
     }
 
-    const reason = 'Speech recognition disabled. Configure Azure or local Whisper.';
+    const reason = 'Speech recognition disabled. Configure Azure, Deepgram, or local Whisper.';
     logger.warn(reason);
     this.emit('status', reason);
+  }
+
+  _initializeDeepgramClient() {
+    if (!this._hasDeepgramKey()) {
+      const reason = 'Deepgram API key not found. Speech recognition disabled.';
+      logger.warn('Speech service disabled (missing Deepgram credentials)');
+      this.emit('status', reason);
+      return;
+    }
+    this.available = true;
+    logger.info('Deepgram Speech service initialized', {
+      model: (config.get('speech.deepgram') || {}).model || 'nova-3',
+      loopbackInterview: true
+    });
+    this.emit('status', 'Deepgram Speech ready');
   }
 
   _initializeAzureClient() {
@@ -541,7 +645,7 @@ class SpeechService extends EventEmitter {
 
   startRecording() {
     try {
-      if (!this.available) {
+      if (!this.available && !this._shouldStartDeepgram()) {
         const errorMsg = `Speech provider "${this.provider}" is not available`;
         logger.error(errorMsg);
         this.emit('error', errorMsg);
@@ -560,6 +664,11 @@ class SpeechService extends EventEmitter {
 
       this.sessionStartTime = Date.now();
       this.retryCount = 0;
+
+      if (this._shouldStartDeepgram()) {
+        this._startDeepgramRecording({ loopback: this.usesDeepgramInterview() });
+        return;
+      }
 
       if (this.provider === 'azure') {
         this._startAzureRecording();
@@ -684,6 +793,17 @@ class SpeechService extends EventEmitter {
     this.pendingFlush = false;
     this.pendingFinal = false;
     this.manualStopRequested = false;
+    this._interimInFlight = false;
+    this._lastInterimAt = 0;
+    this._lastInterimBytes = 0;
+    this._speechOnsetAt = 0;
+    this._firstCaptionAt = 0;
+    this._perfFirstAudio = false;
+    if (!this.rollingEnabled) {
+      this._resetRollingState();
+    } else if (!this._rollingTimer) {
+      this._startRollingTimer();
+    }
     this._resetVadState();
     this.emit('recording-started');
     this.emit('status', 'Local Whisper recording started');
@@ -716,14 +836,14 @@ class SpeechService extends EventEmitter {
     if (this.useRendererCapture) {
       this.emit('status', 'Waiting for microphone audio…');
       // The renderer starts sending chunks once it receives the recording-started event.
-      if (!this._isManualCaptureMode()) {
+      if (!this._isManualCaptureMode() && !this.rollingEnabled) {
         this._startSegmentWatchdog();
       }
       return;
     }
 
     this._startMicrophoneCapture();
-    if (!this._isManualCaptureMode()) {
+    if (!this._isManualCaptureMode() && !this.rollingEnabled) {
       this._startSegmentWatchdog();
     }
 
@@ -787,14 +907,28 @@ class SpeechService extends EventEmitter {
    * Receive raw 16kHz mono 16-bit PCM audio from the renderer and add it to
    * the current Whisper segment buffer.
    */
-  handleAudioChunkFromRenderer(chunk) {
-    if (!this.isRecording || this.provider !== 'whisper' || !this.useRendererCapture) {
+  handleAudioChunkFromRenderer(chunk, source = 'mic') {
+    if (!this.isRecording) {
       return;
     }
     if (!chunk || !chunk.length) {
       return;
     }
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    const tag = source === 'loopback' ? 'loopback' : 'mic';
+    this._lastChunkSource = tag;
+
+    if (this._deepgramActive) {
+      if (this.usesDeepgramInterview() && tag !== 'loopback') {
+        return;
+      }
+      this._ingestDeepgramAudio(buffer, tag);
+      return;
+    }
+
+    if (this.provider !== 'whisper' || !this.useRendererCapture) {
+      return;
+    }
     this._ingestWhisperAudio(buffer);
   }
 
@@ -826,10 +960,31 @@ class SpeechService extends EventEmitter {
       return;
     }
 
+    if (!this._perfFirstAudio) {
+      this._perfFirstAudio = true;
+      this.emit('first-audio-chunk');
+    }
+
+    if (this.rollingEnabled) {
+      if (!this.rollingCaptionsPaused) {
+        if (!this._rollingWindowStartedAt) {
+          this._rollingWindowStartedAt = Date.now();
+        }
+        this._rollingRing.push(buffer);
+        this._utteranceRing.push(buffer);
+        const voiced = this._noteRollingSpeech(buffer);
+        this._turnBuffer.push(buffer, { now: Date.now(), voiced });
+      }
+      return;
+    }
+
     if (this._isManualCaptureMode()) {
       this.segmentBuffers.push(buffer);
       this.segmentBytes += buffer.length;
       this.vadLastChunkAt = Date.now();
+      this.vadSpeaking = true;
+      this.vadSpeechMs = this.segmentBytes / 32;
+      if (!this.rollingEnabled) this._maybeScheduleLiveCaption();
 
       const capturedMs = this.segmentBytes / 32;
       if (!this.manualStopRequested && capturedMs >= this._getManualCaptureMaxMs()) {
@@ -847,6 +1002,7 @@ class SpeechService extends EventEmitter {
       this.vadSpeaking = true;
       this.vadSpeechMs += this._chunkDurationMs(buffer);
       this.vadLastChunkAt = Date.now();
+      if (!this.rollingEnabled) this._maybeScheduleLiveCaption();
       return;
     }
 
@@ -876,6 +1032,10 @@ class SpeechService extends EventEmitter {
         this.vadSpeaking = true;
         this.vadSpeechMs = 0;
         this.vadSilenceMs = 0;
+        this._speechOnsetAt = Date.now();
+        this._firstCaptionAt = 0;
+        this._lastInterimBytes = 0;
+        this.emit('vad-speech-start');
         for (const pre of this.vadPreRoll) {
           this.segmentBuffers.push(pre);
           this.segmentBytes += pre.length;
@@ -924,6 +1084,9 @@ class SpeechService extends EventEmitter {
       this.vadSpeaking = false;
       this.vadSpeechMs = 0;
       this.vadSilenceMs = 0;
+      this._lastInterimBytes = 0;
+    } else if (!this.rollingEnabled) {
+      this._maybeScheduleLiveCaption();
     }
   }
 
@@ -934,9 +1097,703 @@ class SpeechService extends EventEmitter {
     this.vadSilenceMs = 0;
     this.vadPreRoll = [];
     this.vadPreRollMs = 0;
+    this._lastInterimBytes = 0;
+    if (this.rollingEnabled) {
+      const snapshot = this._rollingStabilizer.promoteAll();
+      this._emitRollingCaption(snapshot);
+      return;
+    }
     this._flushWhisperSegment({ final: false }).catch((error) => {
       logger.error('Whisper segment transcription failed', { error: error.message });
     });
+  }
+
+  _noteRollingSpeech(buffer) {
+    const energy = this._chunkRmsEnergy(buffer);
+    const floor = this._getVadEnergyFloor();
+    if (!this.vadNoiseInit) {
+      this.vadNoiseFloor = Math.min(energy, floor);
+      this.vadNoiseInit = true;
+    }
+    const enterThreshold = Math.max(floor, this.vadNoiseFloor * 2.5);
+    if (energy >= enterThreshold) {
+      if (!this._speechOnsetAt) {
+        this._speechOnsetAt = Date.now();
+        this._turnBuffer.begin(this._speechOnsetAt);
+        this.emit('vad-speech-start');
+      }
+      return true;
+    }
+    if (!this._speechOnsetAt) {
+      this.vadNoiseFloor = this.vadNoiseFloor * 0.95 + energy * 0.05;
+    }
+    return false;
+  }
+
+  _resetRollingState() {
+    this._rollingRing.reset();
+    this._utteranceRing.reset();
+    this._turnBuffer.reset();
+    this._rollingStabilizer.reset();
+    this._rollingDropped = 0;
+    this._rollingEmitted = 0;
+    this._rollingWindowStartedAt = 0;
+    this.rollingCaptionsPaused = false;
+  }
+
+  _rollingIntervalMs() {
+    return this._rollingIntervalMsValue || INTERVAL_MS;
+  }
+
+  setRollingIntervalMs(ms) {
+    const next = Math.max(50, Number(ms) || INTERVAL_MS);
+    this._rollingIntervalMsValue = next;
+    if (this._rollingTimer) {
+      this._stopRollingTimer();
+      this._startRollingTimer();
+    }
+  }
+
+  _startRollingTimer() {
+    if (this._rollingTimer) return;
+    this._rollingTimer = setInterval(() => {
+      this._tickRollingCaption().catch((error) => {
+        logger.debug('Rolling caption tick failed', { error: error.message });
+      });
+    }, this._rollingIntervalMs());
+  }
+
+  _stopRollingTimer() {
+    if (this._rollingTimer) {
+      clearInterval(this._rollingTimer);
+      this._rollingTimer = null;
+    }
+  }
+
+  async _tickRollingCaption() {
+    if (!this.rollingEnabled || !this.isRecording || this.rollingCaptionsPaused) {
+      return;
+    }
+    if (!this.whisperWorker || !this.whisperWorker.isConfigured()) {
+      return;
+    }
+    if (this._interimInFlight || this.transcriptionInFlight) {
+      this._rollingDropped += 1;
+      return;
+    }
+    const availableMs = this._rollingRing.durationMs;
+    if (availableMs < MIN_DECODE_MS) {
+      return;
+    }
+    const windowMs = availableMs >= 600
+      ? Math.min(DECODE_MS, availableMs)
+      : availableMs;
+    const pcm = this._rollingRing.snapshotMs(windowMs);
+    if (!pcm.length) {
+      return;
+    }
+    const energy = this._chunkRmsEnergy(pcm);
+    const floor = this._getVadEnergyFloor();
+    const hasStable = this._rollingStabilizer.snapshot().stablePrefixLength > 0;
+    if (energy < floor * 1.15 && !hasStable) {
+      return;
+    }
+    if (energy < floor * 0.7) {
+      return;
+    }
+
+    this._interimInFlight = true;
+    const startedAt = Date.now();
+    try {
+      const text = await this._transcribeWhisperBuffer(pcm, {
+        fast: true,
+        rolling: true,
+        language: this._rollingFastLanguage(),
+        initialPrompt: this._rollingStabilizer.locked.slice(-8).join(' ')
+      });
+      const decodeMs = Date.now() - startedAt;
+      const clean = text && typeof text === 'string' ? text.trim() : '';
+      if (!clean || this._isHallucinatedTranscript(clean)) {
+        return;
+      }
+      if (!this._firstCaptionAt) {
+        this._firstCaptionAt = Date.now();
+        const onset = this._speechOnsetAt || this._rollingWindowStartedAt || startedAt;
+        this.emit('first-caption', {
+          decodeMs,
+          msFromSpeechOnset: this._firstCaptionAt - onset
+        });
+        logger.info('Live caption first word', {
+          msFromSpeechOnset: this._firstCaptionAt - onset,
+          decodeMs,
+          audioMs: Math.round(pcm.length / 32),
+          rolling: true
+        });
+      }
+      const snapshot = this._rollingStabilizer.update(clean);
+      this._emitRollingCaption(snapshot, decodeMs);
+    } finally {
+      this._interimInFlight = false;
+    }
+  }
+
+  _rollingFastLanguage() {
+    if (this._rollingLanguage) return this._rollingLanguage;
+    const configured = this._getWhisperLanguage();
+    if (configured && configured !== 'auto') return configured;
+    return 'en';
+  }
+
+  async _primeRollingDecoder() {
+    if (!this.whisperWorker || !this.whisperWorker.isConfigured()) return;
+    try {
+      await this._transcribeWhisperBuffer(Buffer.alloc(MIN_DECODE_MS * 32), {
+        fast: true,
+        rolling: true,
+        language: this._rollingFastLanguage()
+      });
+    } catch (error) {
+      logger.debug('Rolling decoder prime skipped', { error: error.message });
+    }
+  }
+
+  _emitRollingCaption(snapshot, decodeMs) {
+    this._rollingEmitted += 1;
+    this.emit('rolling-caption', {
+      committed: snapshot.committed,
+      interim: snapshot.interim,
+      text: snapshot.text,
+      stablePrefixLength: snapshot.stablePrefixLength,
+      decodeMs,
+      droppedUpdates: this._rollingDropped
+    });
+    if (snapshot.text) {
+      this.emit('interim-transcription', snapshot.text);
+    }
+  }
+
+  getRollingStats() {
+    const elapsedSec = this._rollingWindowStartedAt
+      ? Math.max(0.001, (Date.now() - this._rollingWindowStartedAt) / 1000)
+      : (this.sessionStartTime
+        ? Math.max(0.001, (Date.now() - this.sessionStartTime) / 1000)
+        : 0);
+    const snapshot = this._rollingStabilizer.snapshot();
+    return {
+      rollingIntervalMs: this._rollingIntervalMs(),
+      ringBufferMs: RING_MS,
+      overlapMs: OVERLAP_MS,
+      decodeWindowMs: DECODE_MS,
+      stablePrefixLength: snapshot.stablePrefixLength,
+      committedWords: snapshot.committedWords,
+      interimWords: snapshot.interimWords,
+      rollbackCount: snapshot.rollbackCount,
+      submittedText: snapshot.text || '',
+      interimUpdates: this._rollingEmitted,
+      droppedUpdates: this._rollingDropped,
+      interimUpdatesPerSec: elapsedSec ? this._rollingEmitted / elapsedSec : 0,
+      stabilityScore: snapshot.stabilityScore,
+      workerRunning: !!(this.whisperWorker && this.whisperWorker.isRunning()),
+      workerPid: this.whisperWorker && this.whisperWorker.pid
+    };
+  }
+
+  clearInterviewTurn() {
+    this._speechOnsetAt = 0;
+    this._turnFinalText = '';
+    this._captionInterim = '';
+    this._deepgramCaptionsPaused = false;
+    this._resetVadState();
+    return this._turnBuffer.reset();
+  }
+
+  getInterviewTurnSnapshot() {
+    return this._turnBuffer.snapshot();
+  }
+
+  getInterviewTurnFinalText() {
+    return String(this._turnFinalText || '').trim();
+  }
+
+  setInterviewCapture(enabled) {
+    this.interviewCapture = !!enabled;
+    if (this.interviewCapture && this._hasDeepgramKey()) {
+      this.rollingEnabled = false;
+      this._stopRollingTimer();
+      this.whisperKeepAlive = false;
+    }
+    if (!this.interviewCapture && !this.isRecording) {
+      this._deepgramActive = false;
+    }
+    return this.usesDeepgramInterview();
+  }
+
+  usesDeepgramInterview() {
+    return !!this.interviewCapture && this._hasDeepgramKey();
+  }
+
+  usesTurnFinalSubmit() {
+    return !!this.rollingEnabled || this.usesDeepgramInterview() || !!this._deepgramActive;
+  }
+
+  _shouldStartDeepgram() {
+    if (!this._hasDeepgramKey()) return false;
+    if (this.usesDeepgramInterview()) return true;
+    return this.provider === 'deepgram';
+  }
+
+  _hasDeepgramKey() {
+    return !!this._getDeepgramApiKey();
+  }
+
+  _getDeepgramApiKey() {
+    const raw = this._getSetting('deepgramKey') || process.env.DEEPGRAM_API_KEY || '';
+    return String(raw || '').trim();
+  }
+
+  /**
+   * Space: snapshot the current interviewer turn.
+   * Does not read or return the live caption string. Mic stays running.
+   */
+  async finalizeInterviewTurn({ waitTrailingSilence = true } = {}) {
+    if (this.usesDeepgramInterview() || this._deepgramActive) {
+      return this._finalizeDeepgramTurn({ waitTrailingSilence });
+    }
+
+    const wasRecording = this.isRecording;
+    if (waitTrailingSilence) {
+      const waitMs = this._turnBuffer.waitMsForTrailingSilence(TRAILING_SILENCE_MS);
+      if (waitMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+    }
+
+    const snapshot = this._turnBuffer.snapshot();
+    this._turnBuffer.deactivate();
+    this.rollingCaptionsPaused = true;
+
+    const result = {
+      text: '',
+      usedCaption: false,
+      durationMs: snapshot.durationMs,
+      startedAt: snapshot.startedAt,
+      lastVoiceAt: snapshot.lastVoiceAt,
+      lastChunkAt: snapshot.lastChunkAt,
+      micStillRecording: this.isRecording === wasRecording && this.isRecording === true
+    };
+
+    if (!snapshot.pcm.length || snapshot.durationMs < 80) {
+      return result;
+    }
+
+    try {
+      const raw = await this._transcribeWhisperBuffer(snapshot.pcm, {
+        model: 'tiny',
+        fast: false,
+        rolling: false,
+        language: this._rollingFastLanguage()
+      });
+      const clean = raw && typeof raw === 'string' ? raw.trim() : '';
+      if (clean && !this._isHallucinatedTranscript(clean)) {
+        result.text = clean;
+      }
+    } catch (error) {
+      logger.warn('Interview turn Tiny decode failed', { error: error.message });
+    }
+
+    return result;
+  }
+
+  _startDeepgramRecording({ loopback = false } = {}) {
+    this._cleanup();
+    this.isRecording = true;
+    this._deepgramActive = true;
+    this._deepgramCaptionsPaused = false;
+    this._turnFinalText = '';
+    this._captionInterim = '';
+    this._gotLoopbackAudio = false;
+    this._lastLoopbackRms = 0;
+    this._lastChunkSource = loopback ? 'loopback' : 'mic';
+    this._audioCaptureSource = loopback ? 'loopback' : 'mic';
+    this.useRendererCapture = true;
+    this.rollingEnabled = false;
+    this._stopRollingTimer();
+    this._resetVadState();
+    this._resetRollingState();
+    this._connectDeepgramLive();
+    this.emit('recording-started', {
+      source: loopback ? 'loopback' : 'mic',
+      provider: 'deepgram'
+    });
+    this.emit('status', loopback ? 'Deepgram loopback listening' : 'Deepgram recording started');
+  }
+
+  _connectDeepgramLive() {
+    this._closeDeepgramLive();
+    const apiKey = this._getDeepgramApiKey();
+    if (!apiKey) {
+      logger.warn('Deepgram live socket skipped (missing credentials)');
+      return;
+    }
+    const dg = config.get('speech.deepgram') || {};
+    const client = new DeepgramLiveClient({
+      apiKey,
+      WebSocketImpl: this.WebSocketImpl,
+      url: buildListenUrl({
+        model: dg.model,
+        language: dg.language,
+        endpointing: dg.endpointing,
+        utteranceEndMs: dg.utteranceEndMs,
+        sampleRate: dg.sampleRate,
+        keyterms: dg.keyterms
+      })
+    });
+    client.on('open', () => {
+      logger.info('Deepgram live socket open');
+    });
+    client.on('message', (msg) => {
+      this._handleDeepgramMessage(msg);
+    });
+    client.on('error', (error) => {
+      logger.warn('Deepgram live error', { error: error && error.message });
+    });
+    client.on('close', () => {
+      if (this._deepgramActive && this.isRecording && !client._intentionalClose) {
+        this._deepgramReconnectTimer = setTimeout(() => {
+          this._deepgramReconnectTimer = null;
+          if (this._deepgramActive && this.isRecording) {
+            this._connectDeepgramLive();
+          }
+        }, 500);
+      }
+    });
+    this._deepgramLive = client;
+    client.connect();
+  }
+
+  _closeDeepgramLive() {
+    if (this._deepgramReconnectTimer) {
+      clearTimeout(this._deepgramReconnectTimer);
+      this._deepgramReconnectTimer = null;
+    }
+    if (this._deepgramLive) {
+      try {
+        this._deepgramLive.close();
+      } catch (_) { /* ignore */ }
+      this._deepgramLive = null;
+    }
+  }
+
+  _ingestDeepgramAudio(buffer, source = 'loopback') {
+    if (!buffer || !buffer.length) {
+      return;
+    }
+    const energy = this._chunkRmsEnergy(buffer);
+    if (!this._perfFirstAudio) {
+      this._perfFirstAudio = true;
+      this.emit('first-audio-chunk');
+      logger.info('First interview audio chunk', {
+        source,
+        rms: Number(energy).toFixed(4),
+        bytes: buffer.length
+      });
+    }
+
+    if (source === 'loopback') {
+      this._gotLoopbackAudio = true;
+      this._lastLoopbackRms = energy;
+      this._audioCaptureSource = 'loopback';
+    }
+
+    if (!this._deepgramCaptionsPaused) {
+      const voiced = energy >= 0.004;
+      if (voiced && !this._turnBuffer.active) {
+        this._speechOnsetAt = Date.now();
+        this._turnBuffer.begin(this._speechOnsetAt);
+        this.emit('vad-speech-start');
+      }
+      if (this._turnBuffer.active) {
+        this._turnBuffer.push(buffer, { now: Date.now(), voiced });
+      }
+    }
+
+    if (this._deepgramLive) {
+      this._deepgramLive.sendPcm(buffer);
+    }
+  }
+
+  _handleDeepgramMessage(msg) {
+    if (!msg || typeof msg !== 'object') {
+      return;
+    }
+    if (msg.type === 'Error' || msg.error) {
+      logger.warn('Deepgram live message error', {
+        type: msg.type,
+        description: msg.description || msg.message || msg.error
+      });
+      return;
+    }
+    if (msg.type === 'UtteranceEnd') {
+      this._lastUtteranceEndAt = Date.now();
+      return;
+    }
+    if (msg.type && msg.type !== 'Results') {
+      return;
+    }
+
+    const transcript = (((msg.channel || {}).alternatives || [])[0] || {}).transcript;
+    const text = String(transcript || '').trim();
+    if (!text) {
+      return;
+    }
+
+    const isFinal = !!(msg.is_final || msg.speech_final);
+    if (!isFinal) {
+      if (this._deepgramCaptionsPaused) {
+        return;
+      }
+      if (!this._firstCaptionAt) {
+        logger.info('Deepgram live caption', { chars: text.length });
+      }
+      this._captionInterim = text;
+      if (!this._firstCaptionAt) {
+        this._firstCaptionAt = Date.now();
+        const onset = this._speechOnsetAt || this._rollingWindowStartedAt || this._firstCaptionAt;
+        this.emit('first-caption', {
+          decodeMs: 0,
+          msFromSpeechOnset: this._firstCaptionAt - onset
+        });
+      }
+      this.emit('interim-transcription', text);
+      return;
+    }
+
+    this._appendTurnFinal(text);
+  }
+
+  _appendTurnFinal(text) {
+    if (this._deepgramCaptionsPaused) {
+      return;
+    }
+    const next = String(text || '').trim();
+    if (!next) {
+      return;
+    }
+    if (!this._turnBuffer.active && !this._speechOnsetAt) {
+      this._speechOnsetAt = Date.now();
+      this._turnBuffer.begin(this._speechOnsetAt);
+    }
+    if (!this._turnFinalText) {
+      this._turnFinalText = next;
+      return;
+    }
+    const current = this._turnFinalText;
+    const a = current.toLowerCase();
+    const b = next.toLowerCase();
+    if (b.startsWith(a) && next.length >= current.length) {
+      this._turnFinalText = next;
+      return;
+    }
+    if (a.endsWith(b)) {
+      return;
+    }
+    this._turnFinalText = `${current} ${next}`;
+  }
+
+  async _waitForLoopbackSilence() {
+    const silenceMs = this._deepgramSpaceSilenceMs || DEEPGRAM_SPACE_SILENCE_MS;
+    const maxWaitMs = this._deepgramSpaceMaxWaitMs || DEEPGRAM_SPACE_MAX_WAIT_MS;
+    const floor = this._getVadEnergyFloor();
+    const deadline = Date.now() + maxWaitMs;
+    while (Date.now() < deadline) {
+      const energyHigh = this._lastLoopbackRms >= floor;
+      const trailing = this._turnBuffer.trailingSilenceMs();
+      if (!energyHigh && trailing >= silenceMs) {
+        return 'silence';
+      }
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    return 'timeout';
+  }
+
+  async _transcribeDeepgramPrerecorded(pcm) {
+    return transcribePrerecorded(pcm, {
+      apiKey: this._getDeepgramApiKey(),
+      fetchImpl: this._deepgramFetchImpl,
+      model: (config.get('speech.deepgram') || {}).model,
+      language: (config.get('speech.deepgram') || {}).language,
+      sampleRate: (config.get('speech.deepgram') || {}).sampleRate,
+      keyterms: (config.get('speech.deepgram') || {}).keyterms
+    });
+  }
+
+  async _finalizeDeepgramTurn({ waitTrailingSilence = true } = {}) {
+    const wasRecording = this.isRecording;
+    if (waitTrailingSilence) {
+      await this._waitForLoopbackSilence();
+    }
+
+    const snapshot = this._turnBuffer.snapshot();
+    this._turnBuffer.deactivate();
+    this._deepgramCaptionsPaused = true;
+    this.rollingCaptionsPaused = true;
+
+    const source = this._gotLoopbackAudio ? 'loopback' : (this._lastChunkSource || 'mic');
+    const rms = snapshot.pcm.length ? this._chunkRmsEnergy(snapshot.pcm) : (this._lastLoopbackRms || 0);
+    const bufferMs = Math.round(snapshot.durationMs);
+    let text = String(this._turnFinalText || '').trim();
+    const blocked = source !== 'loopback' || rms < LOOPBACK_MIN_RMS;
+
+    const result = {
+      text: '',
+      usedCaption: false,
+      durationMs: snapshot.durationMs,
+      startedAt: snapshot.startedAt,
+      lastVoiceAt: snapshot.lastVoiceAt,
+      lastChunkAt: snapshot.lastChunkAt,
+      source,
+      rms,
+      bufferMs,
+      blocked,
+      micStillRecording: this.isRecording === wasRecording && this.isRecording === true,
+      spaceLog: ''
+    };
+
+    if (!text && !blocked && snapshot.pcm.length && snapshot.durationMs >= 80) {
+      try {
+        const raw = await this._transcribeDeepgramPrerecorded(snapshot.pcm);
+        text = raw && typeof raw === 'string' ? raw.trim() : '';
+      } catch (error) {
+        logger.warn('Deepgram prerecorded fallback failed', {
+          error: (error && error.message) || String(error)
+        });
+      }
+    }
+
+    const spaceLog = formatSpaceLogLine({
+      source,
+      provider: 'deepgram',
+      bufferMs,
+      rms,
+      transcript: blocked ? '' : text
+    });
+    result.spaceLog = spaceLog;
+    logger.info(spaceLog);
+
+    if (blocked) {
+      return result;
+    }
+    result.text = text;
+    return result;
+  }
+
+  async flushRollingForSubmit() {
+    if (!this.rollingEnabled) return null;
+    const deadline = Date.now() + 1500;
+    while (this._interimInFlight && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    try {
+      const availableMs = this._utteranceRing.durationMs;
+      if (availableMs >= MIN_DECODE_MS && this.whisperWorker && this.whisperWorker.isConfigured()) {
+        const pcm = this._utteranceRing.snapshotMs(Math.min(UTTERANCE_MS, availableMs));
+        const text = await this._transcribeWhisperBuffer(pcm, {
+          fast: true,
+          rolling: true,
+          language: this._rollingFastLanguage(),
+          initialPrompt: this._rollingStabilizer.snapshot().committed.split(' ').slice(-12).join(' ')
+        });
+        const clean = text && typeof text === 'string' ? text.trim() : '';
+        if (clean && !this._isHallucinatedTranscript(clean)) {
+          this._rollingStabilizer.update(clean);
+        }
+      }
+    } catch (error) {
+      logger.debug('Rolling submit flush decode failed', { error: error.message });
+    }
+    const snapshot = this._rollingStabilizer.promoteAll();
+    this._emitRollingCaption(snapshot);
+    this.rollingCaptionsPaused = true;
+    return snapshot;
+  }
+
+  resetRollingTranscript() {
+    this._resetRollingState();
+    this._speechOnsetAt = 0;
+    this._firstCaptionAt = 0;
+    this._perfFirstAudio = false;
+    this._turnFinalText = '';
+    this._captionInterim = '';
+    this._deepgramCaptionsPaused = false;
+  }
+
+  _liveCaptionIntervalMs() {
+    return 500;
+  }
+
+  _maybeScheduleLiveCaption() {
+    if (this.rollingEnabled) {
+      return;
+    }
+    if (!this.whisperWorker || !this.whisperWorker.isConfigured()) {
+      return;
+    }
+    if (!this.isRecording || this.transcriptionInFlight || this._interimInFlight) {
+      return;
+    }
+    if (this.vadSpeechMs < 400 || this.segmentBytes < 400 * 32) {
+      return;
+    }
+    if (this.segmentBytes <= this._lastInterimBytes) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this._lastInterimAt < this._liveCaptionIntervalMs()) {
+      return;
+    }
+    this._lastInterimAt = now;
+    this._decodeLiveCaption().catch((error) => {
+      logger.debug('Live caption decode failed', { error: error.message });
+    });
+  }
+
+  async _decodeLiveCaption() {
+    if (this._interimInFlight || this.transcriptionInFlight || !this.segmentBytes) {
+      return;
+    }
+    this._interimInFlight = true;
+    const startedAt = Date.now();
+    try {
+      const snapshot = Buffer.concat(this.segmentBuffers, this.segmentBytes);
+      this._lastInterimBytes = snapshot.length;
+      const maxBytes = 6000 * 32;
+      const window = snapshot.length > maxBytes
+        ? snapshot.subarray(snapshot.length - maxBytes)
+        : snapshot;
+      const text = await this._transcribeWhisperBuffer(window, { fast: true });
+      const clean = text && typeof text === 'string' ? text.trim() : '';
+      if (clean && !this._isHallucinatedTranscript(clean)) {
+        if (!this._firstCaptionAt && this._speechOnsetAt) {
+          this._firstCaptionAt = Date.now();
+          const decodeMs = Date.now() - startedAt;
+          logger.info('Live caption first word', {
+            msFromSpeechOnset: this._firstCaptionAt - this._speechOnsetAt,
+            decodeMs,
+            audioMs: Math.round(window.length / 32)
+          });
+          this.emit('first-caption', {
+            decodeMs,
+            msFromSpeechOnset: this._firstCaptionAt - this._speechOnsetAt
+          });
+        }
+        this.emit('interim-transcription', clean);
+      }
+    } finally {
+      this._interimInFlight = false;
+      if (this.isRecording && this.vadSpeaking && !this.transcriptionInFlight) {
+        this._maybeScheduleLiveCaption();
+      }
+    }
   }
 
   _chunkDurationMs(buffer) {
@@ -955,6 +1812,13 @@ class SpeechService extends EventEmitter {
       provider: this.provider,
       sessionDuration: `${sessionDuration}ms`
     });
+
+    if (this._deepgramActive || this.provider === 'deepgram') {
+      this._deepgramActive = false;
+      this._closeDeepgramLive();
+      this._finalizeStop('Recording stopped');
+      return;
+    }
 
     if (this.provider === 'azure' && this.recognizer) {
       try {
@@ -1008,7 +1872,9 @@ class SpeechService extends EventEmitter {
     } finally {
       this._cleanup();
       this.isProcessingAudio = false;
-      this.whisperWorker.releaseWhenIdle();
+      if (!this.whisperKeepAlive) {
+        this.whisperWorker.releaseWhenIdle();
+      }
       if (!captureAlreadyStopped) {
         this.emit('recording-stopped');
       }
@@ -1076,6 +1942,10 @@ class SpeechService extends EventEmitter {
     this._resetVadState();
     this._audioDataLogged = false;
     this.useRendererCapture = false;
+    if (!this.isRecording) {
+      this._deepgramActive = false;
+      this._closeDeepgramLive();
+    }
   }
 
   async recognizeFromFile(audioFilePath) {
@@ -1157,18 +2027,62 @@ class SpeechService extends EventEmitter {
     return { success: false, message: 'Speech service not initialized' };
   }
 
+  setWhisperKeepAlive(enabled) {
+    if (enabled && this.usesDeepgramInterview()) {
+      this.whisperKeepAlive = false;
+      this.rollingEnabled = false;
+      this._stopRollingTimer();
+      return;
+    }
+    this.whisperKeepAlive = !!enabled;
+    this.rollingEnabled = !!enabled
+      && this.provider === 'whisper'
+      && !!(this.whisperWorker && this.whisperWorker.isConfigured());
+    if (this.whisperKeepAlive) {
+      this.whisperWorker.hold();
+      this._resetRollingState();
+      if (this.rollingEnabled) {
+        this._startRollingTimer();
+        logger.info('Rolling Whisper captions enabled', {
+          intervalMs: this._rollingIntervalMs(),
+          ringBufferMs: RING_MS,
+          overlapMs: OVERLAP_MS,
+          decodeWindowMs: DECODE_MS
+        });
+      }
+      if (this.whisperWorker.isConfigured()) {
+        this.whisperWorker.warmup({
+          model: this._getWhisperModel(),
+          modelDir: this._getWhisperModelDir(),
+          device: this._getWhisperDevice()
+        }).then(() => this._primeRollingDecoder()).catch((error) => {
+          logger.warn('Whisper keep-alive warmup failed', { error: error.message });
+        });
+      }
+      return;
+    }
+    this._stopRollingTimer();
+    this.rollingCaptionsPaused = false;
+    this.whisperWorker.releaseWhenIdle();
+  }
+
   getStatus() {
     return {
-      provider: this.provider,
+      provider: this.usesDeepgramInterview() ? 'deepgram' : this.provider,
       isRecording: this.isRecording,
       isProcessingAudio: this.isProcessingAudio,
-      isInitialized: this.provider === 'azure' ? !!this.speechConfig : !!this.whisperCommand,
+      isInitialized: this.provider === 'azure'
+        ? !!this.speechConfig
+        : (this.provider === 'deepgram' || this._hasDeepgramKey())
+          ? this._hasDeepgramKey()
+          : !!this.whisperCommand,
       sessionDuration: this.sessionStartTime ? Date.now() - this.sessionStartTime : 0,
       retryCount: this.retryCount,
       effectiveSettings: {
-        speechProvider: this.provider,
+        speechProvider: this.usesDeepgramInterview() ? 'deepgram' : this.provider,
         azureKey: this._getSetting('azureKey') || '',
         azureRegion: this._getSetting('azureRegion') || process.env.AZURE_SPEECH_REGION || '',
+        deepgramKeyConfigured: this._hasDeepgramKey(),
         whisperCommand: this._getSetting('whisperCommand') || process.env.WHISPER_COMMAND || '',
         whisperModelDir: this._getWhisperModelDir(),
         whisperModel: this._getWhisperModel(),
@@ -1180,18 +2094,27 @@ class SpeechService extends EventEmitter {
       config: {
         azure: config.get('speech.azure') || {},
         whisper: config.get('speech.whisper') || {},
-        selectedProvider: this.provider
+        deepgram: config.get('speech.deepgram') || {},
+        selectedProvider: this.usesDeepgramInterview() ? 'deepgram' : this.provider
       }
     };
   }
 
   isAvailable() {
+    if (this._hasDeepgramKey()) {
+      return true;
+    }
+
     if (this.provider === 'azure') {
       return !!this.speechConfig && !!this.available;
     }
 
     if (this.provider === 'whisper') {
       return !!this.whisperCommand && !!this.available;
+    }
+
+    if (this.provider === 'deepgram') {
+      return this._hasDeepgramKey();
     }
 
     return false;
@@ -1204,12 +2127,17 @@ class SpeechService extends EventEmitter {
   shutdown() {
     this.isRecording = false;
     this.isProcessingAudio = false;
+    this.rollingEnabled = false;
+    this._deepgramActive = false;
+    this.interviewCapture = false;
+    this._stopRollingTimer();
+    this._closeDeepgramLive();
     this._cleanup();
     this.whisperWorker.close();
   }
 
   updateSettings(settings = {}) {
-    const speechKeys = ['speechProvider', 'azureKey', 'azureRegion', 'whisperCommand', 'whisperModelDir', 'whisperModel', 'whisperLanguage', 'whisperCaptureMode', 'whisperDevice', 'whisperSegmentMs'];
+    const speechKeys = ['speechProvider', 'azureKey', 'azureRegion', 'deepgramKey', 'whisperCommand', 'whisperModelDir', 'whisperModel', 'whisperLanguage', 'whisperCaptureMode', 'whisperDevice', 'whisperSegmentMs'];
     let changed = false;
 
     for (const key of speechKeys) {
@@ -1229,8 +2157,12 @@ class SpeechService extends EventEmitter {
   _getConfiguredProvider() {
     const provider = String(this._getSetting('speechProvider') || process.env.SPEECH_PROVIDER || '').trim().toLowerCase();
 
-    if (provider === 'azure' || provider === 'whisper') {
+    if (provider === 'azure' || provider === 'whisper' || provider === 'deepgram') {
       return provider;
+    }
+
+    if (this._hasDeepgramKey()) {
+      return 'deepgram';
     }
 
     const hasAzure = !!((this._getSetting('azureKey') || process.env.AZURE_SPEECH_KEY) &&
@@ -1244,7 +2176,9 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperModel() {
-    return this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'small';
+    const raw = this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'small';
+    const value = String(raw || '').trim();
+    return value || 'small';
   }
 
   _getWhisperModelDir() {
@@ -1273,7 +2207,8 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperLanguage() {
-    return this._getSetting('whisperLanguage') || process.env.WHISPER_LANGUAGE || config.get('speech.whisper.language') || 'auto';
+    const raw = this._getSetting('whisperLanguage') || process.env.WHISPER_LANGUAGE || config.get('speech.whisper.language') || 'auto';
+    return sanitizeWhisperLanguage(raw);
   }
 
   _getWhisperSegmentMs() {
@@ -1352,38 +2287,131 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperPythonPath() {
+    const seen = new Set();
+    const accept = (pythonPath, extraArgs = []) => {
+      if (!pythonPath || seen.has(pythonPath)) return null;
+      seen.add(pythonPath);
+      if (!fs.existsSync(pythonPath)) return null;
+      return this._pythonHasWhisper(pythonPath, extraArgs) ? pythonPath : null;
+    };
+
     const configuredPython = String(process.env.WHISPER_PYTHON || '').trim();
     if (configuredPython) {
       const resolvedPython = path.isAbsolute(configuredPython)
         ? path.normalize(configuredPython)
         : path.resolve(configuredPython);
-      if (fs.existsSync(resolvedPython)) {
-        return resolvedPython;
-      }
+      const hit = accept(resolvedPython);
+      if (hit) return hit;
     }
 
     const userDataCandidate = this._getUserDataWhisperCandidate();
-    if (userDataCandidate && fs.existsSync(userDataCandidate.command)) {
-      return userDataCandidate.command;
+    if (userDataCandidate) {
+      const hit = accept(userDataCandidate.command);
+      if (hit) return hit;
     }
 
-    if (!this.whisperCommand) {
+    const projectVenv = path.join(
+      process.cwd(),
+      '.venv-whisper',
+      process.platform === 'win32' ? path.join('Scripts', 'python.exe') : path.join('bin', 'python')
+    );
+    const projectHit = accept(projectVenv);
+    if (projectHit) return projectHit;
+
+    if (this.whisperCommand) {
+      const moduleIndex = this.whisperCommand.baseArgs.indexOf('-m');
+      if (
+        moduleIndex !== -1 &&
+        this.whisperCommand.baseArgs[moduleIndex + 1] === 'whisper' &&
+        fs.existsSync(this.whisperCommand.command)
+      ) {
+        const hit = accept(this.whisperCommand.command);
+        if (hit) return hit;
+      }
+
+      const whisperAbs = this._resolveExecutable(this.whisperCommand.command);
+      if (whisperAbs) {
+        const dir = path.dirname(whisperAbs);
+        const pythonName = process.platform === 'win32' ? 'python.exe' : 'python';
+        for (const candidate of [
+          path.join(dir, pythonName),
+          path.join(dir, '..', pythonName)
+        ]) {
+          const hit = accept(path.normalize(candidate));
+          if (hit) return hit;
+        }
+      }
+    }
+
+    if (process.platform === 'win32') {
+      const launcherPython = this._resolvePyLauncherPython();
+      const hit = accept(launcherPython);
+      if (hit) return hit;
+    }
+
+    for (const name of process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']) {
+      const abs = this._resolveExecutable(name);
+      const hit = accept(abs);
+      if (hit) return hit;
+    }
+
+    return null;
+  }
+
+  _resolveExecutable(command) {
+    if (!command) return null;
+    if (path.isAbsolute(command) && fs.existsSync(command)) {
+      return path.normalize(command);
+    }
+    try {
+      const finder = process.platform === 'win32' ? 'where' : 'which';
+      const probe = spawnSync(finder, [command], {
+        encoding: 'utf8',
+        timeout: 5000,
+        windowsHide: true
+      });
+      if (probe.status === 0 && probe.stdout) {
+        const first = probe.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)[0];
+        if (first && fs.existsSync(first)) {
+          return path.normalize(first);
+        }
+      }
+    } catch (_) {
       return null;
     }
+    return null;
+  }
 
-    const command = path.normalize(this.whisperCommand.command);
-    const moduleIndex = this.whisperCommand.baseArgs.indexOf('-m');
-    if (
-      moduleIndex !== -1 &&
-      this.whisperCommand.baseArgs[moduleIndex + 1] === 'whisper' &&
-      fs.existsSync(command)
-    ) {
-      return command;
+  _resolvePyLauncherPython() {
+    try {
+      const probe = spawnSync('py', ['-3', '-c', 'import sys; print(sys.executable)'], {
+        encoding: 'utf8',
+        timeout: 8000,
+        windowsHide: true
+      });
+      if (probe.status === 0) {
+        const resolved = String(probe.stdout || '').trim().split(/\r?\n/).filter(Boolean)[0];
+        if (resolved && fs.existsSync(resolved)) {
+          return path.normalize(resolved);
+        }
+      }
+    } catch (_) {
+      return null;
     }
+    return null;
+  }
 
-    const pythonName = process.platform === 'win32' ? 'python.exe' : 'python';
-    const siblingPython = path.join(path.dirname(command), pythonName);
-    return fs.existsSync(siblingPython) ? siblingPython : null;
+  _pythonHasWhisper(pythonPath, extraArgs = []) {
+    try {
+      const probe = spawnSync(
+        pythonPath,
+        [...extraArgs, '-c', 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("whisper") else 1)'],
+        { encoding: 'utf8', timeout: 8000, windowsHide: true }
+      );
+      return !probe.error && probe.status === 0;
+    } catch (_) {
+      return false;
+    }
   }
 
   _getWhisperWorkerScriptPath() {
@@ -1801,6 +2829,11 @@ class SpeechService extends EventEmitter {
       return;
     }
 
+    if (this._deepgramActive) {
+      this._ingestDeepgramAudio(Buffer.from(chunk), this._audioCaptureSource || 'mic');
+      return;
+    }
+
     if (this.provider === 'whisper') {
       this._ingestWhisperAudio(Buffer.from(chunk));
     }
@@ -1880,19 +2913,62 @@ class SpeechService extends EventEmitter {
     return HALLUCINATIONS.has(normalized);
   }
 
-  async _transcribeWhisperBuffer(audioBuffer) {
+  async _transcribeWhisperBuffer(audioBuffer, options = {}) {
+    if (this.whisperWorker.isConfigured() && audioBuffer && audioBuffer.length) {
+      const startedAt = Date.now();
+      try {
+        const result = await this.whisperWorker.transcribe(null, {
+          pcm: audioBuffer,
+          sampleRate: 16000,
+          model: options.model || this._getWhisperModel(),
+          language: options.language || this._getWhisperLanguage(),
+          modelDir: this._getWhisperModelDir(),
+          device: this._getWhisperDevice(),
+          fast: !!options.fast,
+          rolling: !!options.rolling,
+          initialPrompt: options.initialPrompt || undefined
+        });
+        if (result.language) {
+          this._rollingLanguage = result.language;
+        }
+        if (!options.fast) {
+          logger.info('Persistent Whisper transcription completed', {
+            processingTime: Date.now() - startedAt,
+            model: result.model,
+            device: result.device,
+            gpu: result.gpu,
+            detectedLanguage: result.language
+          });
+        } else {
+          logger.debug('Live caption chunk decoded', {
+            processingTime: Date.now() - startedAt,
+            textLength: (result.text || '').length,
+            rolling: !!options.rolling
+          });
+        }
+        return result.text || '';
+      } catch (error) {
+        if (options.fast) {
+          throw error;
+        }
+        logger.warn('Persistent Whisper PCM decode failed; falling back to WAV file', {
+          error: error.message
+        });
+      }
+    }
+
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencluely-whisper-'));
-    const audioFilePath = path.join(tempDir, 'segment.wav');
+    const audioFilePath = path.join(tempDir, options.fast ? 'live.wav' : 'segment.wav');
 
     try {
       fs.writeFileSync(audioFilePath, this._createWavBuffer(audioBuffer));
-      return await this._transcribeWhisperFile(audioFilePath);
+      return await this._transcribeWhisperFile(audioFilePath, options);
     } finally {
       this._removeTempDir(tempDir);
     }
   }
 
-  async _transcribeWhisperFile(audioFilePath) {
+  async _transcribeWhisperFile(audioFilePath, options = {}) {
     if (!this.whisperCommand) {
       throw new Error('Local Whisper CLI not configured');
     }
@@ -1901,25 +2977,44 @@ class SpeechService extends EventEmitter {
       const startedAt = Date.now();
       try {
         const result = await this.whisperWorker.transcribe(audioFilePath, {
-          model: this._getWhisperModel(),
-          language: this._getWhisperLanguage(),
+          model: options.model || this._getWhisperModel(),
+          language: options.language || this._getWhisperLanguage(),
           modelDir: this._getWhisperModelDir(),
-          device: this._getWhisperDevice()
+          device: this._getWhisperDevice(),
+          fast: !!options.fast,
+          rolling: !!options.rolling
         });
-        logger.info('Persistent Whisper transcription completed', {
-          processingTime: Date.now() - startedAt,
-          model: result.model,
-          device: result.device,
-          gpu: result.gpu,
-          detectedLanguage: result.language
-        });
+        if (result.language) {
+          this._rollingLanguage = result.language;
+        }
+        if (!options.fast) {
+          logger.info('Persistent Whisper transcription completed', {
+            processingTime: Date.now() - startedAt,
+            model: result.model,
+            device: result.device,
+            gpu: result.gpu,
+            detectedLanguage: result.language
+          });
+        } else {
+          logger.debug('Live caption chunk decoded', {
+            processingTime: Date.now() - startedAt,
+            textLength: (result.text || '').length
+          });
+        }
         return result.text || '';
       } catch (error) {
+        if (options.fast) {
+          throw error;
+        }
         logger.warn('Persistent Whisper worker failed; falling back to CLI', {
           error: error.message,
           workerTraceback: error.workerTraceback
         });
       }
+    }
+
+    if (options.fast) {
+      return '';
     }
 
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencluely-whisper-out-'));
@@ -2016,4 +3111,6 @@ class SpeechService extends EventEmitter {
   }
 }
 
-module.exports = new SpeechService();
+const speechService = new SpeechService();
+speechService.sanitizeWhisperLanguage = sanitizeWhisperLanguage;
+module.exports = speechService;

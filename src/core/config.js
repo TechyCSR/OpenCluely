@@ -47,9 +47,9 @@ class ConfigManager {
           fallbackEnabled: true,
           enableFallbackMethod: false,
           generation: {
-            temperature: 0.7,
+            temperature: 0.55,
             topK: 32,
-            topP: 0.9,
+            topP: 0.85,
             maxOutputTokens: 4096,
             thinkingConfig: { thinkingBudget: 0 }
           }
@@ -58,6 +58,16 @@ class ConfigManager {
 
       speech: {
         provider: 'azure',
+        deepgram: {
+          model: 'nova-3',
+          language: 'en',
+          endpointing: 800,
+          utteranceEndMs: 1200,
+          sampleRate: 16000,
+          keyterms: ['Kafka', 'Kubernetes', 'HPA', 'microservices'],
+          spaceSilenceMs: 700,
+          spaceMaxWaitMs: 2000
+        },
         azure: {
           language: 'en-US',
           enableDictation: true,

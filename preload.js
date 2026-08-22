@@ -9,8 +9,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Speech recognition
   startSpeechRecognition: () => ipcRenderer.invoke('start-speech-recognition'),
   stopSpeechRecognition: () => ipcRenderer.invoke('stop-speech-recognition'),
-  sendAudioChunk: (buffer) => ipcRenderer.send('audio-chunk', { buffer }),
+  sendAudioChunk: (buffer, source) => ipcRenderer.send('audio-chunk', { buffer, source: source || 'mic' }),
+  getLoopbackSourceId: () => ipcRenderer.invoke('get-loopback-source-id'),
+  sendLoopbackStatus: (payload) => ipcRenderer.send('loopback-status', payload || {}),
+  onStartLoopbackCapture: (callback) => ipcRenderer.on('start-loopback-capture', callback),
+  onStopLoopbackCapture: (callback) => ipcRenderer.on('stop-loopback-capture', callback),
   getSpeechAvailability: () => ipcRenderer.invoke('get-speech-availability'),
+  toggleInterviewMode: () => ipcRenderer.invoke('toggle-interview-mode'),
+  getInterviewState: () => ipcRenderer.invoke('get-interview-state'),
   
   // Window management
   showAllWindows: () => ipcRenderer.invoke('show-all-windows'),
@@ -79,6 +85,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // LLM window specific methods
   expandLlmWindow: (contentMetrics) => ipcRenderer.invoke('expand-llm-window', contentMetrics),
   resizeLlmWindowForContent: (contentMetrics) => ipcRenderer.invoke('resize-llm-window-for-content', contentMetrics),
+  resizeInterviewCard: (metrics) => ipcRenderer.invoke('resize-interview-card', metrics),
 
   // Clipboard helper for reliable copy actions
   copyToClipboard: (text) => {
@@ -123,6 +130,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
+  onInterviewUpdate: (callback) => ipcRenderer.on('interview-update', callback),
+  onInterviewHud: (callback) => ipcRenderer.on('interview-hud', callback),
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),

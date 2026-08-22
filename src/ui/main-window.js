@@ -22,6 +22,10 @@ class MainWindowUI {
         this._mediaStream = null;
         this._scriptNode = null;
         this._captureInterval = null;
+        this._loopbackStream = null;
+        this._loopbackAudioContext = null;
+        this._loopbackScriptNode = null;
+        this._loopbackSourceNode = null;
         
         // Define available skills for navigation
         this.availableSkills = [
@@ -267,17 +271,20 @@ class MainWindowUI {
 
     setupElements() {
         this.statusDot = document.getElementById('statusDot');
+        this.modeLabel = document.getElementById('modeLabel');
+        this.interviewHint = document.getElementById('interviewHint');
         this.skillIndicator = document.getElementById('skillIndicator');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
+        this.interviewButton = document.getElementById('interviewButton');
     this.infoButton = document.getElementById('infoButton');
     this.shortcutsPopover = document.getElementById('shortcutsPopover');
 
         // NEW: Screenshot button is the first .command-item without id
-        const commandItems = document.querySelectorAll('.command-item');
-        this.screenshotButton = commandItems && commandItems[0];
+        this.screenshotButton = document.getElementById('screenshotButton')
+            || (document.querySelectorAll('.command-item') && document.querySelectorAll('.command-item')[0]);
 
-    if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
+    if (!this.statusDot || !this.screenshotButton || !this.interviewButton) {
             throw new Error('Required UI elements not found');
         }
 
@@ -288,7 +295,7 @@ class MainWindowUI {
             }
         });
 
-        // Skill indicator click handler toggles DSA skill
+        if (this.skillIndicator) {
         this.skillIndicator.addEventListener('click', () => {
             if (!this.isInteractive) return;
             const newSkill = 'dsa';
@@ -300,6 +307,7 @@ class MainWindowUI {
                 this.handleSkillActivated(newSkill);
             }
         });
+        }
 
         // Check for required elements (settingsIndicator is optional)
         if (this.settingsIndicator) {
@@ -310,8 +318,24 @@ class MainWindowUI {
             });
         }
 
-        // Add click handler for microphone
-        this.micButton.addEventListener('click', async () => {
+        if (this.interviewButton) {
+            this.interviewButton.addEventListener('click', async () => {
+                if (!this.isInteractive || !window.electronAPI || !window.electronAPI.toggleInterviewMode) {
+                    return;
+                }
+                try {
+                    const payload = await window.electronAPI.toggleInterviewMode();
+                    this.updateInterviewButton(payload);
+                } catch (error) {
+                    logger.error('Interview Mode toggle failed', {
+                        component: 'MainWindowUI',
+                        error: error.message
+                    });
+                }
+            });
+        }
+
+        if (this.micButton) this.micButton.addEventListener('click', async () => {
             if (this.isInteractive && this.speechAvailable) {
                 try {
                     if (this.isRecording) {
@@ -338,23 +362,13 @@ class MainWindowUI {
         // Language dropdown
         this.languageSelect = document.getElementById('codingLanguage');
         if (this.languageSelect) {
-            // Set default to C++ if no value is set
-            this.languageSelect.value = 'cpp';
-            
-            // Initialize with current setting
+            this.languageSelect.value = 'java';
             if (window.electronAPI && window.electronAPI.getSettings) {
                 window.electronAPI.getSettings().then(settings => {
                     if (settings && settings.codingLanguage) {
                         this.languageSelect.value = settings.codingLanguage;
-                    } else {
-                        // Save C++ as default if no language is set
-                        this.languageSelect.value = 'cpp';
-                        window.electronAPI.saveSettings({ codingLanguage: 'cpp' });
                     }
-                }).catch(() => {
-                    // Fallback to C++ on error
-                    this.languageSelect.value = 'cpp';
-                });
+                }).catch(() => {});
             }
 
             this.languageSelect.addEventListener('change', (e) => {
@@ -425,9 +439,15 @@ class MainWindowUI {
                 this.handleInteractionModeChanged(interactive);
             });
 
-            window.electronAPI.onRecordingStarted(() => {
-                this.handleRecordingStarted();
+            window.electronAPI.onRecordingStarted((_event, payload) => {
+                this.handleRecordingStarted(payload);
             });
+
+            if (window.electronAPI.onInterviewUpdate) {
+                window.electronAPI.onInterviewUpdate((_event, payload) => {
+                    this.updateInterviewButton(payload);
+                });
+            }
 
             window.electronAPI.onRecordingStopped(() => {
                 this.handleRecordingStopped();
@@ -641,7 +661,33 @@ class MainWindowUI {
         logger.debug('Screenshot request received', { component: 'MainWindowUI' });
     }
 
-    handleRecordingStarted() {
+    updateInterviewButton(payload) {
+        if (!this.interviewButton) {
+            return;
+        }
+        const on = !!(payload && payload.enabled);
+        this.interviewButton.classList.toggle('interview-on', on);
+        document.body.classList.toggle('interview-hud', on);
+        const state = payload && payload.state ? payload.state : 'off';
+        const labels = {
+            listening: 'Listening',
+            thinking: 'Thinking',
+            answering: 'Answering',
+            speaking: 'Answering'
+        };
+        if (this.modeLabel) {
+            this.modeLabel.textContent = on ? (labels[state] || 'Listening') : 'Idle';
+        }
+        if (this.interviewHint) {
+            this.interviewHint.textContent = on ? 'Space' : 'F8';
+        }
+        this.interviewButton.title = on
+            ? `Interview Mode ${state} (F8 to exit)`
+            : 'Interview Mode (F8)';
+        this.resizeWindowToContent();
+    }
+
+    handleRecordingStarted(payload) {
         this.isRecording = true;
         if (this.micButton) {
             this.micButton.classList.add('recording');
@@ -656,10 +702,14 @@ class MainWindowUI {
           ((navigator.userAgentData && navigator.userAgentData.platform) ||
             navigator.platform || '')).toLowerCase();
         const useRendererCapture = platform.includes('win') || platform.includes('mac');
-        if (useRendererCapture) {
-            this._startRendererAudioCapture();
-        }
-        logger.debug('Recording started', { component: 'MainWindowUI' });
+        const source = payload && payload.source;
+        // Interview loopback runs in a dedicated hidden window so it is not
+        // killed when F8 hides this overlay (content protection + throttling).
+        if (source === 'loopback') {
+            logger.debug('Recording started (loopback owned by capture window)', { component: 'MainWindowUI' });
+            return;
+        } else if (useRendererCapture) {
+        logger.debug('Recording started', { component: 'MainWindowUI', source: source || 'mic' });
     }
 
     handleRecordingStopped() {
@@ -669,6 +719,147 @@ class MainWindowUI {
         }
         this._stopRendererAudioCapture();
         logger.debug('Recording stopped', { component: 'MainWindowUI' });
+    }
+
+    _resampleFloatToPcm16(inputFloat, inputRate, outRate) {
+        const inLen = inputFloat.length;
+        if (!inLen) return new Int16Array(0);
+        const toInt16 = (sample) => {
+            const s = Math.max(-1, Math.min(1, sample));
+            return s < 0 ? s * 0x8000 : s * 0x7FFF;
+        };
+        if (inputRate === outRate) {
+            const out = new Int16Array(inLen);
+            for (let i = 0; i < inLen; i++) {
+                out[i] = toInt16(inputFloat[i]);
+            }
+            return out;
+        }
+        const outCount = Math.max(1, Math.round(inLen * outRate / inputRate));
+        const out = new Int16Array(outCount);
+        const ratio = inputRate / outRate;
+        for (let i = 0; i < outCount; i++) {
+            const src = i * ratio;
+            const i0 = Math.min(inLen - 1, Math.floor(src));
+            const i1 = Math.min(inLen - 1, i0 + 1);
+            const frac = src - i0;
+            out[i] = toInt16(inputFloat[i0] * (1 - frac) + inputFloat[i1] * frac);
+        }
+        return out;
+    }
+
+    async _startInterviewLoopbackCapture() {
+        this._stopRendererAudioCapture();
+        try {
+            const micStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+            this._mediaStream = micStream;
+        } catch (error) {
+            logger.warn('Interview mic keep-alive failed', {
+                component: 'MainWindowUI',
+                error: error.message
+            });
+        }
+
+        try {
+            const loopback = await this._openLoopbackStream();
+            this._loopbackStream = loopback;
+            this._pipeStreamToPcm(loopback, 'loopback');
+            logger.info('Loopback capture started', { component: 'MainWindowUI' });
+        } catch (error) {
+            logger.error('Loopback capture failed; not sending mic to STT', {
+                component: 'MainWindowUI',
+                error: error.message
+            });
+        }
+    }
+
+    async _openLoopbackStream() {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { width: 16, height: 16, frameRate: 1 },
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false,
+                        channelCount: 1
+                    }
+                });
+                if (stream.getAudioTracks().length) {
+                    stream.getVideoTracks().forEach((track) => { track.enabled = false; });
+                    return stream;
+                }
+                stream.getTracks().forEach((track) => track.stop());
+            } catch (error) {
+                logger.warn('getDisplayMedia loopback failed, trying desktop capture', {
+                    component: 'MainWindowUI',
+                    error: error.message
+                });
+            }
+        }
+
+        const sourceId = window.electronAPI.getLoopbackSourceId
+            ? await window.electronAPI.getLoopbackSourceId()
+            : null;
+        if (!sourceId) {
+            throw new Error('no desktop source for loopback');
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                mandatory: {
+                    chromeMediaSource: 'desktop',
+                    chromeMediaSourceId: sourceId
+                }
+            },
+            video: {
+                mandatory: {
+                    chromeMediaSource: 'desktop',
+                    chromeMediaSourceId: sourceId,
+                    maxWidth: 16,
+                    maxHeight: 16
+                }
+            }
+        });
+        stream.getVideoTracks().forEach((track) => { track.enabled = false; });
+        if (!stream.getAudioTracks().length) {
+            stream.getTracks().forEach((track) => track.stop());
+            throw new Error('desktop capture had no audio track');
+        }
+        return stream;
+    }
+
+    _pipeStreamToPcm(stream, source) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const audioContext = new AudioCtx({ sampleRate: 16000 });
+        this._loopbackAudioContext = audioContext;
+        const nativeRate = audioContext.sampleRate || 16000;
+        const sourceNode = audioContext.createMediaStreamSource(stream);
+        const scriptNode = audioContext.createScriptProcessor(4096, 1, 1);
+        this._loopbackScriptNode = scriptNode;
+        this._loopbackSourceNode = sourceNode;
+
+        scriptNode.onaudioprocess = (event) => {
+            if (!this.isRecording || !window.electronAPI || !window.electronAPI.sendAudioChunk) {
+                return;
+            }
+            const inputData = event.inputBuffer.getChannelData(0);
+            const pcm16 = this._resampleFloatToPcm16(inputData, nativeRate, 16000);
+            if (pcm16 && pcm16.byteLength) {
+                window.electronAPI.sendAudioChunk(pcm16.buffer, source);
+            }
+        };
+
+        const mute = audioContext.createGain();
+        mute.gain.value = 0;
+        sourceNode.connect(scriptNode);
+        scriptNode.connect(mute);
+        mute.connect(audioContext.destination);
     }
 
     /**
@@ -735,6 +926,23 @@ class MainWindowUI {
                 this._scriptNode.disconnect();
                 this._scriptNode.onaudioprocess = null;
                 this._scriptNode = null;
+            }
+            if (this._loopbackScriptNode) {
+                this._loopbackScriptNode.disconnect();
+                this._loopbackScriptNode.onaudioprocess = null;
+                this._loopbackScriptNode = null;
+            }
+            if (this._loopbackSourceNode) {
+                try { this._loopbackSourceNode.disconnect(); } catch (_) {}
+                this._loopbackSourceNode = null;
+            }
+            if (this._loopbackStream) {
+                this._loopbackStream.getTracks().forEach((track) => track.stop());
+                this._loopbackStream = null;
+            }
+            if (this._loopbackAudioContext) {
+                this._loopbackAudioContext.close().catch(() => {});
+                this._loopbackAudioContext = null;
             }
             if (this._mediaStream) {
                 this._mediaStream.getTracks().forEach((track) => track.stop());

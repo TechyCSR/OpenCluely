@@ -15,6 +15,8 @@ class WhisperWorkerService {
     this.idleUnloadMs = 60000;
     this.readyInfo = null;
     this.closing = false;
+    this.held = false;
+    this.lines = null;
   }
 
   configure({ pythonPath, scriptPath, idleUnloadMs = 60000 }) {
@@ -22,7 +24,7 @@ class WhisperWorkerService {
     this.pythonPath = pythonPath;
     this.scriptPath = scriptPath;
     this.idleUnloadMs = idleUnloadMs;
-    if (changed) {
+    if (changed && !this.held) {
       this.close();
     }
   }
@@ -41,15 +43,31 @@ class WhisperWorkerService {
       throw new Error('Persistent Whisper worker is not configured');
     }
     this._clearIdleTimer();
-    const result = await this._request({
+    const payload = {
       action: 'transcribe',
-      audio_path: audioPath,
       model: options.model || 'small',
       language: options.language || 'auto',
       model_dir: options.modelDir || null,
-      device: options.device || 'auto'
-    });
-    this._scheduleIdleUnload();
+      device: options.device || 'auto',
+      fast: !!options.fast,
+      rolling: !!options.rolling
+    };
+    if (options.pcm && options.pcm.length) {
+      payload.pcm_b64 = Buffer.from(options.pcm).toString('base64');
+      payload.sample_rate = options.sampleRate || 16000;
+    } else if (audioPath) {
+      payload.audio_path = audioPath;
+    } else {
+      throw new Error('Whisper transcribe requires audio_path or pcm');
+    }
+    if (options.initialPrompt) {
+      payload.initial_prompt = options.initialPrompt;
+    }
+    const timeoutMs = options.fast || options.rolling ? 15000 : 180000;
+    const result = await this._request(payload, timeoutMs);
+    if (!this.held) {
+      this._scheduleIdleUnload();
+    }
     return result;
   }
 
@@ -66,7 +84,25 @@ class WhisperWorkerService {
     });
   }
 
+  hold() {
+    this.held = true;
+    this._clearIdleTimer();
+  }
+
+  isHeld() {
+    return this.held === true;
+  }
+
+  isRunning() {
+    return Boolean(this.process && !this.process.killed);
+  }
+
+  get pid() {
+    return this.process && !this.process.killed ? this.process.pid : null;
+  }
+
   releaseWhenIdle() {
+    this.held = false;
     if (this.process) {
       this._scheduleIdleUnload();
     }
@@ -81,12 +117,18 @@ class WhisperWorkerService {
     this.closing = false;
     const child = spawn(this.pythonPath, ['-u', this.scriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
+      windowsHide: true,
+      env: {
+        ...process.env,
+        OMP_NUM_THREADS: '2',
+        MKL_NUM_THREADS: '2',
+        OPENBLAS_NUM_THREADS: '2'
+      }
     });
     this.process = child;
 
-    const lines = readline.createInterface({ input: child.stdout });
-    lines.on('line', (line) => this._handleLine(line));
+    this.lines = readline.createInterface({ input: child.stdout });
+    this.lines.on('line', (line) => this._handleLine(line));
 
     child.stderr.on('data', (chunk) => {
       const message = chunk.toString().trim();
@@ -107,6 +149,10 @@ class WhisperWorkerService {
       }
       this.process = null;
       this.readyInfo = null;
+      if (this.lines) {
+        this.lines.close();
+        this.lines = null;
+      }
       if (!this.closing) {
         this._rejectAll(error);
       }
@@ -168,6 +214,9 @@ class WhisperWorkerService {
   }
 
   _scheduleIdleUnload() {
+    if (this.held) {
+      return;
+    }
     this._clearIdleTimer();
     this.idleTimer = setTimeout(() => {
       if (!this.process || this.pending.size > 0) {
@@ -195,7 +244,12 @@ class WhisperWorkerService {
   }
 
   close() {
+    this.held = false;
     this._clearIdleTimer();
+    if (this.lines) {
+      try { this.lines.close(); } catch (_) {}
+      this.lines = null;
+    }
     if (this.process && !this.process.killed) {
       try {
         this.closing = true;

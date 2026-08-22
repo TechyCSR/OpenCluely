@@ -415,6 +415,58 @@
             border-color: rgba(76,175,80,0.95); 
             transform: scale(0.98);
         }
+
+        body.interview-card {
+            background: transparent;
+        }
+        body.interview-card .window-header {
+            display: none !important;
+        }
+        body.interview-card.has-header #response-content,
+        body.interview-card.has-header #loading {
+            margin-top: 0;
+        }
+        body.interview-card .split-layout,
+        body.interview-card .full-content,
+        body.interview-card .loading {
+            height: 100vh;
+        }
+        body.interview-card .loading {
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.92) 0%, rgba(8, 8, 8, 0.96) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+        }
+        body.interview-card .full-content-inner,
+        body.interview-card .text-panel,
+        body.interview-card .code-panel {
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.92) 0%, rgba(8, 8, 8, 0.96) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+        }
+        body.interview-card .full-content-inner,
+        body.interview-card .panel-content {
+            padding: 16px 18px;
+        }
+        body.interview-card .markdown-content {
+            font-size: 1.05rem;
+            line-height: 1.6;
+        }
+        body.interview-card .markdown-content p {
+            margin-bottom: 0.75rem;
+            font-size: 1.05rem;
+        }
+        body.interview-card .markdown-content li {
+            font-size: 1.05rem;
+        }
+        body.interview-card .markdown-content h1 { font-size: 1.35rem; }
+        body.interview-card .markdown-content h2 { font-size: 1.22rem; }
+        body.interview-card .markdown-content h3 { font-size: 1.12rem; }
+        body.interview-card .markdown-content code,
+        body.interview-card .markdown-content pre code {
+            font-size: 0.98rem;
+        }
     </style>
 </head>
 <body class="text-white">
@@ -470,11 +522,14 @@
     <script>
         // Global variables
         let currentLayout = 'split';
+        let liveStreamBuffer = '';
         let hasCode = false;
         let currentSkill = 'dsa';
         let isInteractive = false;
         let scrollableElements = [];
         let initialized = false;
+        let interviewHud = false;
+        let interviewResizeTimer = null;
         
         // Immediate logging to verify script execution
         console.log('[LLM-RESPONSE] Script tag executed');
@@ -528,10 +583,29 @@
                 console.log('[LLM-RESPONSE] Setting up IPC listeners...');
                 
                 // Set up show-loading event listener
-                window.electronAPI.onShowLoading(() => {
+                window.electronAPI.onShowLoading((...args) => {
+                    const data = args.length >= 2 ? args[1] : args[0];
+                    if (data && data.compact) {
+                        setInterviewHud(true);
+                    }
                     console.log('[LLM-RESPONSE] show-loading received');
                     showLoadingState();
                 });
+                if (window.electronAPI.onInterviewHud) {
+                    window.electronAPI.onInterviewHud((_event, payload) => {
+                        setInterviewHud(!!(payload && payload.enabled));
+                    });
+                }
+                if (window.electronAPI.onInterviewUpdate) {
+                    window.electronAPI.onInterviewUpdate((_event, payload) => {
+                        setInterviewHud(!!(payload && payload.enabled));
+                    });
+                }
+                if (window.electronAPI.getInterviewState) {
+                    window.electronAPI.getInterviewState().then((state) => {
+                        setInterviewHud(!!(state && state.enabled));
+                    }).catch(() => {});
+                }
                 
                 // Listen for LLM response
                 window.electronAPI.onDisplayLlmResponse(function() {
@@ -569,11 +643,58 @@
                     }
                 });
                 
+                if (window.electronAPI.onTranscriptionLlmResponseStart) {
+                    window.electronAPI.onTranscriptionLlmResponseStart(function () {
+                        liveStreamBuffer = '';
+                        hideLoadingState();
+                        const responseElement = document.getElementById('response-content');
+                        if (responseElement) responseElement.classList.remove('hidden');
+                        displayFullLayout('');
+                    });
+                }
+                if (window.electronAPI.onTranscriptionLlmResponseChunk) {
+                    window.electronAPI.onTranscriptionLlmResponseChunk(function () {
+                        let data = arguments.length >= 2 ? arguments[1] : arguments[0];
+                        const delta = (data && data.delta) || '';
+                        if (!delta) return;
+                        liveStreamBuffer += delta;
+                        hideLoadingState();
+                        const responseElement = document.getElementById('response-content');
+                        if (responseElement) responseElement.classList.remove('hidden');
+                        renderLiveStream(liveStreamBuffer);
+                    });
+                }
+
                 console.log('[LLM-RESPONSE] IPC listeners set up successfully');
             } else {
                 console.error('[LLM-RESPONSE] electronAPI not available!');
             }
         } // end initLLMResponseWindow
+
+        function setInterviewHud(enabled) {
+            interviewHud = !!enabled;
+            document.body.classList.toggle('interview-card', interviewHud);
+        }
+
+        function requestInterviewResize() {
+            if (!interviewHud || !window.electronAPI || !window.electronAPI.resizeInterviewCard) {
+                return;
+            }
+            if (interviewResizeTimer) {
+                return;
+            }
+            interviewResizeTimer = setTimeout(() => {
+                interviewResizeTimer = null;
+                const root = document.getElementById('response-content');
+                const contentHeight = root && !root.classList.contains('hidden')
+                    ? Math.ceil(root.scrollHeight) + 24
+                    : 280;
+                window.electronAPI.resizeInterviewCard({
+                    hasCode,
+                    contentHeight
+                }).catch(() => {});
+            }, 80);
+        }
 
         function showLoadingState() {
             const loadingElement = document.getElementById('loading');
@@ -674,16 +795,41 @@
                 // Full layout: all content in one panel
                 displayFullLayout(response);
             }
-            
-            // Request dynamic window sizing based on content
+
+            if (interviewHud || (data && data.metadata && data.metadata.compactCard)) {
+                requestInterviewResize();
+                return;
+            }
+            if (window.electronAPI.getInterviewState) {
+                window.electronAPI.getInterviewState().then((state) => {
+                    if (state && state.enabled) return;
+                    requestExpand(contentMetrics);
+                }).catch(() => requestExpand(contentMetrics));
+                return;
+            }
+            requestExpand(contentMetrics);
+        }
+
+        function requestExpand(contentMetrics) {
             setTimeout(() => {
                 window.electronAPI.resizeLlmWindowForContent(contentMetrics)
-                    .then(result => {
-                    })
-                    .catch(error => {
+                    .catch((error) => {
                         console.error('Failed to resize window:', error);
                     });
             }, 200);
+        }
+
+        function renderLiveStream(text) {
+            const codeBlocks = extractCodeBlocks(text);
+            hasCode = codeBlocks.length > 0;
+            if (hasCode) {
+                displaySplitLayout(text, codeBlocks);
+            } else {
+                displayFullLayout(text);
+            }
+            if (interviewHud) {
+                requestInterviewResize();
+            }
         }
 
         function setupScrolling() {
