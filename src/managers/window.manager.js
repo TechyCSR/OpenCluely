@@ -2,6 +2,14 @@ const { BrowserWindow, screen, desktopCapturer, shell } = require('electron');
 const path = require('path');
 const logger = require('../core/logger').createServiceLogger('WINDOW');
 const config = require('../core/config');
+const {
+  computeInterviewBarBounds,
+  computeInterviewCardBounds,
+  computeInterviewCardSize,
+  applyStreamingResize,
+  resolveStreamingWidth,
+  MIN_HEIGHT
+} = require('../ui/interview-hud');
 
 class WindowManager {
   constructor() {
@@ -25,6 +33,13 @@ class WindowManager {
     this.isInitialized = false;
     this.isInitializing = false;
     this.isRecording = false;
+    this.interviewModeActive = false;
+    this.interviewAnswerDock = 'right';
+    this._hudPersistPath = null;
+    this._dockAnim = null;
+    this.interviewCardMetrics = { hasCode: false, contentHeight: MIN_HEIGHT };
+    this.interviewCardLock = null;
+    this.INTERVIEW_CARD = { width: 560, height: MIN_HEIGHT };
     
     // Add debouncing to prevent excessive operations
     this.lastEnforceTime = 0;
@@ -74,6 +89,13 @@ class WindowManager {
         visibleOnAllWorkspaces: true,
         fullscreenable: false
       },
+      interviewBar: {
+        width: 920,
+        height: 32,
+        file: 'interview-bar.html',
+        title: 'Interview Captions',
+        alwaysOnTop: true
+      },
       onboarding: {
         width: 560,
         height: 680,
@@ -117,6 +139,7 @@ class WindowManager {
       await this.createChatWindow();
       await this.createLLMResponseWindow();
       await this.createSettingsWindow();
+      await this.createInterviewBarWindow();
       
       this.setupWindowEventHandlers();
       this.setupScreenTracking();
@@ -264,6 +287,79 @@ class WindowManager {
     return window;
   }
 
+  async createInterviewBarWindow() {
+    if (this.windows.has('interviewBar')) {
+      return this.windows.get('interviewBar');
+    }
+    const window = await this.createWindow('interviewBar');
+    this.windows.set('interviewBar', window);
+    try {
+      window.setIgnoreMouseEvents(true, { forward: true });
+    } catch (e) {}
+    window.hide();
+    return window;
+  }
+
+  async createLoopbackCaptureWindow() {
+    if (this.windows.has('loopbackCapture')) {
+      const existing = this.windows.get('loopbackCapture');
+      if (existing && !existing.isDestroyed()) {
+        return existing;
+      }
+    }
+    const win = new BrowserWindow({
+      width: 8,
+      height: 8,
+      x: 0,
+      y: 0,
+      show: false,
+      frame: false,
+      skipTaskbar: true,
+      transparent: true,
+      focusable: false,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      webPreferences: {
+        preload: require('path').join(__dirname, '../../preload.js'),
+        nodeIntegration: false,
+        contextIsolation: true,
+        backgroundThrottling: false,
+        sandbox: false
+      }
+    });
+    try { win.webContents.setBackgroundThrottling(false); } catch (e) {}
+    win.webContents.on('console-message', (_event, _level, message) => {
+      if (String(message || '').includes('[LOOPBACK]')) {
+        logger.info(String(message));
+      }
+    });
+    await win.loadFile(require('path').join(__dirname, '../../loopback-capture.html'));
+    this.windows.set('loopbackCapture', win);
+    logger.info('Loopback capture window ready');
+    return win;
+  }
+
+  async startLoopbackCapture() {
+    try {
+      const win = await this.createLoopbackCaptureWindow();
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('start-loopback-capture');
+        logger.info('Loopback capture start requested');
+      }
+    } catch (error) {
+      logger.error('Failed to start loopback capture window', { error: error.message });
+    }
+  }
+
+  stopLoopbackCapture() {
+    const win = this.windows.get('loopbackCapture');
+    if (win && !win.isDestroyed()) {
+      try { win.webContents.send('stop-loopback-capture'); } catch (e) {}
+    }
+  }
+
   async createWindow(type, showOnCreate = false) {
     const windowConfig = this.windowConfigs[type];
     if (!windowConfig) {
@@ -381,6 +477,27 @@ class WindowManager {
         closable: false,
         hasShadow: false,
         thickFrame: false,
+        ...(process.platform === 'darwin' && {
+          titleBarStyle: 'hiddenInset',
+          trafficLightPosition: { x: -100, y: -100 },
+          acceptFirstMouse: true
+        }),
+        level: process.platform === 'darwin' ? 'floating' : undefined,
+      };
+    } else if (type === 'interviewBar') {
+      browserWindowOptions = {
+        ...baseOptions,
+        frame: false,
+        titleBarStyle: 'hidden',
+        transparent: true,
+        backgroundColor: '#00000000',
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        closable: false,
+        hasShadow: false,
+        thickFrame: false,
+        focusable: false,
         ...(process.platform === 'darwin' && {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
@@ -697,7 +814,7 @@ class WindowManager {
     const display = this.currentDisplay || screen.getPrimaryDisplay();
     const { x: displayX, y: displayY, width: screenWidth, height: screenHeight } = display.workArea || display.workAreaSize;
     
-    if (this.bindWindows && (type === 'main' || type === 'llmResponse')) {
+    if (this.bindWindows && !this.interviewModeActive && (type === 'main' || type === 'llmResponse')) {
       // Position bound windows together
       this.positionBoundWindows();
       return;
@@ -711,7 +828,13 @@ class WindowManager {
       main: { x: displayX + 50, y: displayY + topMargin },
       chat: { x: displayX + screenWidth - windowWidth - 50, y: displayY + topMargin },
       llmResponse: { x: displayX + (screenWidth - windowWidth) / 2, y: displayY + topMargin },
-      settings: { x: displayX + (screenWidth - windowWidth) / 2, y: displayY + topMargin }
+      settings: { x: displayX + (screenWidth - windowWidth) / 2, y: displayY + topMargin },
+      interviewBar: computeInterviewBarBounds({
+        x: displayX,
+        y: displayY,
+        width: screenWidth,
+        height: screenHeight
+      })
     };
 
     const position = positions[type] || { x: displayX + 100, y: displayY + topMargin };
@@ -1059,9 +1182,13 @@ class WindowManager {
     }
 
     this.windows.forEach((window, type) => {
-      if (type !== 'llmResponse') { // Don't show LLM response unless it has content
-        this.showOnCurrentDesktop(window);
+      if (type === 'llmResponse') {
+        return;
       }
+      if (type === 'interviewBar' && !this.interviewModeActive) {
+        return;
+      }
+      this.showOnCurrentDesktop(window);
     });
     
     this.isVisible = true;
@@ -1106,11 +1233,11 @@ class WindowManager {
     
     this.windows.forEach((window, type) => {
       if (!window.isDestroyed()) {
-        if (interactive) {
-          // Interactive mode: allow mouse events for all windows
+        if (type === 'interviewBar') {
+          window.setIgnoreMouseEvents(true, { forward: true });
+        } else if (interactive) {
           window.setIgnoreMouseEvents(false);
         } else {
-          // Non-interactive mode: enable click-through with forwarding for all windows
           window.setIgnoreMouseEvents(true, { forward: true });
         }
         window.webContents.send('interaction-mode-changed', interactive);
@@ -1264,8 +1391,7 @@ class WindowManager {
     });
 
     if (this.isScreenBeingShared) {
-      logger.warn('LLM response blocked due to screen sharing mode');
-      return;
+      logger.warn('LLM response shown during screen sharing (stealth overlay)');
     }
 
     const llmWindow = this.windows.get('llmResponse');
@@ -1283,16 +1409,21 @@ class WindowManager {
     logger.debug('Sending display-llm-response event to window');
     llmWindow.webContents.send('display-llm-response', {
       content,
-      metadata,
+      metadata: { ...metadata, compactCard: this.interviewModeActive },
       timestamp: new Date().toISOString()
     });
-    
-    logger.debug('Showing and focusing LLM window');
-    this.showOnCurrentDesktop(llmWindow);
-    
-    // Position bound windows when LLM response is shown
-    if (this.bindWindows) {
-      this.positionBoundWindows();
+
+    if (this.interviewModeActive) {
+      this.resizeInterviewCard({
+        hasCode: this._responseLooksLikeCode(content),
+        contentHeight: this.interviewCardMetrics.contentHeight
+      });
+      this.showInterviewAnswerCard();
+    } else {
+      this.showOnCurrentDesktop(llmWindow);
+      if (this.bindWindows) {
+        this.positionBoundWindows();
+      }
     }
         
     logger.info('LLM response displayed', {
@@ -1305,24 +1436,29 @@ class WindowManager {
 
   showLLMLoading() {
     if (this.isScreenBeingShared) {
-      logger.warn('LLM loading blocked due to screen sharing mode');
-      return;
+      logger.warn('LLM loading shown during screen sharing (stealth overlay)');
     }
 
     const llmWindow = this.windows.get('llmResponse');
-    if (llmWindow) {
-      logger.debug('Showing LLM loading state');
-      llmWindow.webContents.send('show-loading');
-      this.showOnCurrentDesktop(llmWindow);
-      
-      // Position bound windows when LLM loading is shown
-      if (this.bindWindows) {
-        this.positionBoundWindows();
-      }
-      
-      logger.debug('LLM loading window shown');
-    } else {
+    if (!llmWindow) {
       logger.error('LLM window not available for loading state');
+      return;
+    }
+
+    if (this.interviewModeActive) {
+      this.interviewCardMetrics = { hasCode: false, contentHeight: MIN_HEIGHT };
+      llmWindow.webContents.send('interview-hud', { enabled: true });
+      llmWindow.webContents.send('show-loading', { compact: true });
+      this.showInterviewAnswerCard();
+      return;
+    }
+
+    logger.debug('Showing LLM loading state');
+    llmWindow.webContents.send('show-loading');
+    this.showOnCurrentDesktop(llmWindow);
+
+    if (this.bindWindows) {
+      this.positionBoundWindows();
     }
   }
 
@@ -1331,6 +1467,7 @@ class WindowManager {
     if (llmWindow) {
       llmWindow.hide();
     }
+    this.interviewCardLock = null;
   }
 
   showSettings() {
@@ -1397,6 +1534,10 @@ class WindowManager {
   expandLLMWindow(contentMetrics = null) {
     const llmWindow = this.windows.get('llmResponse');
     if (!llmWindow || this.isScreenBeingShared) return;
+    if (this.interviewModeActive) {
+      this.resizeInterviewCard(contentMetrics || this.interviewCardMetrics);
+      return;
+    }
 
     const optimalSize = this.calculateOptimalWindowSize(contentMetrics);
     
@@ -1609,7 +1750,7 @@ class WindowManager {
     const { x: displayX, y: displayY, width: displayWidth, height: displayHeight } = this.currentDisplay.workArea;
     
     // Handle bound windows specially
-    if (this.bindWindows) {
+    if (this.bindWindows && !this.interviewModeActive) {
       const mainWindow = this.windows.get('main');
       const llmWindow = this.windows.get('llmResponse');
       
@@ -1649,13 +1790,32 @@ class WindowManager {
             newY = displayY + topMargin + 100; // Slightly lower to avoid overlap
             break;
           case 'llmResponse':
-            newX = displayX + (displayWidth - windowWidth) / 2;
-            newY = displayY + topMargin;
+            if (this.interviewModeActive) {
+              const docked = this.getInterviewAnswerBounds();
+              newX = docked.x;
+              newY = docked.y;
+              try { window.setBounds(docked); } catch (e) {}
+            } else {
+              newX = displayX + (displayWidth - windowWidth) / 2;
+              newY = displayY + topMargin;
+            }
             break;
           case 'settings':
             newX = displayX + (displayWidth - windowWidth) / 2;
             newY = displayY + topMargin;
             break;
+          case 'interviewBar': {
+            const barBounds = computeInterviewBarBounds({
+              x: displayX,
+              y: displayY,
+              width: displayWidth,
+              height: displayHeight
+            });
+            newX = barBounds.x;
+            newY = barBounds.y;
+            try { window.setBounds(barBounds); } catch (e) {}
+            break;
+          }
           default:
             newX = displayX + 100;
             newY = displayY + topMargin;
@@ -1792,16 +1952,265 @@ class WindowManager {
     }
   }
 
-  handleRecordingStarted() {
+  setInterviewModeActive(active) {
+    this.interviewModeActive = !!active;
+    const main = this.windows.get('main');
+    const llmWindow = this.windows.get('llmResponse');
+    if (this.interviewModeActive) {
+      this.loadInterviewHudPrefs();
+      this.interviewCardMetrics = { hasCode: false, contentHeight: MIN_HEIGHT };
+      if (main && !main.isDestroyed()) {
+        main.hide();
+      }
+      if (llmWindow && !llmWindow.isDestroyed()) {
+        llmWindow.webContents.send('interview-hud', { enabled: true });
+      }
+    } else {
+      this.hideInterviewBar();
+      this.hideLLMResponse();
+      this.interviewCardMetrics = { hasCode: false, contentHeight: MIN_HEIGHT };
+      this.interviewCardLock = null;
+      if (llmWindow && !llmWindow.isDestroyed()) {
+        llmWindow.webContents.send('interview-hud', { enabled: false });
+      }
+      if (main && !main.isDestroyed() && this.isVisible && !this.isScreenBeingShared) {
+        this.showOnCurrentDesktop(main);
+      }
+    }
+  }
+
+  showInterviewBar() {
+    if (this.isScreenBeingShared) {
+      return;
+    }
+    const bar = this.windows.get('interviewBar');
+    if (!bar || bar.isDestroyed()) {
+      return;
+    }
+    const display = this.currentDisplay || screen.getPrimaryDisplay();
+    const area = display.workArea || display.bounds;
+    const bounds = computeInterviewBarBounds(area);
+    try { bar.setBounds(bounds); } catch (e) {}
+    if (!bar.isVisible()) {
+      this.showOnCurrentDesktop(bar);
+    }
+    try {
+      bar.setIgnoreMouseEvents(true, { forward: true });
+    } catch (e) {}
+  }
+
+  hideInterviewBar() {
+    const bar = this.windows.get('interviewBar');
+    if (bar && !bar.isDestroyed()) {
+      bar.hide();
+    }
+  }
+
+  _hudPrefsPath() {
+    if (this._hudPersistPath) return this._hudPersistPath;
+    const os = require('os');
+    const fsPath = require('path');
+    const dir = fsPath.join(os.homedir(), '.OpenCluely');
+    this._hudPersistPath = fsPath.join(dir, 'interview-hud.json');
+    return this._hudPersistPath;
+  }
+
+  loadInterviewHudPrefs() {
+    try {
+      const fs = require('fs');
+      const file = this._hudPrefsPath();
+      if (!fs.existsSync(file)) return;
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (['left', 'right', 'top'].includes(parsed.answerDock)) {
+        this.interviewAnswerDock = parsed.answerDock;
+      }
+    } catch (error) {
+      logger.debug('Could not load interview HUD prefs', { error: error.message });
+    }
+  }
+
+  saveInterviewHudPrefs() {
+    try {
+      const fs = require('fs');
+      const fsPath = require('path');
+      const file = this._hudPrefsPath();
+      const dir = fsPath.dirname(file);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(file, JSON.stringify({ answerDock: this.interviewAnswerDock }), 'utf8');
+    } catch (error) {
+      logger.debug('Could not save interview HUD prefs', { error: error.message });
+    }
+  }
+
+  getInterviewAnswerBounds() {
+    const display = this.currentDisplay || screen.getPrimaryDisplay();
+    const area = display.workArea || display.bounds;
+    return computeInterviewCardBounds(area, this.interviewAnswerDock, this.interviewCardMetrics);
+  }
+
+  _workArea() {
+    const display = this.currentDisplay || screen.getPrimaryDisplay();
+    return display.workArea || display.bounds || { x: 0, y: 0, width: 1280, height: 720 };
+  }
+
+  _responseLooksLikeCode(text) {
+    return /```/.test(String(text || '')) || /\n {4,}|\n\t/.test(String(text || ''));
+  }
+
+  resizeInterviewCard(metrics = {}) {
+    if (!this.interviewModeActive) {
+      return false;
+    }
+    const hasCode = metrics.hasCode === true || this._responseLooksLikeCode(metrics.response);
+    const contentHeight = Number(metrics.contentHeight) || this.interviewCardMetrics.contentHeight || MIN_HEIGHT;
+    this.interviewCardMetrics = { hasCode, contentHeight };
+
+    const win = this.windows.get('llmResponse');
+    if (!win || win.isDestroyed()) {
+      return false;
+    }
+
+    if (!this.interviewCardLock) {
+      return this.showInterviewAnswerCard();
+    }
+
+    const area = this._workArea();
+    const widthInfo = resolveStreamingWidth(area, this.interviewCardLock, hasCode);
+    const maxHeight = computeInterviewCardSize(area, { hasCode, contentHeight }).maxHeight;
+    const height = Math.max(
+      this.interviewCardLock.height,
+      Math.min(maxHeight, Math.round(contentHeight))
+    );
+    const bounds = applyStreamingResize(this.interviewCardLock, {
+      width: widthInfo.width,
+      height
+    });
+    this.interviewCardLock = {
+      ...this.interviewCardLock,
+      width: bounds.width,
+      height: bounds.height,
+      widthMode: widthInfo.mode
+    };
+    if (!win.isVisible()) {
+      this.showOnCurrentDesktop(win);
+    }
+    win.setBounds(bounds);
+    return true;
+  }
+
+  dockInterviewAnswer(side, { animate = true } = {}) {
+    if (!['left', 'right', 'top'].includes(side)) return false;
+    this.interviewAnswerDock = side;
+    this.saveInterviewHudPrefs();
+    const win = this.windows.get('llmResponse');
+    if (!win || win.isDestroyed()) {
+      logger.warn('Interview dock ignored; answer window missing', { side });
+      return false;
+    }
+    if (this.interviewCardLock) {
+      this.interviewCardMetrics = {
+        hasCode: this.interviewCardMetrics.hasCode === true,
+        contentHeight: this.interviewCardLock.height
+      };
+    }
+    const bounds = this.getInterviewAnswerBounds();
+    if (this.interviewModeActive && !win.isVisible()) {
+      this.interviewCardLock = null;
+      this.showInterviewAnswerCard();
+    } else if (animate && win.isVisible()) {
+      this._animateWindowBounds(win, bounds, 150);
+      this.interviewCardLock = {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        widthMode: 'card'
+      };
+    } else {
+      win.setBounds(bounds);
+      this.interviewCardLock = {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        widthMode: 'card'
+      };
+    }
+    logger.info('Interview answer card docked', { side, bounds, visible: win.isVisible() });
+    return true;
+  }
+
+  _animateWindowBounds(win, target, durationMs) {
+    if (this._dockAnim) {
+      clearInterval(this._dockAnim);
+      this._dockAnim = null;
+    }
+    const start = win.getBounds();
+    const t0 = Date.now();
+    this._dockAnim = setInterval(() => {
+      if (!win || win.isDestroyed()) {
+        clearInterval(this._dockAnim);
+        this._dockAnim = null;
+        return;
+      }
+      const t = Math.min(1, (Date.now() - t0) / durationMs);
+      const e = t * (2 - t);
+      win.setBounds({
+        x: Math.round(start.x + (target.x - start.x) * e),
+        y: Math.round(start.y + (target.y - start.y) * e),
+        width: target.width,
+        height: target.height
+      });
+      if (t >= 1) {
+        clearInterval(this._dockAnim);
+        this._dockAnim = null;
+      }
+    }, 16);
+  }
+
+  showInterviewAnswerCard() {
+    const llmWindow = this.windows.get('llmResponse');
+    if (!llmWindow || llmWindow.isDestroyed()) return false;
+
+    const bounds = this.interviewCardLock
+      ? {
+          x: this.interviewCardLock.x,
+          y: this.interviewCardLock.y,
+          width: this.interviewCardLock.width,
+          height: this.interviewCardLock.height
+        }
+      : this.getInterviewAnswerBounds();
+    if (!this.interviewCardLock) {
+      this.interviewCardLock = {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        widthMode: 'card'
+      };
+    }
+    try { llmWindow.setAlwaysOnTop(true); } catch (e) {}
+    try { llmWindow.setBounds(bounds); } catch (e) {}
+    this.showOnCurrentDesktop(llmWindow);
+    logger.debug('Interview answer card shown', { bounds, dock: this.interviewAnswerDock });
+    return true;
+  }
+
+  handleRecordingStarted(payload) {
     this.isRecording = true;
-    this.showChatWindow();
-    // Notify all windows about recording state
-    this.broadcastToAllWindows('recording-started');
-    logger.debug('Recording started, chat window shown');
+    if (!this.interviewModeActive) {
+      this.showChatWindow();
+    }
+    if (payload && payload.source === 'loopback') {
+      this.startLoopbackCapture();
+    }
+    this.broadcastToAllWindows('recording-started', payload || {});
+    logger.debug('Recording started', { interviewMode: this.interviewModeActive });
   }
 
   handleRecordingStopped() {
     this.isRecording = false;
+    this.stopLoopbackCapture();
     // Notify all windows about recording state
     this.broadcastToAllWindows('recording-stopped');
     logger.debug('Recording stopped, chat window kept visible for the response');

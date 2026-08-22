@@ -1,7 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const { fileURLToPath } = require("url");
-const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
+const { app, BrowserWindow, globalShortcut, session, ipcMain, desktopCapturer } = require("electron");
 
 // ── Resolve a stable .env location ──
 // In packaged builds process.cwd() is unstable and frequently read-only
@@ -32,6 +32,12 @@ function resolveEnvPath() {
 }
 const ENV_PATH = resolveEnvPath();
 require("dotenv").config({ path: ENV_PATH });
+
+const CODING_LANGUAGES = new Set(["cpp", "c", "python", "java", "javascript"]);
+function resolveCodingLanguage(raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  return CODING_LANGUAGES.has(value) ? value : "cpp";
+}
 
 // Format a value for a single .env line. Newlines are collapsed to spaces and
 // backslashes are kept verbatim (doubling them corrupts Windows paths on the
@@ -105,6 +111,8 @@ const speechService = require("./src/services/speech.service");
 const llmService = require("./src/services/llm.service");
 const resumeService = require("./src/services/resume.service");
 const { routeIntent } = require("./src/services/intent-router");
+const { InterviewSession } = require("./src/services/interview-session");
+const { perfTrace, sampleRssMb } = require("./src/services/perf-trace");
 
 // Managers
 const windowManager = require("./src/managers/window.manager");
@@ -115,8 +123,7 @@ class ApplicationController {
     this.isReady = false;
     this.starting = false;
     this.activeSkill = "dsa";
-  // Default to C++ so language is enforced from first run
-  this.codingLanguage = "cpp";
+    this.codingLanguage = resolveCodingLanguage(process.env.CODING_LANGUAGE);
     this.speechAvailable = false;
 
     // Utterance coalescing: VAD emits a transcript per natural pause, but a
@@ -127,6 +134,10 @@ class ApplicationController {
     this._utteranceTimer = null;
     this._utteranceDispatchInFlight = false;
     this._utteranceCoalesceMs = 800;
+    this.interview = new InterviewSession();
+    this._interviewShortcutsRegistered = false;
+    this._rightCtrlDock = null;
+    this._interviewSubmitInFlight = false;
 
     // First-run onboarding: detects missing .env / API key and triggers
     // a settings-window prompt on first launch so users don't have to
@@ -289,10 +300,8 @@ class ApplicationController {
         }, 800);
       } else {
         // Already configured — mark completed so we never nag again.
+        // Do not pop Settings on every launch; user opens it with Ctrl+,
         this.firstRunManager.markCompleted();
-        setTimeout(() => {
-          try { windowManager.showSettings(); } catch (_) { /* ignore */ }
-        }, 500);
       }
 
       logger.info("Application initialized successfully", {
@@ -365,7 +374,9 @@ class ApplicationController {
           return false;
         }
         if (permission === "media") {
-          return !details.mediaType || details.mediaType === "audio";
+          return !details.mediaType
+            || details.mediaType === "audio"
+            || details.mediaType === "video";
         }
         return permission === "display-capture";
       }
@@ -377,7 +388,9 @@ class ApplicationController {
         if (isTrustedAppContents(webContents)) {
           if (permission === "media") {
             const mediaTypes = Array.isArray(details.mediaTypes) ? details.mediaTypes : [];
-            granted = mediaTypes.length === 0 || mediaTypes.includes("audio");
+            granted = mediaTypes.length === 0
+              || mediaTypes.includes("audio")
+              || mediaTypes.includes("video");
           } else {
             granted = permission === "display-capture";
           }
@@ -391,6 +404,32 @@ class ApplicationController {
         callback(granted);
       }
     );
+
+    try {
+      appSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+        try {
+          const sources = await desktopCapturer.getSources({
+            types: ["screen"],
+            thumbnailSize: { width: 1, height: 1 },
+          });
+          const video = sources[0];
+          if (!video) {
+            callback({});
+            return;
+          }
+          callback({ video, audio: "loopback" });
+        } catch (error) {
+          logger.warn("Loopback display-media handler failed", {
+            error: error.message,
+          });
+          callback({});
+        }
+      });
+    } catch (error) {
+      logger.warn("setDisplayMediaRequestHandler unavailable", {
+        error: error.message,
+      });
+    }
   }
 
   setupGlobalShortcuts() {
@@ -403,6 +442,7 @@ class ApplicationController {
       "CommandOrControl+,": () => windowManager.showSettings(),
       "Alt+A": () => windowManager.toggleInteraction(),
       "Alt+R": () => this.toggleSpeechRecognition(),
+      F8: () => this.toggleInterviewMode(),
       "CommandOrControl+Shift+T": () => windowManager.forceAlwaysOnTopForAllWindows(),
       "CommandOrControl+Shift+Alt+T": () => {
         const results = windowManager.testAlwaysOnTopForAllWindows();
@@ -422,8 +462,8 @@ class ApplicationController {
   }
 
   setupServiceEventHandlers() {
-    speechService.on("recording-started", () => {
-      windowManager.handleRecordingStarted();
+    speechService.on("recording-started", (payload) => {
+      windowManager.handleRecordingStarted(payload);
     });
 
     speechService.on("recording-stopped", () => {
@@ -431,10 +471,42 @@ class ApplicationController {
     });
 
     speechService.on("transcription", (text) => {
+      if (this.interview.enabled) {
+        perfTrace.mark("finalTranscript");
+      }
       this.handleTranscriptionFragment(text);
     });
 
+    speechService.on("first-audio-chunk", () => {
+      if (this.interview.enabled) perfTrace.mark("firstAudio");
+    });
+
+    speechService.on("vad-speech-start", () => {
+      if (this.interview.enabled) perfTrace.mark("vadSpeechStart");
+    });
+
+    speechService.on("first-caption", (info) => {
+      if (!this.interview.enabled) return;
+      perfTrace.mark("firstCaption");
+      if (info && info.decodeMs != null) {
+        perfTrace.setMeta({ decodeMs: info.decodeMs });
+      }
+      this._recordPerfRuntimeMeta();
+    });
+
+    speechService.on("rolling-caption", (parts) => {
+      if (!this.interview.enabled) return;
+      if (this.interview.setRollingParts(parts && parts.committed, parts && parts.interim)) {
+        this.broadcastInterviewUpdate();
+      }
+    });
+
     speechService.on("interim-transcription", (text) => {
+      if (this.interview.enabled && !speechService.rollingEnabled) {
+        if (this.interview.setInterim(text)) {
+          this.broadcastInterviewUpdate();
+        }
+      }
       BrowserWindow.getAllWindows().forEach((window) => {
         window.webContents.send("interim-transcription", { text });
       });
@@ -481,6 +553,12 @@ class ApplicationController {
       return speechService.isAvailable ? speechService.isAvailable() : false;
     });
 
+    ipcMain.handle("toggle-interview-mode", () => {
+      return this.toggleInterviewMode();
+    });
+
+    ipcMain.handle("get-interview-state", () => this.interview.toPayload());
+
     ipcMain.handle("start-speech-recognition", () => {
       speechService.startRecording();
       return speechService.getStatus();
@@ -491,10 +569,30 @@ class ApplicationController {
       return speechService.getStatus();
     });
 
-    // Raw PCM audio captured by the renderer's Web Audio API (Windows Whisper path)
+    // Raw PCM audio captured by the renderer's Web Audio API (mic or loopback)
     ipcMain.on("audio-chunk", (_event, data) => {
       if (data && data.buffer) {
-        speechService.handleAudioChunkFromRenderer(Buffer.from(data.buffer));
+        speechService.handleAudioChunkFromRenderer(
+          Buffer.from(data.buffer),
+          data.source || "mic"
+        );
+      }
+    });
+
+    ipcMain.on("loopback-status", (_event, payload) => {
+      logger.info("Loopback capture status", payload || {});
+    });
+
+    ipcMain.handle("get-loopback-source-id", async () => {
+      try {
+        const sources = await desktopCapturer.getSources({
+          types: ["screen"],
+          thumbnailSize: { width: 1, height: 1 },
+        });
+        return sources[0] ? sources[0].id : null;
+      } catch (error) {
+        logger.warn("Failed to list loopback sources", { error: error.message });
+        return null;
       }
     });
 
@@ -889,6 +987,11 @@ class ApplicationController {
       return { success: true, contentMetrics };
     });
 
+    ipcMain.handle("resize-interview-card", (_event, metrics) => {
+      windowManager.resizeInterviewCard(metrics || {});
+      return { success: true };
+    });
+
     // ── Resume handlers ────────────────────────────────────────────────────
     ipcMain.handle("upload-resume", (_event, text) => {
       try { return resumeService.saveResume(text); }
@@ -959,7 +1062,326 @@ class ApplicationController {
     });
   }
 
+  toggleInterviewMode() {
+    if (this.interview.enabled) {
+      this.disableInterviewMode();
+    } else {
+      this.enableInterviewMode();
+    }
+    return this.interview.toPayload();
+  }
+
+  enableInterviewMode() {
+    const isAvailable = typeof speechService.isAvailable === "function"
+      ? speechService.isAvailable()
+      : !!speechService.getStatus?.().isInitialized;
+    if (!isAvailable) {
+      logger.warn("Interview Mode ignored; speech recognition unavailable");
+      try {
+        windowManager.broadcastToAllWindows("speech-status", {
+          status: "Speech recognition unavailable",
+          available: false,
+        });
+      } catch (e) {}
+      return this.interview.toPayload();
+    }
+
+    this._cancelUtteranceCoalesce();
+    this.interview.enable();
+    windowManager.setInterviewModeActive(true);
+    this._setInterviewShortcuts(true);
+    if (typeof speechService.setInterviewCapture === "function") {
+      speechService.setInterviewCapture(true);
+    }
+    if (speechService.usesDeepgramInterview && speechService.usesDeepgramInterview()) {
+      // Deepgram live + loopback. Do not use Whisper for Meet captions or Space.
+    } else if (typeof speechService.setWhisperKeepAlive === "function") {
+      speechService.setWhisperKeepAlive(true);
+    }
+    this.broadcastInterviewUpdate();
+    this._startInterviewListening();
+    perfTrace.interviewEnabled({
+      provider: speechService.provider || speechService.getStatus?.().provider,
+      whisperModel: typeof speechService._getWhisperModel === "function"
+        ? speechService._getWhisperModel()
+        : null,
+      workerWarm: !!(speechService.whisperWorker && speechService.whisperWorker.isRunning())
+    });
+    this._recordPerfRuntimeMeta();
+    logger.info("Interview Mode enabled", {
+      provider: (speechService.usesDeepgramInterview && speechService.usesDeepgramInterview())
+        ? "deepgram"
+        : (speechService.provider || "unknown"),
+      capture: (speechService.usesDeepgramInterview && speechService.usesDeepgramInterview())
+        ? "loopback"
+        : "mic"
+    });
+    return this.interview.toPayload();
+  }
+
+  disableInterviewMode() {
+    this.interview.disable();
+    this._setInterviewShortcuts(false);
+    this._cancelUtteranceCoalesce();
+    windowManager.setInterviewModeActive(false);
+    if (typeof speechService.setInterviewCapture === "function") {
+      speechService.setInterviewCapture(false);
+    }
+    if (typeof speechService.setWhisperKeepAlive === "function") {
+      speechService.setWhisperKeepAlive(false);
+    }
+    try {
+      if (speechService.getStatus?.().isRecording) {
+        speechService.stopRecording();
+      }
+    } catch (error) {
+      logger.warn("Failed to stop recording while leaving Interview Mode", {
+        error: error.message,
+      });
+    }
+    this.broadcastInterviewUpdate();
+    perfTrace.interviewDisabled();
+    logger.info("Interview Mode disabled");
+    return this.interview.toPayload();
+  }
+
+  _recordPerfRuntimeMeta() {
+    const worker = speechService.whisperWorker;
+    const pid = worker && worker.process && worker.process.pid;
+    perfTrace.setMeta({
+      provider: speechService.provider || speechService.getStatus?.().provider,
+      whisperModel: typeof speechService._getWhisperModel === "function"
+        ? speechService._getWhisperModel()
+        : null,
+      workerWarm: !!(worker && worker.isRunning()),
+      workerRssMb: sampleRssMb(pid)
+    });
+    if (typeof speechService.getRollingStats === "function") {
+      perfTrace.setMeta(speechService.getRollingStats());
+    }
+  }
+
+  _setInterviewShortcuts(enabled) {
+    if (enabled && !this._interviewShortcutsRegistered) {
+      const spaceOk = globalShortcut.register("Space", () => this.submitInterviewTranscript());
+      const escOk = globalShortcut.register("Escape", () => this.clearInterviewTranscript());
+      this._interviewShortcutsRegistered = true;
+      this._startRightCtrlDockHook();
+      logger.info("Interview Mode shortcuts registered", { spaceOk, escOk });
+      if (!spaceOk) {
+        logger.warn("Electron failed to register global Space; using OS hook fallback");
+      }
+      return;
+    }
+    if (!enabled && this._interviewShortcutsRegistered) {
+      globalShortcut.unregister("Space");
+      globalShortcut.unregister("Escape");
+      this._stopRightCtrlDockHook();
+      this._interviewShortcutsRegistered = false;
+    }
+  }
+
+  _startInterviewListening() {
+    if (!this.interview.enabled) {
+      return;
+    }
+    const tryStart = (attempt) => {
+      if (!this.interview.enabled) return;
+      const status = typeof speechService.getStatus === "function"
+        ? speechService.getStatus()
+        : {};
+      const needLoopback = typeof speechService.usesDeepgramInterview === "function"
+        && speechService.usesDeepgramInterview();
+      const wrongSource = needLoopback && speechService._audioCaptureSource !== "loopback";
+      if (status.isRecording && !wrongSource) return;
+      if (status.isRecording && wrongSource) {
+        try { speechService.stopRecording(); } catch (_) {}
+      }
+      if (status.isProcessingAudio && attempt < 20) {
+        setTimeout(() => tryStart(attempt + 1), 150);
+        return;
+      }
+      try {
+        speechService.startRecording();
+      } catch (error) {
+        logger.error("Failed to start Interview Mode listening", {
+          error: error.message,
+        });
+      }
+    };
+    tryStart(0);
+  }
+
+  _cancelUtteranceCoalesce() {
+    if (this._utteranceTimer) {
+      clearTimeout(this._utteranceTimer);
+      this._utteranceTimer = null;
+    }
+    this._utteranceBuffer = "";
+  }
+
+  broadcastInterviewUpdate() {
+    const payload = this.interview.toPayload();
+    windowManager.broadcastToAllWindows("interview-update", payload);
+    if (payload.enabled) {
+      windowManager.showInterviewBar();
+    } else {
+      windowManager.hideInterviewBar();
+    }
+  }
+
+  clearInterviewTranscript() {
+    if (!this.interview.enabled || this.interview.state !== "listening") {
+      return this.interview.toPayload();
+    }
+    this.interview.clearTranscript();
+    if (typeof speechService.clearInterviewTurn === "function") {
+      speechService.clearInterviewTurn();
+    }
+    if (typeof speechService.resetRollingTranscript === "function") {
+      speechService.resetRollingTranscript();
+    }
+    this.broadcastInterviewUpdate();
+    return this.interview.toPayload();
+  }
+
+  async submitInterviewTranscript() {
+    if (this._interviewSubmitInFlight) {
+      return this.interview.toPayload();
+    }
+    if (!this.interview.enabled || this.interview.state !== "listening") {
+      logger.debug("Interview Space ignored", {
+        enabled: this.interview.enabled,
+        state: this.interview.state,
+      });
+      return this.interview.toPayload();
+    }
+    this._interviewSubmitInFlight = true;
+
+    let text = '';
+    const useTurnFinal = typeof speechService.finalizeInterviewTurn === "function"
+      && ((typeof speechService.usesTurnFinalSubmit === "function" && speechService.usesTurnFinalSubmit())
+        || speechService.rollingEnabled);
+    if (useTurnFinal) {
+      // Freeze HUD as thinking. Do not read the live caption for Gemini.
+      this.interview.beginAnalyze();
+      this.broadcastInterviewUpdate();
+      windowManager.hideLLMResponse();
+      this._cancelUtteranceCoalesce();
+      const finalized = await speechService.finalizeInterviewTurn();
+      text = (finalized && finalized.text) || '';
+      if (finalized && finalized.micStillRecording === false) {
+        logger.warn("Interview Space expected the mic to stay running");
+      }
+      if (finalized && finalized.blocked) {
+        logger.info("Interview Space blocked empty/mic loopback; not sending to Gemini");
+      }
+    } else {
+      await this._flushPendingInterviewAudio();
+      text = this.interview.beginSubmit() || '';
+    }
+
+    if (!text || text.trim().length < 2) {
+      logger.info("Interview Space ignored; turn decode was empty");
+      this._interviewSubmitInFlight = false;
+      this.interview.resumeListening();
+      if (typeof speechService.clearInterviewTurn === "function") {
+        speechService.clearInterviewTurn();
+      }
+      if (speechService.rollingCaptionsPaused) {
+        speechService.rollingCaptionsPaused = false;
+      }
+      this.broadcastInterviewUpdate();
+      this._startInterviewListening();
+      return this.interview.toPayload();
+    }
+
+    text = text.trim();
+    perfTrace.mark("space");
+    this._recordPerfRuntimeMeta();
+    perfTrace.setMeta({ submittedText: text });
+
+    try {
+      sessionManager.addUserInput(text, "speech");
+      const sessionHistory = sessionManager.getOptimizedHistory();
+      await this.processTranscriptionWithLLM(text, sessionHistory);
+    } catch (error) {
+      logger.error("Interview Mode submit failed", { error: error.message });
+    } finally {
+      this._interviewSubmitInFlight = false;
+      if (this.interview.finishAnswer()) {
+        if (typeof speechService.clearInterviewTurn === "function") {
+          speechService.clearInterviewTurn();
+        }
+        if (typeof speechService.resetRollingTranscript === "function") {
+          speechService.resetRollingTranscript();
+        }
+        this.broadcastInterviewUpdate();
+        this._startInterviewListening();
+      }
+    }
+    return this.interview.toPayload();
+  }
+
+  async _flushPendingInterviewAudio() {
+    if (speechService.rollingEnabled && typeof speechService.flushRollingForSubmit === "function") {
+      const snapshot = await speechService.flushRollingForSubmit();
+      if (snapshot && snapshot.text) {
+        this.interview.setRollingParts(snapshot.committed, snapshot.interim);
+      }
+      return;
+    }
+
+    const status = typeof speechService.getStatus === "function"
+      ? speechService.getStatus()
+      : {};
+    if (!status.isRecording && !status.isProcessingAudio) {
+      return;
+    }
+
+    await new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        try { speechService.removeListener("transcription", onTranscription); } catch (e) {}
+        resolve();
+      };
+      const onTranscription = () => {
+        setTimeout(finish, 30);
+      };
+      speechService.once("transcription", onTranscription);
+
+      try {
+        if (status.isRecording) {
+          speechService.stopRecording();
+        }
+      } catch (error) {
+        logger.warn("Interview flush stopRecording failed", { error: error.message });
+        finish();
+        return;
+      }
+
+      const poll = setInterval(() => {
+        const now = typeof speechService.getStatus === "function"
+          ? speechService.getStatus()
+          : {};
+        if (!now.isRecording && !now.isProcessingAudio) {
+          clearInterval(poll);
+          setTimeout(finish, 40);
+        }
+      }, 40);
+      setTimeout(() => {
+        clearInterval(poll);
+        finish();
+      }, 5000);
+    });
+  }
+
   toggleSpeechRecognition() {
+    if (this.interview.enabled) {
+      return this.disableInterviewMode();
+    }
     const isAvailable = typeof speechService.isAvailable === 'function' ? speechService.isAvailable() : !!speechService.getStatus?.().isInitialized;
     if (!isAvailable) {
       logger.warn("Speech recognition unavailable; toggle ignored");
@@ -998,7 +1420,67 @@ class ApplicationController {
     }
   }
 
+  _startRightCtrlDockHook() {
+    this._stopRightCtrlDockHook();
+    if (process.platform !== "win32") {
+      return;
+    }
+    try {
+      const { spawn } = require("child_process");
+      const script = path.join(__dirname, "scripts", "right-ctrl-dock.ps1");
+      const child = spawn(
+        "powershell.exe",
+        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script],
+        { windowsHide: true }
+      );
+      this._rightCtrlDock = child;
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk) => {
+        if (!this.interview.enabled) return;
+        String(chunk)
+          .split(/\s+/)
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean)
+          .forEach((token) => {
+            if (token === "left" || token === "right" || token === "up") {
+              windowManager.dockInterviewAnswer(token === "up" ? "top" : token);
+            } else if (token === "submit") {
+              this.submitInterviewTranscript();
+            } else if (token === "clear") {
+              this.clearInterviewTranscript();
+            }
+          });
+      });
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk) => {
+        logger.warn("Interview key hook stderr", { chunk: String(chunk).slice(0, 300) });
+      });
+      child.on("exit", (code) => {
+        logger.warn("Interview key hook exited", { code });
+        if (this._rightCtrlDock === child) this._rightCtrlDock = null;
+      });
+      child.on("error", (error) => {
+        logger.warn("Right-Ctrl dock hook failed", { error: error.message });
+      });
+      logger.info("Interview key hook started", { script });
+    } catch (error) {
+      logger.warn("Could not start Right-Ctrl dock hook", { error: error.message });
+    }
+  }
+
+  _stopRightCtrlDockHook() {
+    if (!this._rightCtrlDock) return;
+    try {
+      this._rightCtrlDock.kill();
+    } catch (e) {}
+    this._rightCtrlDock = null;
+  }
+
   handleUpArrow() {
+    if (this.interview.enabled) {
+      windowManager.dockInterviewAnswer("top");
+      return;
+    }
     const isInteractive = windowManager.getWindowStats().isInteractive;
 
     if (isInteractive) {
@@ -1023,6 +1505,10 @@ class ApplicationController {
   }
 
   handleLeftArrow() {
+    if (this.interview.enabled) {
+      windowManager.dockInterviewAnswer("left");
+      return;
+    }
     const isInteractive = windowManager.getWindowStats().isInteractive;
 
     if (!isInteractive) {
@@ -1033,6 +1519,10 @@ class ApplicationController {
   }
 
   handleRightArrow() {
+    if (this.interview.enabled) {
+      windowManager.dockInterviewAnswer("right");
+      return;
+    }
     const isInteractive = windowManager.getWindowStats().isInteractive;
 
     if (!isInteractive) {
@@ -1089,25 +1579,39 @@ class ApplicationController {
     const startTime = Date.now();
 
     try {
+      const interviewCapture = this.interview.enabled;
+      if (interviewCapture) {
+        this.interview.beginAnalyze();
+        this.broadcastInterviewUpdate();
+      }
       windowManager.showLLMLoading();
+      if (interviewCapture) {
+        windowManager.showInterviewAnswerCard();
+      }
 
-  const capture = await captureService.captureAndProcess();
+      const capture = await captureService.captureAndProcess();
 
       if (!capture.imageBuffer || !capture.imageBuffer.length) {
-        windowManager.hideLLMResponse();
+        windowManager.showLLMResponse("Could not capture the screen. Try Ctrl+Shift+S again.");
+        if (interviewCapture && this.interview.finishAnswer()) {
+          this.broadcastInterviewUpdate();
+        }
         this.broadcastOCRError("Failed to capture screenshot image");
         return;
       }
 
-      // Use image directly with LLM and active skill; do not send chat messages here
-      const sessionHistory = sessionManager.getOptimizedHistory();
+      logger.info("Screenshot captured; requesting answer", {
+        bytes: capture.imageBuffer.length,
+        interviewMode: interviewCapture,
+        language: this.codingLanguage
+      });
 
-      const skillsRequiringProgrammingLanguage = ['dsa'];
-      const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
+      const sessionHistory = sessionManager.getOptimizedHistory();
+      const programmingLanguage = this.codingLanguage || "java";
 
       this._responseSeq = (this._responseSeq || 0) + 1;
       const messageId = `img-${Date.now()}-${this._responseSeq}`;
-      windowManager.broadcastToAllWindows("transcription-llm-response-start", {
+      this.sendToVoiceResponseWindows("transcription-llm-response-start", {
         messageId,
         skill: this.activeSkill
       });
@@ -1117,9 +1621,13 @@ class ApplicationController {
         capture.mimeType || 'image/png',
         this.activeSkill,
         sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null,
+        programmingLanguage,
         (delta) => {
-          windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
+          if (interviewCapture && this.interview.markAnswering()) {
+            this.broadcastInterviewUpdate();
+            windowManager.showInterviewAnswerCard();
+          }
+          this.sendToVoiceResponseWindows("transcription-llm-response-chunk", {
             messageId,
             delta
           });
@@ -1127,7 +1635,8 @@ class ApplicationController {
       );
       llmResult.metadata = { ...llmResult.metadata, messageId };
 
-      sessionManager.addModelResponse(llmResult.response, {
+      const answer = String((llmResult && llmResult.response) || '').trim();
+      sessionManager.addModelResponse(answer, {
         skill: this.activeSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
@@ -1136,19 +1645,28 @@ class ApplicationController {
 
       this.broadcastTranscriptionLLMResponse(llmResult);
 
-      windowManager.showLLMResponse(llmResult.response, {
+      windowManager.showLLMResponse(answer || "No answer came back for that screenshot. Try again.", {
         skill: this.activeSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
         isImageAnalysis: true
       });
+      if (interviewCapture) {
+        windowManager.showInterviewAnswerCard();
+        if (this.interview.finishAnswer()) {
+          this.broadcastInterviewUpdate();
+        }
+      }
     } catch (error) {
       logger.error("Screenshot OCR process failed", {
         error: error.message,
         duration: Date.now() - startTime,
       });
 
-      windowManager.hideLLMResponse();
+      windowManager.showLLMResponse(`Screenshot answer failed: ${error.message}`);
+      if (this.interview.enabled && this.interview.finishAnswer()) {
+        this.broadcastInterviewUpdate();
+      }
       this.broadcastOCRError(error.message);
       
       sessionManager.addConversationEvent({
@@ -1248,6 +1766,13 @@ class ApplicationController {
   handleTranscriptionFragment(text) {
     const fragment = (text || "").trim();
     if (!fragment) {
+      return;
+    }
+
+    if (!this.interview.shouldAutoSendToLlm()) {
+      if (this.interview.appendFinal(fragment)) {
+        this.broadcastInterviewUpdate();
+      }
       return;
     }
 
@@ -1353,7 +1878,12 @@ class ApplicationController {
         messageId,
         skill: this.activeSkill
       });
-      if (this.shouldShowVoiceOverlay()) {
+      if (this.interview.enabled) {
+        perfTrace.mark("geminiRequest");
+        perfTrace.setMeta({ transcriptLength: cleanText.length });
+        this._recordPerfRuntimeMeta();
+      }
+      if (this.shouldShowVoiceOverlay() && !this.interview.enabled) {
         windowManager.showLLMLoading();
       }
       const llmResult = await llmService.processTranscriptionWithIntelligentResponseStream(
@@ -1362,6 +1892,13 @@ class ApplicationController {
         sessionHistory.recent,
         programmingLanguage,
         (delta) => {
+          if (this.interview.enabled) {
+            perfTrace.mark("firstToken");
+            if (this.interview.markAnswering()) {
+              this.broadcastInterviewUpdate();
+              windowManager.showInterviewAnswerCard();
+            }
+          }
           this.sendToVoiceResponseWindows("transcription-llm-response-chunk", {
             messageId,
             delta
@@ -1379,7 +1916,7 @@ class ApplicationController {
       });
 
       this.sendTranscriptionLLMResponseToVoiceTargets(llmResult);
-      if (this.shouldShowVoiceOverlay()) {
+      if (this.shouldShowVoiceOverlay() || this.interview.enabled) {
         windowManager.showLLMResponse(llmResult.response, {
           skill: this.activeSkill,
           processingTime: llmResult.metadata.processingTime,
@@ -1395,6 +1932,12 @@ class ApplicationController {
         programmingLanguage: programmingLanguage || 'not applicable',
         processingTime: llmResult.metadata.processingTime
       });
+
+      if (this.interview.enabled) {
+        perfTrace.mark("answerComplete");
+        this._recordPerfRuntimeMeta();
+        perfTrace.finishTurn();
+      }
 
     } catch (error) {
       logger.error("Transcription LLM processing failed", {
@@ -1422,7 +1965,7 @@ class ApplicationController {
         });
 
         this.sendTranscriptionLLMResponseToVoiceTargets(fallbackResult);
-        if (this.shouldShowVoiceOverlay()) {
+        if (this.shouldShowVoiceOverlay() || this.interview.enabled) {
           windowManager.showLLMResponse(fallbackResult.response, {
             skill: this.activeSkill,
             processingTime: fallbackResult.metadata.processingTime,
@@ -1530,9 +2073,11 @@ class ApplicationController {
   sendToVoiceResponseWindows(channel, data) {
     const target = this.getVoiceResponseTarget();
     if (target === 'chat' || target === 'both') {
-      this.sendToChatWindow(channel, data);
+      if (!this.interview.enabled) {
+        this.sendToChatWindow(channel, data);
+      }
     }
-    if (target === 'overlay' || target === 'both') {
+    if (target === 'overlay' || target === 'both' || this.interview.enabled) {
       const responseWindow = windowManager.getWindow("llmResponse");
       if (responseWindow && !responseWindow.isDestroyed()) {
         responseWindow.webContents.send(channel, data);
@@ -1579,6 +2124,7 @@ class ApplicationController {
   }
 
   onWillQuit() {
+    this._setInterviewShortcuts(false);
     globalShortcut.unregisterAll();
     speechService.shutdown();
     windowManager.destroyAllWindows();
@@ -1618,9 +2164,13 @@ class ApplicationController {
       speechProvider: speechService.provider || "whisper",
       azureKey: process.env.AZURE_SPEECH_KEY || "",
       azureRegion: process.env.AZURE_SPEECH_REGION || "",
+      deepgramKey: process.env.DEEPGRAM_API_KEY || "",
+      deepgramConfigured: !!process.env.DEEPGRAM_API_KEY,
       whisperCommand: process.env.WHISPER_COMMAND || "",
       whisperModel: process.env.WHISPER_MODEL || "small",
-      whisperLanguage: process.env.WHISPER_LANGUAGE || "auto",
+      whisperLanguage: speechService.sanitizeWhisperLanguage
+        ? speechService.sanitizeWhisperLanguage(process.env.WHISPER_LANGUAGE || "auto")
+        : (process.env.WHISPER_LANGUAGE || "auto"),
       whisperDevice: process.env.WHISPER_DEVICE || "auto",
       whisperCaptureMode: process.env.WHISPER_CAPTURE_MODE ||
         (process.env.WHISPER_MANUAL_CAPTURE === "true" ? "manual" : "vad"),
@@ -1637,9 +2187,9 @@ class ApplicationController {
     try {
       // ── In-memory updates + window broadcasts ──
       if (settings.codingLanguage) {
-        this.codingLanguage = settings.codingLanguage;
+        this.codingLanguage = resolveCodingLanguage(settings.codingLanguage);
         windowManager.broadcastToAllWindows("coding-language-changed", {
-          language: settings.codingLanguage,
+          language: this.codingLanguage,
         });
       }
       if (settings.activeSkill) {
@@ -1665,11 +2215,17 @@ class ApplicationController {
       // Writing to .env ensures they survive app restarts and are picked
       // up the next time the app boots.
       const envUpdates = {};
-      if (settings.speechProvider === "azure" || settings.speechProvider === "whisper") {
+      if (settings.codingLanguage) {
+        envUpdates.CODING_LANGUAGE = this.codingLanguage;
+      }
+      if (settings.speechProvider === "azure" || settings.speechProvider === "whisper" || settings.speechProvider === "deepgram") {
         envUpdates.SPEECH_PROVIDER = settings.speechProvider;
       }
       if (settings.azureKey !== undefined) {
         envUpdates.AZURE_SPEECH_KEY = settings.azureKey;
+      }
+      if (settings.deepgramKey !== undefined) {
+        envUpdates.DEEPGRAM_API_KEY = settings.deepgramKey;
       }
       if (settings.azureRegion !== undefined) {
         envUpdates.AZURE_SPEECH_REGION = settings.azureRegion;
@@ -1681,7 +2237,9 @@ class ApplicationController {
         envUpdates.WHISPER_MODEL = settings.whisperModel;
       }
       if (settings.whisperLanguage !== undefined) {
-        envUpdates.WHISPER_LANGUAGE = settings.whisperLanguage;
+        envUpdates.WHISPER_LANGUAGE = speechService.sanitizeWhisperLanguage
+          ? speechService.sanitizeWhisperLanguage(settings.whisperLanguage)
+          : settings.whisperLanguage;
       }
       if (["auto", "cpu", "cuda"].includes(settings.whisperDevice)) {
         envUpdates.WHISPER_DEVICE = settings.whisperDevice;
@@ -1732,7 +2290,8 @@ class ApplicationController {
       const providerChanged = settings.speechProvider && speechService.provider !== settings.speechProvider;
       const whisperCommandChanged = settings.whisperCommand !== undefined &&
         prevWhisperCommand !== String(settings.whisperCommand || '');
-      if (providerChanged || whisperCommandChanged) {
+      const deepgramKeyChanged = settings.deepgramKey !== undefined;
+      if (providerChanged || whisperCommandChanged || deepgramKeyChanged) {
         try {
           speechService.initializeClient();
           this.speechAvailable = speechService.isAvailable
@@ -1759,8 +2318,12 @@ class ApplicationController {
         }
       }
 
+      const loggedSettings = { ...settings };
+      if (Object.prototype.hasOwnProperty.call(loggedSettings, "deepgramKey")) {
+        loggedSettings.deepgramKey = loggedSettings.deepgramKey ? "[set]" : "";
+      }
       logger.info("Settings saved successfully", {
-        ...settings,
+        ...loggedSettings,
         persistedEnvKeys: persistedKeys
       });
       return { success: true, persistedEnvKeys: persistedKeys };

@@ -355,11 +355,12 @@
                     <div class="settings-item">
                         <div>
                             <div class="settings-item-label">Speech Provider</div>
-                            <div class="settings-item-description">Choose Azure Speech or a local OpenAI Whisper CLI</div>
+                            <div class="settings-item-description">Choose Azure Speech, local Whisper, or Deepgram</div>
                         </div>
                         <select class="input-field" id="speechProvider">
                             <option value="azure">Azure Speech</option>
                             <option value="whisper">Local Whisper</option>
+                            <option value="deepgram">Deepgram</option>
                         </select>
                     </div>
 
@@ -378,6 +379,17 @@
                                 <div class="settings-item-description">Your Azure service region</div>
                             </div>
                             <input type="text" class="input-field" id="azureRegion" placeholder="e.g. eastus">
+                        </div>
+                    </div>
+
+                    <!-- Deepgram fields (shown only when Deepgram is selected) -->
+                    <div id="deepgramFields" class="settings-group" style="display: none;">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Deepgram API Key</div>
+                                <div class="settings-item-description">Used for Interview Mode live captions. Stored in local <code>.env</code> only.</div>
+                            </div>
+                            <input type="password" class="input-field" id="deepgramKey" placeholder="Enter your Deepgram key" autocomplete="off">
                         </div>
                     </div>
 

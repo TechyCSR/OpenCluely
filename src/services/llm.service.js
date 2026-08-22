@@ -3,6 +3,7 @@ const logger = require('../core/logger').createServiceLogger('LLM');
 const config = require('../core/config');
 const { promptLoader } = require('../../prompt-loader');
 const resumeService = require('./resume.service');
+const { routeIntent } = require('./intent-router');
 
 class LLMService {
   constructor() {
@@ -112,17 +113,16 @@ class LLMService {
   }
 
   /**
-   * Process an image directly with Gemini using the active skill prompt.
-   * The image buffer is sent as inlineData alongside a concise instruction.
-   * For image-based queries, we include the skill prompt (e.g., DSA) as systemInstruction.
+   * Process an image directly with Gemini using the intent assembler.
+   * No accompanying text → EXPLAIN. With text → routeIntent + _buildSystemInstruction.
    * @param {Buffer} imageBuffer - PNG/JPEG image bytes
    * @param {string} mimeType - e.g., 'image/png' or 'image/jpeg'
-   * @param {string} activeSkill - current skill (e.g. 'dsa')
-   * @param {Array} sessionMemory - optional (not required for image)
-   * @param {string|null} programmingLanguage - optional language context for skills that need it
-   * @returns {Promise<{response: string, metadata: object}>}
+   * @param {string} activeSkill - unused for persona; kept for existing call sites
+   * @param {Array} sessionMemory - unused for image prompt construction
+   * @param {string|null} programmingLanguage - used only when routed mode is code
+   * @param {string|null} accompanyingText - optional typed/spoken question with the capture
    */
-  async processImageWithSkill(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null) {
+  async processImageWithSkill(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null, accompanyingText = null) {
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -135,30 +135,12 @@ class LLMService {
     this.requestCount++;
 
     try {
-      // Build system instruction using the skill prompt (with optional language injection)
-      const { promptLoader } = require('../../prompt-loader');
-      const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
-
-      // Build request with text + image parts
-      const base64 = imageBuffer.toString('base64');
-
-      const request = {
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: this.formatImageInstruction(activeSkill, programmingLanguage) },
-              { inlineData: { data: base64, mimeType } }
-            ]
-          }
-        ]
-      };
-
-      this.applyGenerationDefaults(request);
-
-      if (skillPrompt && skillPrompt.trim().length > 0) {
-        request.systemInstruction = { parts: [{ text: skillPrompt }] };
-      }
+      const { request, intentMode, resolvedLanguage } = this._buildImageGeminiRequest(
+        imageBuffer,
+        mimeType,
+        accompanyingText,
+        programmingLanguage
+      );
 
       // Execute with retries/timeout - try alternative method first for network reliability
       let responseText;
@@ -186,16 +168,16 @@ class LLMService {
         }
       }
 
-      // Enforce language in code fences if provided
-      const finalResponse = programmingLanguage
-        ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
+      const finalResponse = resolvedLanguage
+        ? this.enforceProgrammingLanguage(responseText, resolvedLanguage)
         : responseText;
 
       logger.logPerformance('LLM image processing', startTime, {
         activeSkill,
+        intentMode,
         imageSize: imageBuffer.length,
         responseLength: finalResponse.length,
-        programmingLanguage: programmingLanguage || 'not specified',
+        programmingLanguage: resolvedLanguage || 'not specified',
         requestId: this.requestCount
       });
 
@@ -203,7 +185,8 @@ class LLMService {
         response: finalResponse,
         metadata: {
           skill: activeSkill,
-          programmingLanguage,
+          intentMode,
+          programmingLanguage: resolvedLanguage,
           processingTime: Date.now() - startTime,
           requestId: this.requestCount,
           usedFallback: false,
@@ -226,7 +209,7 @@ class LLMService {
     }
   }
 
-  async processImageWithSkillStream(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
+  async processImageWithSkillStream(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null, accompanyingText = null) {
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -239,38 +222,26 @@ class LLMService {
     this.requestCount++;
 
     try {
-      const { promptLoader } = require('../../prompt-loader');
-      const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
-      const base64 = imageBuffer.toString('base64');
+      const { request, intentMode, resolvedLanguage } = this._buildImageGeminiRequest(
+        imageBuffer,
+        mimeType,
+        accompanyingText,
+        programmingLanguage
+      );
 
-      const geminiRequest = {
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: this.formatImageInstruction(activeSkill, programmingLanguage) },
-              { inlineData: { data: base64, mimeType } }
-            ]
-          }
-        ]
-      };
-      this.applyGenerationDefaults(geminiRequest);
-      if (skillPrompt && skillPrompt.trim().length > 0) {
-        geminiRequest.systemInstruction = { parts: [{ text: skillPrompt }] };
-      }
-
-      const fullText = await this.executeStreamingRequest(geminiRequest, (delta) => {
+      const fullText = await this.executeStreamingRequest(request, (delta) => {
         if (typeof onDelta === 'function' && delta) {
           onDelta(delta);
         }
       });
 
-      const finalResponse = programmingLanguage
-        ? this.enforceProgrammingLanguage(fullText, programmingLanguage)
+      const finalResponse = resolvedLanguage
+        ? this.enforceProgrammingLanguage(fullText, resolvedLanguage)
         : fullText;
 
       logger.logPerformance('LLM image streaming', startTime, {
         activeSkill,
+        intentMode,
         imageSize: imageBuffer.length,
         responseLength: finalResponse.length,
         requestId: this.requestCount
@@ -280,7 +251,8 @@ class LLMService {
         response: finalResponse,
         metadata: {
           skill: activeSkill,
-          programmingLanguage,
+          intentMode,
+          programmingLanguage: resolvedLanguage,
           processingTime: Date.now() - startTime,
           requestId: this.requestCount,
           usedFallback: false,
@@ -294,16 +266,65 @@ class LLMService {
         error: error.message,
         requestId: this.requestCount
       });
-      return this.processImageWithSkill(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage);
+      return this.processImageWithSkill(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage, accompanyingText);
     }
   }
 
-  formatImageInstruction(activeSkill, programmingLanguage) {
-    const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
-    return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
+  /**
+   * Screenshot prompt builder. Same assembler as chat/voice.
+   * No text → explain. With text → routeIntent(text).
+   */
+  _buildImageGeminiRequest(imageBuffer, mimeType, accompanyingText, programmingLanguage) {
+    const text = accompanyingText && typeof accompanyingText === 'string'
+      ? accompanyingText.trim()
+      : '';
+    const intentMode = text
+      ? routeIntent(text).mode
+      : (programmingLanguage ? 'code' : 'explain');
+    const resolvedLanguage = programmingLanguage || null;
+    const systemInstructionText = this._buildSystemInstruction(
+      intentMode,
+      text || 'screenshot',
+      resolvedLanguage
+    );
+
+    const request = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: this.formatImageInstruction(text, intentMode, resolvedLanguage) },
+            { inlineData: { data: imageBuffer.toString('base64'), mimeType } }
+          ]
+        }
+      ]
+    };
+
+    this.applyGenerationDefaults(request);
+    if (systemInstructionText) {
+      request.systemInstruction = { parts: [{ text: systemInstructionText }] };
+    }
+
+    logger.debug('Built image Gemini request', {
+      intentMode,
+      hasAccompanyingText: !!text,
+      programmingLanguage: resolvedLanguage || 'not specified'
+    });
+
+    return { request, intentMode, resolvedLanguage };
   }
 
-  async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
+  formatImageInstruction(accompanyingText, _intentMode, programmingLanguage) {
+    const langNote = programmingLanguage
+      ? ` If this is a coding or DSA question, answer in ${String(programmingLanguage).toUpperCase()} with a short approach then complete code.`
+      : '';
+    if (accompanyingText) {
+      return `${accompanyingText}\n\nThe attached image is the question. Answer it.${langNote}`;
+    }
+    return `This screenshot is a live interview question. Answer what is on screen. Do not describe the screenshot.${langNote}`;
+  }
+
+  async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null, intentMode = 'general') {
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -314,13 +335,14 @@ class LLMService {
     try {
       logger.info('Processing text with LLM', {
         activeSkill,
+        intentMode,
         textLength: text.length,
         hasSessionMemory: sessionMemory.length > 0,
         programmingLanguage: programmingLanguage || 'not specified',
         requestId: this.requestCount
       });
 
-      const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage);
+      const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage, intentMode);
 
       const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
       let response;
@@ -432,9 +454,10 @@ class LLMService {
     } catch (error) {
       logger.warn('Streaming text failed, falling back to non-streaming', {
         error: error.message,
+        intentMode,
         requestId: this.requestCount
       });
-      return this.processTextWithSkill(text, activeSkill, sessionMemory, programmingLanguage);
+      return this.processTextWithSkill(text, activeSkill, sessionMemory, programmingLanguage, intentMode);
     }
   }
 
@@ -763,31 +786,30 @@ class LLMService {
       throw new Error('Empty or invalid transcription text provided to buildIntelligentTranscriptionRequest');
     }
 
+    // Same router chat already used. main.js also routes for language gating;
+    // this call selects the persona so voice does not need a main.js change.
+    const { mode: intentMode } = routeIntent(cleanText);
+
     // Check if we have the new conversation history format
     const sessionManager = require('../managers/session.manager');
     
     if (sessionManager && typeof sessionManager.getConversationHistory === 'function') {
       const conversationHistory = sessionManager.getConversationHistory(10);
       const skillContext = sessionManager.getSkillContext(activeSkill, programmingLanguage);
-      return this.buildIntelligentTranscriptionRequestWithHistory(cleanText, activeSkill, conversationHistory, skillContext, programmingLanguage);
+      return this.buildIntelligentTranscriptionRequestWithHistory(cleanText, activeSkill, conversationHistory, skillContext, programmingLanguage, intentMode);
     }
 
-    // Fallback to basic intelligent request
+    // Fallback to basic request — same assembler as typed chat
     const request = {
       contents: []
     };
 
     this.applyGenerationDefaults(request);
 
-    // Add intelligent filtering system instruction
-    const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
-    if (!intelligentPrompt) {
-      throw new Error('Failed to generate intelligent transcription prompt');
+    const systemInstructionText = this._buildSystemInstruction(intentMode, cleanText, programmingLanguage);
+    if (systemInstructionText) {
+      request.systemInstruction = { parts: [{ text: systemInstructionText }] };
     }
-
-    request.systemInstruction = {
-      parts: [{ text: intelligentPrompt }]
-    };
 
     request.contents.push({
       role: 'user',
@@ -796,6 +818,7 @@ class LLMService {
 
     logger.debug('Built basic intelligent transcription request', {
       skill: activeSkill,
+      intentMode,
       programmingLanguage: programmingLanguage || 'not specified',
       textLength: cleanText.length,
       hasSystemInstruction: !!request.systemInstruction
@@ -804,16 +827,17 @@ class LLMService {
     return request;
   }
 
-  buildIntelligentTranscriptionRequestWithHistory(text, activeSkill, conversationHistory, skillContext, programmingLanguage) {
+  buildIntelligentTranscriptionRequestWithHistory(text, activeSkill, conversationHistory, skillContext, programmingLanguage, intentMode = 'general') {
     const request = {
       contents: []
     };
 
     this.applyGenerationDefaults(request);
 
-  // For chat/transcription messages, DO NOT include the full skill prompt; use only the intelligent filter prompt
-  const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
-  request.systemInstruction = { parts: [{ text: intelligentPrompt }] };
+    const systemInstructionText = this._buildSystemInstruction(intentMode, text, programmingLanguage);
+    if (systemInstructionText) {
+      request.systemInstruction = { parts: [{ text: systemInstructionText }] };
+    }
 
     // Add recent conversation history (excluding system messages) with validation
     const conversationContents = conversationHistory
@@ -859,69 +883,15 @@ class LLMService {
 
     logger.debug('Built intelligent transcription request with conversation history', {
       skill: activeSkill,
+      intentMode,
       programmingLanguage: programmingLanguage || 'not specified',
       historyLength: conversationHistory.length,
       totalContents: request.contents.length,
-      hasSkillPrompt: !!skillContext.skillPrompt,
       cleanTextLength: cleanText.length,
       requiresProgrammingLanguage: skillContext.requiresProgrammingLanguage || false
     });
 
     return request;
-  }
-
-  getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage) {
-    let prompt = `# Intelligent Transcription Response System
-
-Assume you are asked a question in ${activeSkill.toUpperCase()} mode. Your job is to intelligently respond to question/message with appropriate brevity.
-Assume you are in an interview and you need to perform best in ${activeSkill.toUpperCase()} mode.
-Always respond to the point, do not repeat the question or unnecessary information which is not related to ${activeSkill}.`;
-
-    // Add programming language context if provided
-    if (programmingLanguage) {
-      const lang = String(programmingLanguage).toLowerCase();
-      const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
-      const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
-      const languageTitle = languageMap[lang] || (lang.charAt(0).toUpperCase() + lang.slice(1));
-      const fenceTag = fenceTagMap[lang] || lang || 'text';
-      prompt += `\n\nCODING CONTEXT: Respond ONLY in ${languageTitle}. All code blocks must use triple backticks with language tag \`\`\`${fenceTag}\`\`\`. Do not include other languages unless explicitly asked.`;
-    }
-
-    prompt += `
-
-## Response Rules:
-
-### If the transcription is casual conversation, greetings, or NOT related to ${activeSkill}:
-- Respond with: "Yeah, I'm listening. Ask your question relevant to ${activeSkill}."
-- Or similar brief acknowledgments like: "I'm here, what's your ${activeSkill} question?"
-
-### If the transcription IS relevant to ${activeSkill} or is a follow-up question:
-- Provide a comprehensive, detailed response
-- Use bullet points, examples, and explanations
-- Focus on actionable insights and complete answers
-- Do not truncate or shorten your response
-
-### Examples of casual/irrelevant messages:
-- "Hello", "Hi there", "How are you?"
-- "What's the weather like?"
-- "I'm just testing this"
-- Random conversations not related to ${activeSkill}
-
-### Examples of relevant messages:
-- Actual questions about ${activeSkill} concepts
-- Follow-up questions to previous responses
-- Requests for clarification on ${activeSkill} topics
-- Problem-solving requests related to ${activeSkill}
-
-## Response Format:
-- Keep responses detailed
-- Use bullet points for structured answers
-- Be encouraging and helpful
-- Stay focused on ${activeSkill}
-
-Remember: Be intelligent about filtering - only provide detailed responses when the user actually needs help with ${activeSkill}.`;
-
-    return prompt;
   }
 
   formatUserMessage(text, _activeSkill) {

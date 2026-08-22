@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const speechProviderSelect = document.getElementById('speechProvider');
     const azureKeyInput = document.getElementById('azureKey');
     const azureRegionInput = document.getElementById('azureRegion');
+    const deepgramKeyInput = document.getElementById('deepgramKey');
     const whisperCommandInput = document.getElementById('whisperCommand');
     const whisperModelInput = document.getElementById('whisperModel');
     const whisperLanguageInput = document.getElementById('whisperLanguage');
@@ -80,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // empty strings were skipped which left stale UI values.
         if (azureKeyInput) azureKeyInput.value = settings.azureKey || '';
         if (azureRegionInput) azureRegionInput.value = settings.azureRegion || '';
+        if (deepgramKeyInput) deepgramKeyInput.value = settings.deepgramKey || '';
         if (whisperCommandInput) whisperCommandInput.value = settings.whisperCommand || '';
         if (whisperModelInput) whisperModelInput.value = settings.whisperModel || '';
         if (whisperLanguageInput) whisperLanguageInput.value = settings.whisperLanguage || '';
@@ -92,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Set C++ as default if no coding language is specified
         if (codingLanguageSelect) {
-            codingLanguageSelect.value = settings.codingLanguage || 'cpp';
+            codingLanguageSelect.value = settings.codingLanguage || 'java';
         }
 
         if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
@@ -139,9 +141,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (speechProviderSelect) settings.speechProvider = speechProviderSelect.value;
         if (azureKeyInput) settings.azureKey = azureKeyInput.value;
         if (azureRegionInput) settings.azureRegion = azureRegionInput.value;
+        if (deepgramKeyInput) settings.deepgramKey = deepgramKeyInput.value;
         if (whisperCommandInput) settings.whisperCommand = whisperCommandInput.value;
         if (whisperModelInput) settings.whisperModel = whisperModelInput.value;
-        if (whisperLanguageInput) settings.whisperLanguage = whisperLanguageInput.value;
+        if (whisperLanguageInput) {
+            const raw = whisperLanguageInput.value;
+            const models = ['tiny','tiny.en','base','base.en','small','small.en','medium','medium.en','large','large-v1','large-v2','large-v3','large-v3-turbo','turbo'];
+            const normalized = String(raw || '').trim().toLowerCase();
+            settings.whisperLanguage = (!normalized || models.includes(normalized)) ? 'auto' : raw.trim();
+            if (settings.whisperLanguage === 'auto' && whisperLanguageInput.value !== 'auto') {
+                whisperLanguageInput.value = 'auto';
+            }
+        }
         if (whisperDeviceSelect) settings.whisperDevice = whisperDeviceSelect.value;
         if (whisperCaptureModeSelect) settings.whisperCaptureMode = whisperCaptureModeSelect.value;
         if (whisperResponseTargetSelect) settings.whisperResponseTarget = whisperResponseTargetSelect.value;
@@ -162,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // for the selected provider are visible.
         const azureGroup = document.getElementById('azureFields');
         const whisperGroup = document.getElementById('whisperFields');
+        const deepgramGroup = document.getElementById('deepgramFields');
         const azureNote = document.getElementById('azureFieldsNote');
 
         if (azureGroup) {
@@ -169,6 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (whisperGroup) {
             whisperGroup.style.display = provider === 'whisper' ? '' : 'none';
+        }
+        if (deepgramGroup) {
+            deepgramGroup.style.display = provider === 'deepgram' ? '' : 'none';
         }
         if (azureNote) {
             azureNote.style.display = provider === 'azure' ? '' : 'none';
@@ -178,6 +193,9 @@ document.addEventListener('DOMContentLoaded', () => {
         [azureKeyInput, azureRegionInput].forEach(input => {
             if (input) input.disabled = provider !== 'azure';
         });
+        if (deepgramKeyInput) {
+            deepgramKeyInput.disabled = provider !== 'deepgram';
+        }
         [whisperCommandInput, whisperModelInput, whisperLanguageInput, whisperDeviceSelect,
             whisperCaptureModeSelect, whisperResponseTargetSelect, whisperSegmentMsInput].forEach(input => {
             if (input) input.disabled = provider !== 'whisper';
@@ -188,6 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputs = [
         azureKeyInput,
         azureRegionInput,
+        deepgramKeyInput,
         whisperCommandInput,
         whisperModelInput,
         whisperLanguageInput,

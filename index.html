@@ -76,6 +76,31 @@
         animation: pulse 2s infinite;
       }
 
+      .command-item.interview-on {
+        color: #4caf50;
+      }
+      .command-item.interview-on i {
+        color: #4caf50;
+        text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+      }
+
+      .mode-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.88);
+        letter-spacing: 0.02em;
+        -webkit-app-region: no-drag;
+        flex-shrink: 0;
+      }
+      body.interview-hud .idle-only {
+        display: none !important;
+      }
+      body.interview-hud .status-dot {
+        background: #3ddc97;
+        box-shadow: 0 0 8px rgba(61, 220, 151, 0.65);
+        animation: pulse-green 1.4s infinite;
+      }
+
       .command-item.active {
         color: #4caf50;
         text-shadow: 0 1px 2px rgba(76, 175, 80, 0.3);
@@ -124,15 +149,11 @@
   flex-shrink: 0;
       }
 
-      .status-dot.interactive {
-        background-color: #10b981; /* Green for active/interactive */
-        box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
-        animation: pulse-green 2s infinite;
-      }
-
+      .status-dot.interactive,
       .status-dot.non-interactive {
-        background: #f44336;
-        box-shadow: 0 0 10px rgba(244, 67, 54, 0.692);
+        background: #8b8e93;
+        box-shadow: none;
+        animation: none;
       }
 
       .hidden-indicator {
@@ -236,6 +257,11 @@
       .command-item select option:checked {
         background: rgba(76, 175, 80, 0.8);
         color: white;
+      }
+
+      @keyframes pulse-green {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.45; transform: scale(0.86); }
       }
 
       @keyframes pulse {
@@ -353,36 +379,26 @@
   </head>
   <body>
     <div class="command-tab">
-      <div class="command-item">
-        <i class="fas fa-camera"></i>
-        <span>⌘⇧S</span>
-      </div>
-      <div class="command-separator"></div>
-      <div class="command-item" id="micButton">
-        <i class="fas fa-microphone"></i>
-      </div>
-      <div class="command-separator"></div>
-      <div class="command-item" id="skillIndicator">
-        <i class="fas fa-brain"></i>
-        <span>DSA</span>
-      </div>
-      <div class="command-separator"></div>
-      <div class="command-item" id="languageSelector">
-        <i class="fas fa-code"></i>
+      <div class="status-dot non-interactive" id="statusDot"></div>
+      <span class="mode-label" id="modeLabel">Idle</span>
+      <div class="command-separator idle-only"></div>
+      <div class="command-item idle-only" id="languageSelector" title="Coding language">
         <select id="codingLanguage">
           <option value="cpp">C++</option>
           <option value="c">C</option>
           <option value="python">Python</option>
-          <option value="java">Java</option>
+          <option value="java" selected>Java</option>
           <option value="javascript">JavaScript</option>
         </select>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="infoButton" title="Shortcuts">
-        <i class="fas fa-circle-info"></i>
+      <div class="command-item" id="screenshotButton" title="Screenshot (Ctrl+Shift+S)">
+        <i class="fas fa-camera"></i>
       </div>
       <div class="command-separator"></div>
-      <div class="status-dot non-interactive" id="statusDot"></div>
+      <div class="command-item" id="interviewButton" title="Interview Mode (F8)">
+        <span id="interviewHint">F8</span>
+      </div>
     </div>
 
   <!-- Shortcuts Popover (hidden by default via CSS) -->
@@ -439,6 +455,24 @@
               + <span class="kbd">R</span>
             </td>
             <td>Toggle speech</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">F8</span>
+            </td>
+            <td>Toggle Interview Mode</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Space</span>
+            </td>
+            <td>Answer current transcript (Interview Mode)</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Esc</span>
+            </td>
+            <td>Clear transcript (Interview Mode)</td>
           </tr>
           <tr>
             <td>

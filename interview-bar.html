@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Interview Captions</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        overflow: hidden;
+        -webkit-app-region: no-drag;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      .strip {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        height: 28px;
+        margin: 2px 0;
+        padding: 0 28px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.42);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(14px);
+        box-sizing: border-box;
+      }
+      .dot {
+        position: absolute;
+        left: 12px;
+        top: 0;
+        bottom: 0;
+        margin: auto 0;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #888;
+      }
+      .strip.listening .dot {
+        background: #4caf50;
+        box-shadow: 0 0 7px rgba(76, 175, 80, 0.75);
+        animation: pulse 1.4s infinite;
+      }
+      .strip.thinking .dot {
+        background: #ffb300;
+        box-shadow: 0 0 7px rgba(255, 179, 0, 0.7);
+      }
+      .strip.answering .dot,
+      .strip.speaking .dot {
+        background: #42a5f5;
+        box-shadow: 0 0 7px rgba(66, 165, 245, 0.7);
+      }
+      .caption {
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-align: center;
+        direction: rtl;
+      }
+      .caption-text {
+        display: inline-block;
+        direction: ltr;
+        unicode-bidi: isolate;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        color: rgba(255, 255, 255, 0.92);
+      }
+      .caption-text .stable {
+        color: rgba(255, 255, 255, 0.94);
+      }
+      .caption-text .tail {
+        color: rgba(170, 170, 170, 0.72);
+      }
+      .caption-text:empty::after {
+        content: "";
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(0.82); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="strip listening" id="interviewBar">
+      <span class="dot" aria-hidden="true"></span>
+      <div class="caption"><span class="caption-text" id="transcript"><span class="stable" id="stableText"></span><span class="tail" id="tailText"></span></span></div>
+    </div>
+    <script src="./src/ui/interview-bar.js"></script>
+  </body>
+</html>
