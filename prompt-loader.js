@@ -45,12 +45,13 @@ class PromptLoader {
   }
 
   /**
-   * Get the system prompt for a specific skill with optional programming language injection
+   * Get the system prompt for a specific skill with optional programming language and MCQ mode injection
    * @param {string} skillName - The name of the skill
    * @param {string|null} programmingLanguage - Optional programming language to inject
+   * @param {boolean} isMcqMode - Whether MCQ only mode is active
    * @returns {string|null} The system prompt content or null if not found
    */
-  getSkillPrompt(skillName, programmingLanguage = null) {
+  getSkillPrompt(skillName, programmingLanguage = null, isMcqMode = false) {
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
@@ -67,7 +68,34 @@ class PromptLoader {
       promptContent = this.injectProgrammingLanguage(promptContent, programmingLanguage, normalizedSkillName);
     }
 
+    // Inject MCQ instructions if MCQ mode is active
+    if (isMcqMode) {
+      promptContent = this.injectMcqInstructions(promptContent);
+    }
+
     return promptContent;
+  }
+
+  /**
+   * Inject MCQ-only mode instructions into system prompt
+   * @param {string} promptContent - Original prompt content
+   * @returns {string} Modified prompt with strict MCQ instructions
+   */
+  injectMcqInstructions(promptContent) {
+    const mcqInjection = `\n\n## MANDATORY MCQ MODE ACTIVE
+STRICT MCQ RULES:
+1. Scan the ENTIRE input/image for ALL Multiple Choice Questions (MCQs). There may be ONE or MULTIPLE questions.
+2. For EACH MCQ found:
+   a. Identify the question number/label and all options (A, B, C, D, etc.).
+   b. Select the single BEST correct answer for THAT question.
+   c. Format as: **Q[N] Correct Option: [Option Letter] - [Option Text/Value]**
+   d. Follow with a crisp 1-3 bullet point justification.
+3. If multiple MCQs are present, answer ALL of them in order separated by a blank line.
+4. If only one MCQ is present, start directly with: **Correct Option: [Option Letter] - [Option Text/Value]**
+5. If code or calculation is needed to justify an answer, provide a minimal snippet.
+6. Do NOT include greetings, filler, or conversational text. Direct answers only.`;
+
+    return promptContent + mcqInjection;
   }
 
   /**
@@ -146,11 +174,12 @@ STRICT REQUIREMENTS:
    * @param {string} userMessage - The user's message/query
    * @param {Array} storedMemory - Current stored memory
    * @param {string|null} programmingLanguage - Optional programming language
+   * @param {boolean} isMcqMode - Optional MCQ mode flag
    * @returns {Object} Gemini API request configuration
    */
-  prepareGeminiRequest(skillName, userMessage, storedMemory, programmingLanguage = null) {
+  prepareGeminiRequest(skillName, userMessage, storedMemory, programmingLanguage = null, isMcqMode = false) {
     const normalizedSkillName = this.normalizeSkillName(skillName);
-    const skillPrompt = this.getSkillPrompt(normalizedSkillName, programmingLanguage);
+    const skillPrompt = this.getSkillPrompt(normalizedSkillName, programmingLanguage, isMcqMode);
     
     const requestConfig = {
       model: 'gemini-pro', // or your preferred Gemini model
@@ -183,7 +212,8 @@ STRICT REQUIREMENTS:
           ...requestConfig,
           isUsingModelMemory: true,
           skillUsed: normalizedSkillName,
-          programmingLanguage
+          programmingLanguage,
+          isMcqMode
         };
       } else {
         console.warn(`No system prompt found for skill: ${normalizedSkillName}`);
@@ -200,7 +230,8 @@ STRICT REQUIREMENTS:
       ...requestConfig,
       isUsingModelMemory: false,
       skillUsed: normalizedSkillName,
-      programmingLanguage
+      programmingLanguage,
+      isMcqMode
     };
   }
 
@@ -210,12 +241,13 @@ STRICT REQUIREMENTS:
    * @param {string} userMessage - The user's message/query
    * @param {Array} storedMemory - Current stored memory
    * @param {string|null} programmingLanguage - Optional programming language
+   * @param {boolean} isMcqMode - Optional MCQ mode flag
    * @returns {Object} Separated components for manual request building
    */
-  getRequestComponents(skillName, userMessage, storedMemory, programmingLanguage = null) {
+  getRequestComponents(skillName, userMessage, storedMemory, programmingLanguage = null, isMcqMode = false) {
     const normalizedSkillName = this.normalizeSkillName(skillName);
     const shouldUseModelMemory = this.shouldSendAsModelMemory(skillName, storedMemory);
-    const skillPrompt = this.getSkillPrompt(normalizedSkillName, programmingLanguage);
+    const skillPrompt = this.getSkillPrompt(normalizedSkillName, programmingLanguage, isMcqMode);
 
     return {
       skillName: normalizedSkillName,
@@ -226,6 +258,7 @@ STRICT REQUIREMENTS:
       modelMemory: shouldUseModelMemory && skillPrompt ? skillPrompt : null,
       messageContent: userMessage,
       programmingLanguage,
+      isMcqMode,
       requiresProgrammingLanguage: this.skillsRequiringProgrammingLanguage.includes(normalizedSkillName)
     };
   }

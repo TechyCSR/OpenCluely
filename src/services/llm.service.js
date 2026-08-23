@@ -8,10 +8,28 @@ class LLMService {
     this.client = null;
     this.model = null;
     this.isInitialized = false;
+    this.isMcqMode = false;
     this.requestCount = 0;
     this.errorCount = 0;
     
     this.initializeClient();
+  }
+
+  /**
+   * Set MCQ-only mode
+   * @param {boolean} enabled
+   */
+  setMcqMode(enabled) {
+    this.isMcqMode = Boolean(enabled);
+    logger.info('LLMService MCQ mode updated', { isMcqMode: this.isMcqMode });
+  }
+
+  /**
+   * Get current MCQ-only mode status
+   * @returns {boolean}
+   */
+  getMcqMode() {
+    return this.isMcqMode;
   }
 
   initializeClient() {
@@ -134,9 +152,9 @@ class LLMService {
     this.requestCount++;
 
     try {
-      // Build system instruction using the skill prompt (with optional language injection)
+      // Build system instruction using the skill prompt (with optional language and MCQ injection)
       const { promptLoader } = require('../../prompt-loader');
-      const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+      let skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage, this.isMcqMode) || '';
 
       // Build request with text + image parts
       const base64 = imageBuffer.toString('base64');
@@ -239,7 +257,7 @@ class LLMService {
 
     try {
       const { promptLoader } = require('../../prompt-loader');
-      const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+      let skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage, this.isMcqMode) || '';
       const base64 = imageBuffer.toString('base64');
 
       const geminiRequest = {
@@ -298,6 +316,10 @@ class LLMService {
   }
 
   formatImageInstruction(activeSkill, programmingLanguage) {
+    if (this.isMcqMode) {
+      const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} if code is required.` : '';
+      return `MANDATORY MCQ MODE ACTIVE: Analyze this screen/image for ALL Multiple Choice Questions (MCQs) visible. There may be one or multiple questions. For EACH question found: identify all options (A, B, C, D, etc.), select the single BEST correct answer, and format your response as "**Q[N] Correct Option: [Letter] - [Option Text]**" followed by concise reasoning. If only one MCQ is visible, omit the Q[N] prefix. Answer every question you can see.${langNote}`;
+    }
     const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
     return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
   }
@@ -563,12 +585,13 @@ class LLMService {
       return this.buildGeminiRequestWithHistory(text, activeSkill, conversationHistory, skillContext, programmingLanguage);
     }
 
-    // Fallback to old method for compatibility - now with programming language support
+    // Fallback to old method for compatibility - now with programming language & MCQ support
     const requestComponents = promptLoader.getRequestComponents(
       activeSkill, 
       text, 
       sessionMemory,
-      programmingLanguage
+      programmingLanguage,
+      this.isMcqMode
     );
 
     const request = {
@@ -577,7 +600,7 @@ class LLMService {
 
     this.applyGenerationDefaults(request);
 
-    // Use the skill prompt that already has programming language injected
+    // Use the skill prompt that already has programming language & MCQ injected
     if (requestComponents.shouldUseModelMemory && requestComponents.skillPrompt) {
       request.systemInstruction = {
         parts: [{ text: requestComponents.skillPrompt }]
@@ -586,6 +609,7 @@ class LLMService {
       logger.debug('Using language-enhanced system instruction for skill', {
         skill: activeSkill,
         programmingLanguage: programmingLanguage || 'not specified',
+        isMcqMode: this.isMcqMode,
         promptLength: requestComponents.skillPrompt.length,
         requiresProgrammingLanguage: requestComponents.requiresProgrammingLanguage
       });
@@ -607,15 +631,22 @@ class LLMService {
     this.applyGenerationDefaults(request);
 
     // Use the skill prompt from context (which may already include programming language)
-    if (skillContext.skillPrompt) {
+    let promptText = skillContext.skillPrompt;
+    if (this.isMcqMode && promptText && !promptText.includes('MANDATORY MCQ MODE ACTIVE')) {
+      const { promptLoader } = require('../../prompt-loader');
+      promptText = promptLoader.injectMcqInstructions(promptText);
+    }
+
+    if (promptText) {
       request.systemInstruction = {
-        parts: [{ text: skillContext.skillPrompt }]
+        parts: [{ text: promptText }]
       };
       
       logger.debug('Using skill context prompt as system instruction', {
         skill: activeSkill,
         programmingLanguage: programmingLanguage || 'not specified',
-        promptLength: skillContext.skillPrompt.length,
+        isMcqMode: this.isMcqMode,
+        promptLength: promptText.length,
         requiresProgrammingLanguage: skillContext.requiresProgrammingLanguage || false,
         hasLanguageInjection: programmingLanguage && skillContext.requiresProgrammingLanguage
       });
@@ -825,7 +856,17 @@ Always respond to the point, do not repeat the question or unnecessary informati
 - Keep responses detailed
 - Use bullet points for structured answers
 - Be encouraging and helpful
-- Stay focused on ${activeSkill}
+- Stay focused on ${activeSkill}`;
+
+    if (this.isMcqMode) {
+      prompt += `\n\n## MANDATORY MCQ MODE ACTIVE:
+Treat any user query or question as a Multiple Choice Question (MCQ).
+Select the single BEST choice answer option immediately and start with:
+**Correct Option: [Option Letter] - [Option Text]**
+Follow with a crisp 2-3 bullet point justification.`;
+    }
+
+    prompt += `
 
 If the user's input is a coding or DSA problem statement and contains no code, produce a complete, runnable solution in the selected programming language without asking for more details. Always include the final implementation in a properly tagged code block.
 
@@ -835,6 +876,9 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   }
 
   formatUserMessage(text, activeSkill) {
+    if (this.isMcqMode) {
+      return `Context: MCQ ONLY analysis request for ${activeSkill.toUpperCase()}.\nTreat this strictly as a Multiple Choice Question, identify all choices, choose the single best answer, and output the correct option with concise justification.\n\nText to analyze:\n${text}`;
+    }
     return `Context: ${activeSkill.toUpperCase()} analysis request\n\nText to analyze:\n${text}`;
   }
 

@@ -34,12 +34,19 @@ class WindowManager {
     // Window binding properties
     this.bindWindows = true; // Enable window binding by default
     this.windowGap = 10; // Small gap between windows
-    this.boundWindowsPosition = { x: 0, y: 0 }; // Track position of bound windows
+    this.boundWindowsPosition = { x: null, y: null }; // Track position of bound windows
+    this.hasUserMovedBoundWindows = false;
+    this.userPositions = {};
+    
+    // Auto-Hide properties
+    this.isAutoHideMode = false;
+    this.autoHideState = 'visible'; // 'visible' | 'hidden'
+    this.autoHideWatcher = null;
     
     this.windowConfigs = {
       main: {
-        width: 520,
-        height: 35,
+        width: 1020,
+        height: 40,
         useContentSize: true,
         file: 'index.html',
         title: 'OpenCluely'
@@ -90,6 +97,25 @@ class WindowManager {
         alwaysOnTop: true,
         visibleOnAllWorkspaces: true,
         fullscreenable: false
+      },
+      clipboard: {
+        width: 600,
+        height: 700,
+        file: 'clipboard.html',
+        title: 'Clipboard History',
+        alwaysOnTop: true,
+        visibleOnAllWorkspaces: true
+      },
+      targetBox: {
+        width: 400,
+        height: 300,
+        file: 'target-box.html',
+        title: 'Target Box',
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        hasShadow: false,
+        visibleOnAllWorkspaces: true
       }
     };
 
@@ -117,6 +143,8 @@ class WindowManager {
       await this.createChatWindow();
       await this.createLLMResponseWindow();
       await this.createSettingsWindow();
+      await this.createClipboardWindow();
+      await this.createTargetBoxWindow();
       
       this.setupWindowEventHandlers();
       this.setupScreenTracking();
@@ -222,7 +250,6 @@ class WindowManager {
         }, 200);
       }, 100);
     }
-
     return window;
   }
 
@@ -260,6 +287,26 @@ class WindowManager {
     }
     const window = await this.createWindow('settings');
     this.windows.set('settings', window);
+    window.hide();
+    return window;
+  }
+
+  async createClipboardWindow() {
+    if (this.windows.has('clipboard')) {
+      return this.windows.get('clipboard');
+    }
+    const window = await this.createWindow('clipboard');
+    this.windows.set('clipboard', window);
+    window.hide();
+    return window;
+  }
+
+  async createTargetBoxWindow() {
+    if (this.windows.has('targetBox')) {
+      return this.windows.get('targetBox');
+    }
+    const window = await this.createWindow('targetBox');
+    this.windows.set('targetBox', window);
     window.hide();
     return window;
   }
@@ -411,6 +458,18 @@ class WindowManager {
         }),
         level: process.platform === 'darwin' ? 'floating' : undefined,
       };
+    } else if (type === 'clipboard' || type === 'targetBox') {
+      // Use config settings for frameless/transparency
+      browserWindowOptions = {
+        ...baseOptions,
+        ...windowConfig,
+        ...(process.platform === 'darwin' && {
+          titleBarStyle: windowConfig.titleBarStyle || (windowConfig.frame === false ? 'hiddenInset' : 'default'),
+          trafficLightPosition: { x: -100, y: -100 },
+          acceptFirstMouse: true
+        }),
+        level: process.platform === 'darwin' ? 'floating' : undefined,
+      };
     } else {
       // Other windows (skills)
       browserWindowOptions = {
@@ -513,7 +572,7 @@ class WindowManager {
           }
         });
 
-        // When resized (by user or programmatically), keep bound windows aligned at top
+        // When resized (by user or programmatically), keep bound windows aligned
         window.on('resize', () => {
           if (this.bindWindows) {
             this.positionBoundWindows();
@@ -522,6 +581,18 @@ class WindowManager {
       } catch { /* ignore */ }
     }
     
+    // Track user window repositioning to preserve exact user-placed positions
+    window.on('move', () => {
+      if (!window.isDestroyed()) {
+        const pos = window.getPosition();
+        this.userPositions[type] = { x: pos[0], y: pos[1] };
+        if (type === 'main') {
+          this.hasUserMovedBoundWindows = true;
+          this.boundWindowsPosition = { x: pos[0], y: pos[1] };
+        }
+      }
+    });
+
     // Show window on current desktop if requested
     if (showOnCreate) {
       this.showOnCurrentDesktop(window);
@@ -534,91 +605,50 @@ class WindowManager {
       showOnCreate: showOnCreate
     });
 
+    window.webContents.on('did-finish-load', () => {
+      if (this.currentOpacity !== undefined) {
+        window.webContents.send('update-opacity', this.currentOpacity);
+      }
+    });
+
+    window.on('moved', () => {
+      const [x, y] = window.getPosition();
+      this.userPositions[type] = { x, y };
+      logger.debug('Window moved by user', { type, x, y });
+    });
+
     return window;
   }
 
   applyStealthMeasures(window, type) {
+    // Determine if this window needs permanent fullscreen visibility
+    const isOverlayWindow = (type === 'main' || type === 'llmResponse');
+
     // Enhanced always-on-top enforcement for all platforms
     if (process.platform === 'darwin') {
-      // macOS: Use native window level constants for maximum effectiveness
+      // macOS: Use screen-saver level consistently for fullscreen overlay
       try {
-        // Try the most aggressive levels first
-        const levels = [
-          'screen-saver',    // Highest level
-          'pop-up-menu',     // Menu level
-          'modal-panel',     // Modal panel level
-          'floating',        // Floating level
-          'normal'           // Fallback to normal with alwaysOnTop
-        ];
-        
-        let levelSet = false;
-        for (const level of levels) {
-          try {
-            window.setAlwaysOnTop(true, level, 1);
-            levelSet = true;
-            logger.debug(`Successfully set always-on-top with level: ${level}`, { type });
-            break;
-          } catch (levelError) {
-            logger.debug(`Failed to set level: ${level}`, { error: levelError.message });
-          }
-        }
-        
-        if (!levelSet) {
-          // Final fallback
-          window.setAlwaysOnTop(true);
-        }
-        
-        // Additional macOS-specific enforcement
-        setTimeout(() => {
-          if (!window.isDestroyed()) {
-            try {
-              // Force re-application of always-on-top
-              window.setAlwaysOnTop(false);
-              setTimeout(() => {
-                if (!window.isDestroyed()) {
-                  window.setAlwaysOnTop(true, 'floating', 1);
-                }
-              }, 50);
-            } catch (error) {
-              logger.warn('Error in macOS re-enforcement', { error: error.message });
-            }
-          }
-        }, 200);
-        
-      } catch (error) {
-        logger.warn('Error setting always-on-top for macOS', { error: error.message });
-        // Absolute fallback
-        window.setAlwaysOnTop(true);
+        window.setAlwaysOnTop(true, 'screen-saver', 2);
+        logger.debug(`Set always-on-top with level: screen-saver (level 2)`, { type });
+      } catch {
+        try { window.setAlwaysOnTop(true, 'pop-up-menu', 2); }
+        catch { try { window.setAlwaysOnTop(true, 'floating', 2); }
+        catch { window.setAlwaysOnTop(true); }}
       }
     } else if (process.platform === 'win32') {
-      // Windows: Multiple enforcement attempts
       window.setAlwaysOnTop(true);
-      
-      setTimeout(() => {
-        if (!window.isDestroyed()) {
-          window.setAlwaysOnTop(true);
-        }
-      }, 100);
-      
-      setTimeout(() => {
-        if (!window.isDestroyed()) {
-          window.setAlwaysOnTop(true);
-        }
-      }, 500);
-      
+      setTimeout(() => { if (!window.isDestroyed()) window.setAlwaysOnTop(true); }, 100);
+      setTimeout(() => { if (!window.isDestroyed()) window.setAlwaysOnTop(true); }, 500);
     } else {
-      // Linux and other platforms
       window.setAlwaysOnTop(true);
-      
-      setTimeout(() => {
-        if (!window.isDestroyed()) {
-          window.setAlwaysOnTop(true);
-        }
-      }, 100);
+      setTimeout(() => { if (!window.isDestroyed()) window.setAlwaysOnTop(true); }, 100);
     }
 
-    // Ensure window appears on all workspaces/desktops initially
-    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // Ensure window appears on all workspaces/desktops including fullscreen spaces
+    window.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true
+    });
     
     // Hide from taskbar to maintain stealth
     window.setSkipTaskbar(true);
@@ -634,21 +664,21 @@ class WindowManager {
       logger.debug('Content protection not supported on this platform');
     }
     
-    // More aggressive event listeners to maintain always-on-top behavior
+    // Event listeners to maintain always-on-top and fullscreen visibility for ALL windows
     const enforceAlwaysOnTop = () => {
       if (!window.isDestroyed()) {
         try {
           if (process.platform === 'darwin') {
-            // Try multiple levels on macOS
-            window.setAlwaysOnTop(true, 'floating', 1);
-            setTimeout(() => {
-              if (!window.isDestroyed()) {
-                window.setAlwaysOnTop(true, 'screen-saver', 1);
-              }
-            }, 50);
+            window.setAlwaysOnTop(true, 'screen-saver', 2);
+            window.setVisibleOnAllWorkspaces(true, {
+              visibleOnFullScreen: true,
+              skipTransformProcessType: true
+            });
           } else {
             window.setAlwaysOnTop(true);
+            window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
           }
+          window.setContentProtection(true);
         } catch (error) {
           logger.debug('Error in enforceAlwaysOnTop', { error: error.message });
         }
@@ -675,7 +705,7 @@ class WindowManager {
       setTimeout(enforceAlwaysOnTop, 50);
     });
     
-    // Periodic enforcement every 3 seconds (more frequent)
+    // Periodic enforcement every 3 seconds
     const periodicEnforcement = setInterval(() => {
       if (window.isDestroyed()) {
         clearInterval(periodicEnforcement);
@@ -684,11 +714,12 @@ class WindowManager {
       enforceAlwaysOnTop();
     }, 3000);
     
-    logger.debug('Applied enhanced stealth measures with aggressive always-on-top', {
+    logger.debug('Applied stealth measures with fullscreen overlay support', {
       type,
       platform: process.platform,
       alwaysOnTop: true,
       visibleOnAllWorkspaces: true,
+      isOverlayWindow,
       skipTaskbar: true
     });
   }
@@ -725,7 +756,7 @@ class WindowManager {
     });
   }
 
-  // New method to position bound windows (vertical column layout) - Always at top
+  // New method to position bound windows (vertical column layout) - Respects user positions
   positionBoundWindows() {
     const mainWindow = this.windows.get('main');
     const llmWindow = this.windows.get('llmResponse');
@@ -738,39 +769,36 @@ class WindowManager {
     const [mainWidth, mainHeight] = mainWindow.getSize();
     const [llmWidth, llmHeight] = llmWindow.getSize();
     
-    // Always position at the top of the screen with small margin
-    const topMargin = 20;
-    const startY = displayY + topMargin;
+    let startX, startY;
     
-    // Use the wider window for horizontal centering
-    const maxWidth = Math.max(mainWidth, llmWidth);
+    if (this.hasUserMovedBoundWindows && this.boundWindowsPosition && typeof this.boundWindowsPosition.x === 'number') {
+      // Respect user's custom placed position!
+      startX = this.boundWindowsPosition.x;
+      startY = this.boundWindowsPosition.y;
+    } else {
+      // Initial default top-center margin
+      const topMargin = 20;
+      startY = displayY + topMargin;
+      const maxWidth = Math.max(mainWidth, llmWidth);
+      startX = displayX + Math.round((screenWidth - maxWidth) / 2);
+      this.boundWindowsPosition = { x: startX, y: startY };
+    }
     
-    // Center horizontally on the display
-    const xPosition = displayX + Math.round((screenWidth - maxWidth) / 2);
-    
-    // Ensure windows don't go outside screen bounds horizontally
-    const adjustedMainX = Math.max(displayX, Math.min(displayX + screenWidth - mainWidth, xPosition));
-    const adjustedLlmX = Math.max(displayX, Math.min(displayX + screenWidth - llmWidth, xPosition));
-    
-    // Position main window (top)
-    const mainX = adjustedMainX;
-    const mainY = startY;
+    const mainX = Math.round(startX);
+    const mainY = Math.round(startY);
     mainWindow.setPosition(mainX, mainY);
     
-    // Position LLM response window below with gap
-    const llmX = adjustedLlmX;
-    const llmY = startY + mainHeight + this.windowGap;
+    const llmX = Math.round(startX);
+    const llmY = Math.round(startY + mainHeight + this.windowGap);
     llmWindow.setPosition(llmX, llmY);
     
-    // Update stored position (use main window position as reference)
-    this.boundWindowsPosition = { x: adjustedMainX, y: startY };
+    this.userPositions['main'] = { x: mainX, y: mainY };
+    this.userPositions['llmResponse'] = { x: llmX, y: llmY };
     
-    logger.debug('Positioned bound windows at top (column layout)', {
+    logger.debug('Positioned bound windows', {
       mainPosition: `${mainX},${mainY}`,
       llmPosition: `${llmX},${llmY}`,
-      gap: this.windowGap,
-      topMargin: topMargin,
-      display: display.id
+      userMoved: this.hasUserMovedBoundWindows
     });
   }
 
@@ -811,8 +839,11 @@ class WindowManager {
     llmWindow.setPosition(newLlmX, newLlmY);
     
     // Update stored position (use main window as reference)
+    this.hasUserMovedBoundWindows = true;
     this.boundWindowsPosition.x = newMainX;
     this.boundWindowsPosition.y = newMainY;
+    this.userPositions['main'] = { x: newMainX, y: newMainY };
+    this.userPositions['llmResponse'] = { x: newLlmX, y: newLlmY };
     
     logger.debug('Moved bound windows (maintaining top preference)', {
       delta: `${deltaX},${deltaY}`,
@@ -826,18 +857,23 @@ class WindowManager {
   showOnCurrentDesktop(win) {
     if (!win || win.isDestroyed()) return;
 
-    const llmWin = this.windows.get('llmResponse');
-    const isLLM = llmWin && !llmWin.isDestroyed() && win.id === llmWin.id;
-
     if (process.platform === 'darwin') {
-      // macOS: prevent space switching and keep visibility stable
+      // macOS: prevent space switching and keep visibility stable across all desktops/fullscreens
       win.hide();
-      win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      win.setVisibleOnAllWorkspaces(true, {
+        visibleOnFullScreen: true,
+        skipTransformProcessType: true
+      });
 
       const setMacOSAlwaysOnTop = () => {
         if (win.isDestroyed()) return;
         try {
           win.setAlwaysOnTop(true, 'screen-saver', 2);
+          win.setVisibleOnAllWorkspaces(true, {
+            visibleOnFullScreen: true,
+            skipTransformProcessType: true
+          });
+          win.setContentProtection(true);
         } catch {
           try { win.setAlwaysOnTop(true, 'pop-up-menu', 2); }
           catch { try { win.setAlwaysOnTop(true, 'floating', 2); }
@@ -853,12 +889,8 @@ class WindowManager {
         win.focus();
         setMacOSAlwaysOnTop();
         setTimeout(() => { if (!win.isDestroyed()) setMacOSAlwaysOnTop(); }, 100);
-        // Keep LLM window visible across workspaces; others revert
         setTimeout(() => {
           if (win.isDestroyed()) return;
-          if (!isLLM) {
-            win.setVisibleOnAllWorkspaces(false);
-          }
           setMacOSAlwaysOnTop();
         }, 300);
       }, 50);
@@ -866,18 +898,18 @@ class WindowManager {
       // Linux/Windows
       win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
       win.setAlwaysOnTop(true);
+      try { win.setContentProtection(true); } catch (e) {}
       win.show();
       win.focus();
       setTimeout(() => {
         if (win.isDestroyed()) return;
-        if (!isLLM) {
-          win.setVisibleOnAllWorkspaces(false);
-        }
+        win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
         win.setAlwaysOnTop(true);
+        try { win.setContentProtection(true); } catch (e) {}
       }, 500);
     }
 
-    logger.debug('Showing window on current desktop with enhanced always-on-top', {
+    logger.debug('Showing window on current desktop with enhanced always-on-top and stealth protection', {
       platform: process.platform,
       windowId: win.id,
       isDestroyed: win.isDestroyed()
@@ -1133,6 +1165,118 @@ class WindowManager {
     return this.isInteractive;
   }
 
+  setAutoHideMode(enabled) {
+    this.isAutoHideMode = Boolean(enabled);
+    logger.info('WindowManager Auto-Hide mode updated', { isAutoHideMode: this.isAutoHideMode });
+    if (this.isAutoHideMode) {
+      this.startAutoHideWatcher();
+    } else {
+      this.stopAutoHideWatcher();
+    }
+  }
+
+  startAutoHideWatcher() {
+    if (this.autoHideWatcher) clearInterval(this.autoHideWatcher);
+    this.autoHideWatcher = setInterval(() => {
+      this.checkAutoHideMousePosition();
+    }, 50);
+    logger.info('Started Auto-Hide mouse position watcher');
+  }
+
+  stopAutoHideWatcher() {
+    if (this.autoHideWatcher) {
+      clearInterval(this.autoHideWatcher);
+      this.autoHideWatcher = null;
+    }
+    this.setAutoHideVisibility('visible');
+    logger.info('Stopped Auto-Hide mouse position watcher');
+  }
+
+  checkAutoHideMousePosition() {
+    if (!this.isAutoHideMode) return;
+
+    const mainWin = this.windows.get('main');
+    if (!mainWin || mainWin.isDestroyed()) return;
+
+    const point = screen.getCursorScreenPoint();
+    const barBounds = mainWin.getBounds();
+    const padding = 15; // 15px safety padding around bounds
+
+    const isCursorInBar = (
+      point.x >= barBounds.x - padding &&
+      point.x <= barBounds.x + barBounds.width + padding &&
+      point.y >= barBounds.y - padding &&
+      point.y <= barBounds.y + barBounds.height + padding
+    );
+
+    if (this.autoHideState === 'visible') {
+      // Currently visible: stay visible if cursor is touching bar OR any open child window
+      let isCursorInAnyActiveArea = isCursorInBar;
+
+      if (!isCursorInAnyActiveArea) {
+        this.windows.forEach((win, type) => {
+          if (type !== 'main' && !win.isDestroyed() && win.isVisible()) {
+            const b = win.getBounds();
+            if (
+              point.x >= b.x - padding &&
+              point.x <= b.x + b.width + padding &&
+              point.y >= b.y - padding &&
+              point.y <= b.y + b.height + padding
+            ) {
+              isCursorInAnyActiveArea = true;
+            }
+          }
+        });
+      }
+
+      // If cursor left both bar and open windows, hide!
+      if (!isCursorInAnyActiveArea) {
+        this.setAutoHideVisibility('hidden');
+      }
+    } else {
+      // Currently hidden: ONLY moving cursor into BAR position reveals them again!
+      if (isCursorInBar) {
+        this.setAutoHideVisibility('visible');
+      }
+    }
+  }
+
+  setAutoHideVisibility(state) {
+    if (this.autoHideState === state) return;
+    this.autoHideState = state;
+    logger.info('Auto-Hide visibility changed', { state });
+
+    if (state === 'hidden') {
+      // Completely hide bar & open windows at 0% opacity and ignore mouse events
+      this.windows.forEach((win, type) => {
+        if (!win.isDestroyed()) {
+          try {
+            win.setOpacity(0);
+            win.setIgnoreMouseEvents(true, { forward: true });
+          } catch (e) {
+            logger.debug('Error setting hidden opacity', { type, error: e.message });
+          }
+        }
+      });
+    } else {
+      // Restore visibility to 100% and restore interactive state
+      this.windows.forEach((win, type) => {
+        if (!win.isDestroyed()) {
+          try {
+            win.setOpacity(1);
+            if (this.isInteractive) {
+              win.setIgnoreMouseEvents(false);
+            }
+          } catch (e) {
+            logger.debug('Error restoring opacity', { type, error: e.message });
+          }
+        }
+      });
+    }
+
+    this.broadcastToAllWindows('autohide-state-changed', { state });
+  }
+
   // New method to enforce always-on-top for all windows
   enforceAlwaysOnTopForAllWindows() {
     this.windows.forEach((window, type) => {
@@ -1350,6 +1494,42 @@ class WindowManager {
     }
   }
 
+  closeSettings() {
+    const settingsWindow = this.windows.get('settings');
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.close();
+    }
+  }
+
+  async showClipboardWindow() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('toggle-clipboard-popover');
+    }
+  }
+
+  hideClipboardWindow() {
+    const win = this.windows.get('clipboard');
+    if (win) win.hide();
+  }
+
+  async showTargetBox() {
+    if (this.isScreenBeingShared) return;
+    const win = await this.createTargetBoxWindow();
+    if (win) {
+      this.showOnCurrentDesktop(win);
+      if (!this.userPositions['targetBox']) {
+        this.centerWindow(win);
+      } else {
+        win.setPosition(this.userPositions['targetBox'].x, this.userPositions['targetBox'].y);
+      }
+    }
+  }
+
+  hideTargetBox() {
+    const win = this.windows.get('targetBox');
+    if (win) win.hide();
+  }
+
   hideSettings() {
     const settingsWindow = this.windows.get('settings');
     if (settingsWindow) {
@@ -1442,22 +1622,34 @@ class WindowManager {
   }
 
   centerWindow(window) {
+    if (!window || window.isDestroyed()) return;
+    
+    // Find window type
+    let windowType = null;
+    this.windows.forEach((w, type) => {
+      if (w === window) windowType = type;
+    });
+    
+    // Preserve user's last placed position if set
+    if (windowType && this.userPositions[windowType]) {
+      const pos = this.userPositions[windowType];
+      window.setPosition(Math.round(pos.x), Math.round(pos.y));
+      return;
+    }
+
     const display = this.currentDisplay || screen.getPrimaryDisplay();
     const { x: displayX, y: displayY, width: screenWidth, height: screenHeight } = display.workArea || display.workAreaSize;
     const [windowWidth, windowHeight] = window.getSize();
     
-    // Center horizontally but position at top
+    // Center horizontally but position at top margin by default
     const topMargin = 20;
     const x = displayX + Math.round((screenWidth - windowWidth) / 2);
     const y = displayY + topMargin;
     
     window.setPosition(x, y);
-    
-    logger.debug('Positioned window at top-center', {
-      position: `${x},${y}`,
-      topMargin,
-      display: display.id || 'primary'
-    });
+    if (windowType) {
+      this.userPositions[windowType] = { x, y };
+    }
   }
 
   broadcastToAllWindows(channel, data) {
@@ -1631,34 +1823,37 @@ class WindowManager {
         const [windowWidth, windowHeight] = window.getSize();
         
         let newX, newY;
-        
-        // All windows positioned at top of screen
         const topMargin = 20;
         
-        switch (type) {
-          case 'main':
-            newX = displayX + 50;
-            newY = displayY + topMargin;
-            break;
-          case 'chat':
-            newX = displayX + displayWidth - windowWidth - 50;
-            newY = displayY + topMargin;
-            break;
-          case 'skills':
-            newX = displayX + 50;
-            newY = displayY + topMargin + 100; // Slightly lower to avoid overlap
-            break;
-          case 'llmResponse':
-            newX = displayX + (displayWidth - windowWidth) / 2;
-            newY = displayY + topMargin;
-            break;
-          case 'settings':
-            newX = displayX + (displayWidth - windowWidth) / 2;
-            newY = displayY + topMargin;
-            break;
-          default:
-            newX = displayX + 100;
-            newY = displayY + topMargin;
+        if (this.userPositions[type]) {
+          newX = this.userPositions[type].x;
+          newY = this.userPositions[type].y;
+        } else {
+          switch (type) {
+            case 'main':
+              newX = displayX + 50;
+              newY = displayY + topMargin;
+              break;
+            case 'chat':
+              newX = displayX + displayWidth - windowWidth - 50;
+              newY = displayY + topMargin;
+              break;
+            case 'skills':
+              newX = displayX + 50;
+              newY = displayY + topMargin + 100;
+              break;
+            case 'llmResponse':
+              newX = displayX + (displayWidth - windowWidth) / 2;
+              newY = displayY + topMargin;
+              break;
+            case 'settings':
+              newX = displayX + (displayWidth - windowWidth) / 2;
+              newY = displayY + topMargin;
+              break;
+            default:
+              newX = displayX + 100;
+              newY = displayY + topMargin;
+          }
         }
         
         window.setPosition(Math.round(newX), Math.round(newY));

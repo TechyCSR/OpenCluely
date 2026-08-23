@@ -21,35 +21,29 @@
       .chat-container {
         width: 100%;
         height: 100vh;
-        background: linear-gradient(
-          135deg,
-          rgba(0, 0, 0, 0.3) 0%,
-          rgba(20, 20, 20, 0.4) 100%
-        );
-        backdrop-filter: blur(25px);
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.45) 0%, rgba(20, 20, 20, 0.6) 100%);
+        backdrop-filter: blur(20px);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
         display: flex;
         flex-direction: column;
         -webkit-app-region: drag;
       }
       .chat-header {
-        padding: 16px 20px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         display: flex;
         align-items: center;
         justify-content: space-between;
         -webkit-app-region: drag;
-        background: rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(10px);
         cursor: move;
         flex-shrink: 0;
       }
       .header-title {
-        color: rgba(255, 255, 255, 0.95);
-        font-size: 14px;
-        font-weight: 600;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 12px;
+        font-weight: normal;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -63,9 +57,9 @@
         gap: 8px;
       }
       .icon-button {
-        background: rgba(255, 255, 255, 0.12);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        color: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.6);
         border-radius: 6px;
         padding: 6px 10px;
         cursor: pointer;
@@ -76,13 +70,12 @@
         color: #fff;
       }
       .recording-indicator {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
-        background: #ff4757;
+        background: #ef4444;
         animation: pulse 2s infinite;
         display: none;
-        box-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
       }
       @keyframes pulse {
         0% {
@@ -120,7 +113,7 @@
         position: relative;
       }
       .message.transcription {
-        background: rgba(76, 175, 80, 0.15);
+        background: rgba(255, 255, 255, 0.03);
         animation: fadeInSlide 0.1s ease-out;
         position: relative;
       }
@@ -130,7 +123,7 @@
         left: -8px;
         top: 8px;
         font-size: 12px;
-        color: white;
+        color: rgba(255, 255, 255, 0.5);
         width: 20px;
         height: 20px;
         border-radius: 50%;
@@ -143,26 +136,25 @@
         from {
           opacity: 0;
           transform: translateX(-20px);
-          background: rgba(76, 175, 80, 0.3);
         }
         to {
           opacity: 1;
           transform: translateX(0);
-          background: rgba(76, 175, 80, 0.15);
         }
       }
       .message.system {
-        background: rgba(33, 150, 243, 0.1);
+        background: rgba(255, 255, 255, 0.02);
       }
       .message.error {
-        background: rgba(244, 67, 54, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+        border-left: 3px solid rgba(239, 68, 68, 0.5);
       }
       .message.user {
-        background: rgba(255, 152, 0, 0.1);
+        background: rgba(255, 255, 255, 0.04);
       }
       .message.assistant {
-        background: rgba(156, 39, 176, 0.1);
-        border-left: 3px solid #9c27b0;
+        background: rgba(255, 255, 255, 0.05);
+        border-left: 3px solid rgba(255, 255, 255, 0.3);
         /* Removed all height restrictions and overflow hidden */
         display: block;
       }
@@ -684,6 +676,9 @@
         <div class="header-actions">
           <button class="icon-button" id="clearHistoryBtn" title="Clear chat history">
             <i class="fas fa-trash"></i>
+          </button>
+          <button class="icon-button" id="closeChatBtn" title="Close Chat">
+            <i class="fas fa-times"></i>
           </button>
         </div>
       </div>
@@ -1212,7 +1207,22 @@
 
       // UI Event Listeners
       if (clearHistoryBtn) {
-        clearHistoryBtn.addEventListener('click', () => clearChatHistory());
+        clearHistoryBtn.addEventListener('click', () => {
+          chatMessages.innerHTML = '';
+          chatHistory = [];
+          if (whysperAPI && whysperAPI.clearSessionMemory) {
+            whysperAPI.clearSessionMemory();
+          }
+        });
+      }
+      
+      const closeChatBtn = document.getElementById('closeChatBtn');
+      if (closeChatBtn) {
+        closeChatBtn.addEventListener('click', () => {
+          if (whysperAPI && whysperAPI.hideChatWindow) {
+            whysperAPI.hideChatWindow();
+          }
+        });
       }
 
       if (micButton) {
@@ -1314,6 +1324,12 @@
       // Initialize
       if (!chatHistory || chatHistory.length === 0) {
         addMessage('Recording in Progress. press Alt+R to stop recording.', 'system');
+      }
+
+      if (window.electronAPI && window.electronAPI.onOpacityUpdate) {
+        window.electronAPI.onOpacityUpdate((event, opacity) => {
+          document.body.style.opacity = opacity;
+        });
       }
     </script>
   </body>

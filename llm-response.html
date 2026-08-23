@@ -7,21 +7,26 @@
     <script src="lib/markdown.js"></script>
     <script src="lib/mathrender.js"></script>
     <style>
-        .text-white { color: white; }
-        .text-gray-300 { color: #d1d5db; }
-        .text-sm { font-size: 0.875rem; }
-        .font-medium { font-weight: 500; }
+        .text-white { color: rgba(255,255,255,0.9); }
+        .text-gray-300 { color: rgba(255,255,255,0.6); }
+        .text-sm { font-size: 12px; }
+        .font-medium { font-weight: normal; }
         .mr-2 { margin-right: 0.5rem; }
 
         body {
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(20, 20, 20, 0.5) 100%);;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.45) 0%, rgba(20, 20, 20, 0.6) 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
             -webkit-app-region: no-drag;
-            color: white;
+            color: rgba(255, 255, 255, 0.9);
             margin: 0;
             padding: 0;
             overflow: hidden;
             height: 100vh;
             width: 100vw;
+            box-sizing: border-box;
+            font-size: 12px;
         }
         .content-area {
             -webkit-app-region: no-drag;
@@ -223,7 +228,7 @@
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background-color: #4CAF50;
+            background-color: rgba(255, 255, 255, 0.6);
             animation: bounce 1.4s infinite ease-in-out;
         }
         
@@ -341,11 +346,10 @@
             justify-content: space-between;
             padding: 0 10px;
             box-sizing: border-box;
-            background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
             z-index: 50;
-            color: #e5e7eb;
+            color: rgba(255, 255, 255, 0.8);
             font-size: 12px;
             letter-spacing: 0.3px;
         }
@@ -1036,6 +1040,12 @@
                 });
             }
         })();
+
+        if (window.electronAPI && window.electronAPI.onOpacityUpdate) {
+            window.electronAPI.onOpacityUpdate((event, opacity) => {
+                document.body.style.opacity = opacity;
+            });
+        }
     </script>
 </body>
 </html>
