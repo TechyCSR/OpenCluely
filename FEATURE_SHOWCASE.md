@@ -343,6 +343,25 @@ applyStealthMeasures(window, type) {
 
 ---
 
+### 6. UX & Stability Bug Fixes
+
+#### Feature Overview
+* Resolves critical UI rendering and window state lifecycle bugs reported during screen sharing and deep work sessions.
+
+#### Problem Solved
+* The main window would snap to the bottom center unexpectedly.
+* Popovers were clipped because the Electron window bounds didn't expand.
+* Mic toggle did not clean up UI windows gracefully.
+* UI icons rendered as broken horizontal lines.
+
+#### Low-Level Implementation Specs
+* **Dynamic Popover Resizing**: Implemented `resizeWindowToContent()` in `main-window.js` to dynamically compute the total bounding box of the main toolbar *plus* any open popovers, resizing the Electron window seamlessly to prevent clipping.
+* **Window Position Persistence**: Caches the user's manual drag coordinates (`window.getPosition()`) and restores the exact placement on screen instead of defaulting to center-bottom.
+* **Smart Mic Toggle Lifecycle**: Turning off the microphone now issues an IPC command to gracefully hide the transcription and chat overlays *without* wiping session history data.
+* **Restored SVG Iconography**: Replaced broken text-based icons with optimized inline SVG nodes for the Mic, Hide, Target Box, and Clipboard buttons, ensuring crisp rendering across all displays.
+
+---
+
 ## 📊 Before vs. After System Comparison
 
 | Feature Area | Legacy Architecture | Enhanced Architecture |
