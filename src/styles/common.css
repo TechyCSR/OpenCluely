@@ -3,6 +3,10 @@
 /* Font imports */
 @import url('../../node_modules/@fortawesome/fontawesome-free/css/all.min.css');
 
+*, *::before, *::after, html, body {
+    cursor: default !important;
+}
+
 /* Base styles */
 body {
     background: transparent !important;
@@ -10,7 +14,7 @@ body {
     padding: 0;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    cursor: default;
+    cursor: default !important;
 }
 
 /* Common container styles */

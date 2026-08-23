@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Clipboard History</title>
+  <link href="./dist/output.css" rel="stylesheet">
+  <link href="./src/styles/common.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(135deg, rgba(0, 0, 0, 0.45) 0%, rgba(20, 20, 20, 0.6) 100%) !important;
+      backdrop-filter: blur(20px);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 0.9);
+      margin: 0;
+      padding: 0;
+      overflow-y: auto;
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      font-size: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    .header {
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      -webkit-app-region: drag;
+    }
+    
+    .title {
+      font-size: 12px;
+      font-weight: normal;
+      color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .close-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.6);
+      cursor: pointer !important;
+      font-size: 1rem;
+      -webkit-app-region: no-drag;
+      transition: all 0.2s ease;
+    }
+    
+    .close-btn:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    
+    .content {
+      padding: 16px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    
+    .session-block {
+      margin-bottom: 24px;
+    }
+    
+    .session-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 8px;
+    }
+    
+    .session-title {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+    
+    .copy-all-btn {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer !important;
+      transition: background 0.2s;
+    }
+    
+    .copy-all-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+    
+    .clip-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      position: relative;
+    }
+    
+    .clip-text {
+      font-family: inherit;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      color: rgba(255, 255, 255, 0.8);
+      max-height: 100px;
+      overflow-y: auto;
+      margin-bottom: 8px;
+    }
+    
+    .clip-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+    
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer !important;
+      transition: all 0.2s;
+    }
+    
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+    
+    .empty-state {
+      text-align: center;
+      color: #6b7280;
+      padding: 40px;
+      font-style: italic;
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title"><i class="fas fa-clipboard-list"></i> Clipboard History</div>
+    <button class="close-btn" id="closeBtn"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="content" id="historyContainer">
+    <!-- Populated dynamically -->
+  </div>
+
+  <script src="./src/ui/clipboard.js"></script>
+</body>
+</html>

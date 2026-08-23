@@ -11,9 +11,15 @@ class MainWindowUI {
         this.isInteractive = false;
         this.isHidden = false;
         this.currentSkill = 'dsa'; // Default, will be updated from settings
+        this.isMcqMode = false;
+        this.isTyping = false;
         this.statusDot = null;
         this.skillIndicator = null;
         this.micButton = null;
+        this.mcqToggle = null;
+        this.autoHideToggle = null;
+        this.autoTypeButton = null;
+        this.isAutoHideMode = false;
         this.isRecording = false;
         this.speechAvailable = false; // track availability
         this._popoverHideTimeout = null;
@@ -45,6 +51,12 @@ class MainWindowUI {
             // Fetch speech availability
             await this.loadSpeechAvailability();
             
+            // Load MCQ mode state
+            await this.loadMcqMode();
+            
+            // Load Auto-Hide mode state
+            await this.loadAutoHideMode();
+            
             this.updateSkillIndicator();
             this.updateAllElementStates(); // Update all elements with current state
             this.resizeWindowToContent();
@@ -52,7 +64,8 @@ class MainWindowUI {
             logger.info('Main window UI initialized', {
                 component: 'MainWindowUI',
                 skill: this.currentSkill,
-                interactive: this.isInteractive
+                interactive: this.isInteractive,
+                isMcqMode: this.isMcqMode
             });
 
             // Notify the main process that the overlay renderer is ready
@@ -124,6 +137,30 @@ class MainWindowUI {
         }
     }
 
+    async loadMcqMode() {
+        try {
+            if (window.electronAPI && window.electronAPI.getMcqMode) {
+                const res = await window.electronAPI.getMcqMode();
+                this.isMcqMode = !!(res && res.isMcqMode);
+                this.updateMcqToggleState();
+            }
+        } catch (e) {
+            logger.warn('Failed to load MCQ mode state', { error: e.message });
+        }
+    }
+
+    async loadAutoHideMode() {
+        try {
+            if (window.electronAPI && window.electronAPI.getAutoHideMode) {
+                const res = await window.electronAPI.getAutoHideMode();
+                this.isAutoHideMode = !!(res && res.isAutoHideMode);
+                this.updateAutoHideToggleState();
+            }
+        } catch (e) {
+            logger.warn('Failed to load Auto-Hide mode state', { error: e.message });
+        }
+    }
+
     applyMicVisibility() {
         if (this.micButton) {
             if (this.speechAvailable) {
@@ -141,6 +178,9 @@ class MainWindowUI {
         this.updateStatusDot();
         this.updateSkillIndicatorState();
         this.updateMicButtonState();
+        this.updateMcqToggleState();
+        this.updateAutoHideToggleState();
+        this.updateAutoTypeState();
         this.updateSettingsIndicatorState();
     }
 
@@ -238,20 +278,117 @@ class MainWindowUI {
         }
     }
 
+    updateMcqToggleState() {
+        if (!this.mcqToggle) return;
+        if (this.isMcqMode) {
+            this.mcqToggle.classList.add('mcq-active');
+            this.mcqToggle.title = 'MCQ Mode ON (⌥M to toggle)';
+        } else {
+            this.mcqToggle.classList.remove('mcq-active');
+            this.mcqToggle.title = 'MCQ Mode OFF (⌥M to toggle)';
+        }
+        this.resizeWindowToContent();
+    }
+
+    updateAutoHideToggleState() {
+        if (!this.autoHideToggle) return;
+        if (this.isAutoHideMode) {
+            this.autoHideToggle.classList.add('autohide-active');
+            this.autoHideToggle.title = 'Auto-Hide ON (⌥H to toggle)';
+        } else {
+            this.autoHideToggle.classList.remove('autohide-active');
+            this.autoHideToggle.title = 'Auto-Hide OFF (⌥H to toggle)';
+        }
+        this.resizeWindowToContent();
+    }
+
+    updateAutoTypeState() {
+        if (!this.autoTypeButton) return;
+        if (this.isTyping) {
+            this.autoTypeButton.classList.add('typing-active');
+            this.autoTypeButton.title = 'Typing clipboard content... (Click or press ⌥V to stop)';
+        } else {
+            this.autoTypeButton.classList.remove('typing-active');
+            this.autoTypeButton.title = 'Smart Auto-Type Clipboard (90-120 WPM) (⌥V / Alt+V)';
+            if (this.autoTypeProgressFill) {
+                this.autoTypeProgressFill.style.width = '0%';
+            }
+            if (this.autoTypeLabel && !this._showingDoneStatus) {
+                this.autoTypeLabel.textContent = 'Type ⌥V';
+            }
+            this._lastAutoTypeData = null;
+        }
+        this.resizeWindowToContent();
+    }
+
+    handleAutoTypeProgress(data) {
+        this.isTyping = true;
+        this._lastAutoTypeData = data;
+        if (this.autoTypeButton && !this.autoTypeButton.classList.contains('typing-active')) {
+            this.autoTypeButton.classList.add('typing-active');
+            this.autoTypeButton.title = 'Typing clipboard content... (Click or press ⌥V to stop)';
+        }
+
+        const percent = data.percent !== undefined ? data.percent : (data.total ? Math.round((data.index / data.total) * 100) : 0);
+        const etaText = data.eta_text || (data.eta_seconds !== undefined ? `${data.eta_seconds}s` : '');
+
+        if (this.autoTypeLabel) {
+            if (etaText && etaText !== '0s') {
+                this.autoTypeLabel.textContent = `${percent}% · ${etaText}`;
+            } else {
+                this.autoTypeLabel.textContent = `${percent}%`;
+            }
+        }
+
+        if (this.autoTypeProgressFill) {
+            this.autoTypeProgressFill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+        }
+
+        this.resizeWindowToContent();
+    }
+
+    handleAutoTypeCompleted(data) {
+        this.isTyping = false;
+        this._showingDoneStatus = true;
+        if (this.autoTypeProgressFill) {
+            this.autoTypeProgressFill.style.width = '100%';
+        }
+        if (this.autoTypeLabel) {
+            this.autoTypeLabel.textContent = '✓ Done';
+        }
+        this.updateAutoTypeState();
+
+        setTimeout(() => {
+            this._showingDoneStatus = false;
+            if (!this.isTyping && this.autoTypeLabel) {
+                this.autoTypeLabel.textContent = 'Type ⌥V';
+            }
+            this.updateAutoTypeState();
+        }, 1800);
+    }
+
     resizeWindowToContent() {
         // Wait for DOM to fully render
         setTimeout(() => {
             const commandTab = document.querySelector('.command-tab');
             if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
                 const rect = commandTab.getBoundingClientRect();
-                const width = Math.ceil(rect.width);
-                let height = Math.ceil(rect.height);
+                const scrollWidth = commandTab.scrollWidth || rect.width;
+                let width = Math.ceil(Math.max(rect.width, scrollWidth)) + 4;
+                let height = Math.ceil(rect.height) + 2;
 
-                // If shortcuts popover is visible, extend height to fit it
+                // If shortcuts popover is visible, extend height and width to fit it
                 if (this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
                     const popRect = this.shortcutsPopover.getBoundingClientRect();
-                    // popover is positioned below the bar (top:36px), add that plus its height and a small margin
-                    height = Math.max(height, Math.ceil(36 + popRect.height + 8));
+                    height = Math.max(height, Math.ceil(36 + popRect.height + 12));
+                    width = Math.max(width, Math.ceil(popRect.right + 12));
+                }
+
+                // If clipboard popover is visible, extend height and width to fit it
+                if (this.clipboardPopover && this.clipboardPopover.classList.contains('is-open')) {
+                    const popRect = this.clipboardPopover.getBoundingClientRect();
+                    height = Math.max(height, Math.ceil(36 + popRect.height + 12));
+                    width = Math.max(width, Math.ceil(popRect.right + 12));
                 }
                 
                 logger.debug('Resizing window to content', {
@@ -262,7 +399,7 @@ class MainWindowUI {
                 
                 window.electronAPI.resizeWindow(width, height);
             }
-        }, 100);
+        }, 60);
     }
 
     setupElements() {
@@ -270,14 +407,20 @@ class MainWindowUI {
         this.skillIndicator = document.getElementById('skillIndicator');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
-    this.infoButton = document.getElementById('infoButton');
-    this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.infoButton = document.getElementById('infoButton');
+        this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.screenshotButton = document.getElementById('screenshotButton') || document.querySelector('.command-item');
+        this.mcqToggle = document.getElementById('mcqToggle');
+        this.autoHideToggle = document.getElementById('autoHideToggle');
+        this.autoTypeButton = document.getElementById('autoTypeButton');
+        this.autoTypeLabel = document.getElementById('autoTypeLabel');
+        this.autoTypeProgressFill = document.getElementById('autoTypeProgressFill');
+        this.opacitySlider = document.getElementById('opacitySlider');
+        this.targetModeBtn = document.getElementById('targetModeBtn');
+        this.clipboardHistoryBtn = document.getElementById('clipboardHistoryBtn');
+        this.clipboardPopover = document.getElementById('clipboardPopover');
 
-        // NEW: Screenshot button is the first .command-item without id
-        const commandItems = document.querySelectorAll('.command-item');
-        this.screenshotButton = commandItems && commandItems[0];
-
-    if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
+        if (!this.skillIndicator || !this.micButton || !this.screenshotButton) {
             throw new Error('Required UI elements not found');
         }
 
@@ -287,6 +430,95 @@ class MainWindowUI {
                 window.electronAPI.takeScreenshot();
             }
         });
+
+        if (this.targetModeBtn) {
+            this.targetModeBtn.addEventListener('click', () => {
+                if (this.isInteractive && window.electronAPI && window.electronAPI.showTargetBox) {
+                    window.electronAPI.showTargetBox();
+                }
+            });
+        }
+
+        if (this.clipboardHistoryBtn) {
+            this.clipboardHistoryBtn.addEventListener('click', (e) => {
+                if (!this.isInteractive) return;
+                e.stopPropagation();
+                this.toggleClipboardPopover();
+            });
+        }
+
+        const closeClipboardBtn = document.getElementById('closeClipboardPopoverBtn');
+        if (closeClipboardBtn) {
+            closeClipboardBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.hideClipboardPopover();
+            });
+        }
+
+        // MCQ toggle click handler
+        if (this.mcqToggle) {
+            this.mcqToggle.addEventListener('click', async () => {
+                if (!this.isInteractive) return;
+                if (window.electronAPI && window.electronAPI.toggleMcqMode) {
+                    try {
+                        const res = await window.electronAPI.toggleMcqMode();
+                        this.isMcqMode = res ? res.isMcqMode : !this.isMcqMode;
+                        this.updateMcqToggleState();
+                    } catch (e) {
+                        logger.error('Failed to toggle MCQ mode', e);
+                    }
+                }
+            });
+        }
+
+        // Auto-Hide toggle click handler
+        if (this.autoHideToggle) {
+            this.autoHideToggle.addEventListener('click', async () => {
+                if (!this.isInteractive) return;
+                if (window.electronAPI && window.electronAPI.toggleAutoHideMode) {
+                    try {
+                        const res = await window.electronAPI.toggleAutoHideMode();
+                        this.isAutoHideMode = res ? res.isAutoHideMode : !this.isAutoHideMode;
+                        this.updateAutoHideToggleState();
+                    } catch (e) {
+                        logger.error('Failed to toggle Auto-Hide mode', e);
+                    }
+                }
+            });
+        }
+
+        // Auto-type clipboard click handler
+        if (this.autoTypeButton) {
+            this.autoTypeButton.addEventListener('click', async () => {
+                if (!this.isInteractive) return;
+                if (window.electronAPI && window.electronAPI.typeClipboard) {
+                    try {
+                        await window.electronAPI.typeClipboard();
+                    } catch (e) {
+                        logger.error('Failed to trigger auto-type', e);
+                    }
+                }
+            });
+        }
+
+        // Opacity / Transparency slider handler
+        if (this.opacitySlider) {
+            // Apply initial opacity (default is max transparency = 15%)
+            let val = parseInt(this.opacitySlider.value, 10);
+            let opacity = Math.max(0.005, Math.pow(val / 100, 2));
+            document.body.style.opacity = opacity.toString();
+
+            this.opacitySlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value, 10);
+                const opacity = Math.max(0.005, Math.pow(val / 100, 2));
+                document.body.style.opacity = opacity.toString();
+                if (window.electronAPI && window.electronAPI.setOpacity) {
+                    window.electronAPI.setOpacity(opacity);
+                }
+            });
+            // Prevent drag region from stealing the slider interaction
+            this.opacitySlider.addEventListener('mousedown', (e) => e.stopPropagation());
+        }
 
         // Skill indicator click handler toggles DSA skill
         this.skillIndicator.addEventListener('click', () => {
@@ -363,17 +595,11 @@ class MainWindowUI {
                     window.electronAPI.saveSettings({ codingLanguage: lang });
                 }
                 // Resize for any width change
-                setTimeout(() => {
-                    const commandTab = document.querySelector('.command-tab');
-                    if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
-                        const rect = commandTab.getBoundingClientRect();
-                        window.electronAPI.resizeWindow(Math.ceil(rect.width), Math.ceil(rect.height));
-                    }
-                }, 50);
+                this.resizeWindowToContent();
             });
         }
 
-        // Info button / shortcuts popover
+        // Info button / shortcuts popover (Click only, no hover)
         if (this.infoButton && this.shortcutsPopover) {
             this.infoButton.addEventListener('click', (e) => {
                 if (!this.isInteractive) return;
@@ -381,37 +607,31 @@ class MainWindowUI {
                 this.toggleShortcutsPopover();
             });
 
-            // Hover to show
-            this.infoButton.addEventListener('mouseenter', () => {
-                if (!this.isInteractive) return;
-                this.showShortcutsPopover();
-            });
-            // Queue hide when leaving the button
-            this.infoButton.addEventListener('mouseleave', () => this.queueHideShortcutsPopover());
-
-            // Keep open when hovering popover
-            this.shortcutsPopover.addEventListener('mouseenter', () => {
-                if (this._popoverHideTimeout) {
-                    clearTimeout(this._popoverHideTimeout);
-                    this._popoverHideTimeout = null;
-                }
-            });
-            // Hide after a small delay when leaving popover
-            this.shortcutsPopover.addEventListener('mouseleave', () => this.queueHideShortcutsPopover());
-
             // Close on outside click
             document.addEventListener('click', (e) => {
-                if (!this.shortcutsPopover) return;
-                const isClickInside = this.shortcutsPopover.contains(e.target) || this.infoButton.contains(e.target);
-                if (!isClickInside && this.shortcutsPopover.classList.contains('is-open')) {
-                    this.hideShortcutsPopover();
+                if (this.shortcutsPopover) {
+                    const isClickInsideShortcuts = this.shortcutsPopover.contains(e.target) || (this.infoButton && this.infoButton.contains(e.target));
+                    if (!isClickInsideShortcuts && this.shortcutsPopover.classList.contains('is-open')) {
+                        this.hideShortcutsPopover();
+                    }
+                }
+                if (this.clipboardPopover) {
+                    const isClickInsideClipboard = this.clipboardPopover.contains(e.target) || (this.clipboardHistoryBtn && this.clipboardHistoryBtn.contains(e.target));
+                    if (!isClickInsideClipboard && this.clipboardPopover.classList.contains('is-open')) {
+                        this.hideClipboardPopover();
+                    }
                 }
             });
 
             // Close on Escape
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
-                    this.hideShortcutsPopover();
+                if (e.key === 'Escape') {
+                    if (this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
+                        this.hideShortcutsPopover();
+                    }
+                    if (this.clipboardPopover && this.clipboardPopover.classList.contains('is-open')) {
+                        this.hideClipboardPopover();
+                    }
                 }
             });
         }
@@ -419,6 +639,16 @@ class MainWindowUI {
 
     setupEventListeners() {
         if (window.electronAPI) {
+            if (window.electronAPI.onOpacityUpdate) {
+                window.electronAPI.onOpacityUpdate((event, opacity) => {
+                    document.body.style.opacity = opacity.toString();
+                });
+            }
+            if (window.electronAPI.onToggleClipboardPopover) {
+                window.electronAPI.onToggleClipboardPopover(() => {
+                    this.toggleClipboardPopover();
+                });
+            }
             // Fix interaction mode change listener
             window.electronAPI.onInteractionModeChanged((event, interactive) => {
                 logger.debug('Interaction mode changed received:', interactive);
@@ -465,16 +695,70 @@ class MainWindowUI {
                 });
                 this.loadSpeechAvailability();
             });
+
+            // Listen for MCQ Mode changes
+            window.electronAPI.onMcqModeChanged((event, data) => {
+                if (data && typeof data.isMcqMode === 'boolean') {
+                    this.isMcqMode = data.isMcqMode;
+                    this.updateMcqToggleState();
+                }
+            });
+
+            // Listen for Auto-Hide Mode changes
+            window.electronAPI.onAutoHideModeChanged((event, data) => {
+                if (data && typeof data.isAutoHideMode === 'boolean') {
+                    this.isAutoHideMode = data.isAutoHideMode;
+                    this.updateAutoHideToggleState();
+                }
+            });
+
+            // Listen for Auto-Type events
+            window.electronAPI.onAutotypeStarted((event, data) => {
+                this.isTyping = true;
+                if (this.autoTypeLabel) {
+                    const etaText = data && data.eta_text ? ` · ${data.eta_text}` : '';
+                    this.autoTypeLabel.textContent = `0%${etaText}`;
+                }
+                this.updateAutoTypeState();
+                logger.info('Auto-type started in UI', data);
+            });
+
+            window.electronAPI.onAutotypeProgress((event, data) => {
+                this.handleAutoTypeProgress(data);
+            });
+
+            window.electronAPI.onAutotypeCompleted((event, data) => {
+                this.handleAutoTypeCompleted(data);
+                logger.info('Auto-type completed in UI', data);
+            });
+
+            window.electronAPI.onAutotypeStopped((event, data) => {
+                this.isTyping = false;
+                this.updateAutoTypeState();
+                logger.info('Auto-type stopped in UI', data);
+            });
             
             // Global keyboard shortcuts
             document.addEventListener('keydown', (e) => {
-                if (e.altKey && e.key === 'r' && this.isInteractive) {
+                if (e.altKey && (e.key === 'r' || e.key === '®') && this.isInteractive) {
                     e.preventDefault();
                     if (!this.speechAvailable) return; // guard when unavailable
                     if (this.isRecording) {
                         window.electronAPI.stopSpeechRecognition();
                     } else {
                         window.electronAPI.startSpeechRecognition();
+                    }
+                }
+                if (e.altKey && (e.key === 'v' || e.key === '√') && this.isInteractive) {
+                    e.preventDefault();
+                    if (window.electronAPI && window.electronAPI.typeClipboard) {
+                        window.electronAPI.typeClipboard();
+                    }
+                }
+                if (e.altKey && (e.key === 'm' || e.key === 'µ') && this.isInteractive) {
+                    e.preventDefault();
+                    if (window.electronAPI && window.electronAPI.toggleMcqMode) {
+                        window.electronAPI.toggleMcqMode();
                     }
                 }
             });
@@ -978,23 +1262,8 @@ class MainWindowUI {
     }
 
     showNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `fixed top-4 right-4 p-4 rounded-lg text-white z-50 ${
-            type === 'error' ? 'bg-red-600' : 
-            type === 'success' ? 'bg-green-600' :
-            'bg-blue-600'
-        }`;
-        notification.textContent = message;
-        
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 5000);
-        
-        logger.debug('Notification shown', {
+        // Disabled: do not display any text popups or text alert banners on screen
+        logger.debug('Notification (suppressed)', {
             component: 'MainWindowUI',
             message,
             type
@@ -1261,6 +1530,114 @@ class MainWindowUI {
         if (!this.shortcutsPopover) return;
         if (this._popoverHideTimeout) clearTimeout(this._popoverHideTimeout);
         this._popoverHideTimeout = setTimeout(() => this.hideShortcutsPopover(), 180);
+    }
+
+    toggleClipboardPopover() {
+        if (!this.clipboardPopover) return;
+        const isOpen = this.clipboardPopover.classList.contains('is-open');
+        if (isOpen) {
+            this.hideClipboardPopover();
+        } else {
+            this.showClipboardPopover();
+        }
+    }
+
+    async showClipboardPopover() {
+        if (!this.clipboardPopover) return;
+        this.hideShortcutsPopover();
+        this.clipboardPopover.classList.add('is-open');
+        await this.loadAndRenderClipboardPopover();
+        this.resizeWindowToContent();
+        setTimeout(() => this.resizeWindowToContent(), 100);
+    }
+
+    hideClipboardPopover() {
+        if (!this.clipboardPopover) return;
+        this.clipboardPopover.classList.remove('is-open');
+        setTimeout(() => this.resizeWindowToContent(), 130);
+    }
+
+    async loadAndRenderClipboardPopover() {
+        const contentContainer = document.getElementById('clipboardPopoverContent');
+        if (!contentContainer) return;
+        try {
+            if (!window.electronAPI || !window.electronAPI.getClipboardHistory) return;
+            const history = await window.electronAPI.getClipboardHistory();
+            contentContainer.innerHTML = '';
+            const sessions = Object.keys(history || {}).sort().reverse();
+            if (sessions.length === 0) {
+                contentContainer.innerHTML = `<div style="text-align: center; color: rgba(255,255,255,0.5); padding: 20px 0; font-size: 11px;">No items in clipboard history</div>`;
+                return;
+            }
+            sessions.forEach(sessionKey => {
+                const items = history[sessionKey];
+                if (!items || items.length === 0) return;
+                const date = new Date(sessionKey);
+                const title = `Session: ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+
+                const block = document.createElement('div');
+                block.className = 'clipboard-session-block';
+
+                const header = document.createElement('div');
+                header.className = 'clipboard-session-header';
+                header.innerHTML = `
+                    <div class="clipboard-session-title">${title} (${items.length})</div>
+                    <button class="clipboard-copy-all-btn" data-session="${sessionKey}"><i class="fas fa-copy"></i> Copy All</button>
+                `;
+                block.appendChild(header);
+
+                const itemsContainer = document.createElement('div');
+                const reversedItems = [...items].reverse();
+                reversedItems.forEach(text => {
+                    const card = document.createElement('div');
+                    card.className = 'clipboard-card';
+
+                    const textEl = document.createElement('div');
+                    textEl.className = 'clipboard-text';
+                    textEl.textContent = text;
+
+                    const actions = document.createElement('div');
+                    actions.className = 'clipboard-actions';
+
+                    const copyBtn = document.createElement('button');
+                    copyBtn.className = 'clipboard-copy-btn';
+                    copyBtn.innerHTML = `<i class="fas fa-copy"></i> Copy`;
+                    copyBtn.onclick = async (e) => {
+                        e.stopPropagation();
+                        if (window.electronAPI && window.electronAPI.copyToClipboard) {
+                            await window.electronAPI.copyToClipboard(text);
+                            copyBtn.innerHTML = `<i class="fas fa-check"></i> Copied`;
+                            setTimeout(() => copyBtn.innerHTML = `<i class="fas fa-copy"></i> Copy`, 1500);
+                        }
+                    };
+
+                    actions.appendChild(copyBtn);
+                    card.appendChild(textEl);
+                    card.appendChild(actions);
+                    itemsContainer.appendChild(card);
+                });
+
+                block.appendChild(itemsContainer);
+                contentContainer.appendChild(block);
+            });
+
+            contentContainer.querySelectorAll('.clipboard-copy-all-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const sessionKey = btn.getAttribute('data-session');
+                    if (window.electronAPI && window.electronAPI.copyClipboardSession) {
+                        const success = await window.electronAPI.copyClipboardSession(sessionKey);
+                        if (success) {
+                            const orig = btn.innerHTML;
+                            btn.innerHTML = `<i class="fas fa-check"></i> Copied All`;
+                            setTimeout(() => btn.innerHTML = orig, 1500);
+                        }
+                    }
+                });
+            });
+        } catch (e) {
+            console.error('Failed to load clipboard history in popover', e);
+        }
     }
 }
 

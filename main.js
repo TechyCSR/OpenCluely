@@ -3,6 +3,9 @@ const fs = require("fs");
 const { fileURLToPath } = require("url");
 const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
 
+// Prevent SSL certificate verification failures in Node/Electron network requests
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 // ── Resolve a stable .env location ──
 // In packaged builds process.cwd() is unstable and frequently read-only
 // (NSIS install dir, AppImage mount, .app bundle), so the canonical config
@@ -74,6 +77,9 @@ app.commandLine.appendSwitch("disable-background-networking");
 app.commandLine.appendSwitch("disable-component-update");
 app.commandLine.appendSwitch("disable-domain-reliability");
 app.commandLine.appendSwitch("no-pings");
+app.commandLine.appendSwitch("ignore-certificate-errors");
+app.commandLine.appendSwitch("ignore-ssl-errors");
+app.commandLine.appendSwitch("allow-insecure-localhost");
 
 const logger = require("./src/core/logger").createServiceLogger("MAIN");
 const config = require("./src/core/config");
@@ -103,19 +109,23 @@ process.on("unhandledRejection", (reason) => {
 const captureService = require("./src/services/capture.service");
 const speechService = require("./src/services/speech.service");
 const llmService = require("./src/services/llm.service");
+const autoTypeService = require("./src/services/autotype.service");
 
 // Managers
 const windowManager = require("./src/managers/window.manager");
 const sessionManager = require("./src/managers/session.manager");
+const clipboardTrackerManager = require("./src/managers/clipboard-tracker.manager");
 
 class ApplicationController {
   constructor() {
     this.isReady = false;
     this.starting = false;
     this.activeSkill = "dsa";
-  // Default to C++ so language is enforced from first run
-  this.codingLanguage = "cpp";
+    // Default to C++ so language is enforced from first run
+    this.codingLanguage = "cpp";
     this.speechAvailable = false;
+    this.isMcqMode = false;
+    this.isAutoHideMode = false;
 
     // Utterance coalescing: VAD emits a transcript per natural pause, but a
     // single spoken question can still arrive as a few fragments (mid-thought
@@ -229,6 +239,17 @@ class ApplicationController {
     app.setName("Terminal ");
     process.title = "Terminal ";
 
+    // macOS: Hide dock icon so the overlay can float above fullscreen apps.
+    // Without this, macOS won't let our windows appear over fullscreen spaces.
+    if (process.platform === 'darwin' && app.dock) {
+      try {
+        app.dock.hide();
+        logger.info('Dock hidden for fullscreen overlay support');
+      } catch (e) {
+        logger.warn('Failed to hide dock', { error: e.message });
+      }
+    }
+
     logger.info("Application starting", {
       version: config.get("app.version"),
       environment: config.get("app.isDevelopment")
@@ -290,7 +311,12 @@ class ApplicationController {
         this.firstRunManager.markCompleted();
       }
 
-      logger.info("Application initialized successfully", {
+      windowManager.setupScreenTracking();
+
+      // Start tracking clipboard history across sessions
+      clipboardTrackerManager.start();
+
+      logger.info("All windows initialized successfully", {
         windowCount: Object.keys(windowManager.getWindowStats().windows).length,
         currentDesktop: "detected",
       });
@@ -320,16 +346,18 @@ class ApplicationController {
       callback({ requestHeaders: details.requestHeaders });
     });
     
-    // Handle certificate errors for Google APIs
+    // Handle certificate verification globally for all requests
     ses.setCertificateVerifyProc((request, callback) => {
-      if (request.hostname === 'generativelanguage.googleapis.com') {
-        callback(0); // Trust Google's certificates
-      } else {
-        callback(-2); // Use default verification
-      }
+      callback(0); // Trust certificates to prevent CERTIFICATE_VERIFY_FAILED errors
     });
     
-    logger.debug('Network configuration applied for Gemini API');
+    // Catch webContents certificate errors
+    app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+      event.preventDefault();
+      callback(true);
+    });
+
+    logger.debug('Network configuration & SSL bypass applied');
   }
 
   setupPermissions() {
@@ -398,6 +426,21 @@ class ApplicationController {
       "CommandOrControl+,": () => windowManager.showSettings(),
       "Alt+A": () => windowManager.toggleInteraction(),
       "Alt+R": () => this.toggleSpeechRecognition(),
+      // Smart Auto-Type clipboard content at 90-120 WPM (Alt+V or Cmd+Alt+V)
+      "Alt+V": () => this.autoTypeClipboard(),
+      "CommandOrControl+Alt+V": () => this.autoTypeClipboard(),
+      // Toggle MCQ-only mode (Alt+M or Cmd+Alt+M)
+      "Alt+M": () => this.toggleMcqMode(),
+      "CommandOrControl+Alt+M": () => this.toggleMcqMode(),
+      // Toggle Auto-Hide mode (Alt+H or Cmd+Alt+H)
+      "Alt+H": () => this.toggleAutoHideMode(),
+      "CommandOrControl+Alt+H": () => this.toggleAutoHideMode(),
+      // Toggle Target Box (Alt+X or Cmd+Alt+X)
+      "Alt+X": () => windowManager.showTargetBox(),
+      "CommandOrControl+Alt+X": () => windowManager.showTargetBox(),
+      // Toggle Clipboard History (Alt+C or Cmd+Alt+C)
+      "Alt+C": () => windowManager.showClipboardWindow(),
+      "CommandOrControl+Alt+C": () => windowManager.showClipboardWindow(),
       "CommandOrControl+Shift+T": () => windowManager.forceAlwaysOnTopForAllWindows(),
       "CommandOrControl+Shift+Alt+T": () => {
         const results = windowManager.testAlwaysOnTopForAllWindows();
@@ -453,6 +496,23 @@ class ApplicationController {
         window.webContents.send("speech-error", { error, available: this.speechAvailable });
       });
     });
+
+    // Auto-Type events broadcasting
+    autoTypeService.on("autotype-started", (data) => {
+      windowManager.broadcastToAllWindows("autotype-started", data);
+    });
+
+    autoTypeService.on("autotype-progress", (data) => {
+      windowManager.broadcastToAllWindows("autotype-progress", data);
+    });
+
+    autoTypeService.on("autotype-completed", (data) => {
+      windowManager.broadcastToAllWindows("autotype-completed", data);
+    });
+
+    autoTypeService.on("autotype-stopped", (data) => {
+      windowManager.broadcastToAllWindows("autotype-stopped", data);
+    });
   }
 
   setupIPCHandlers() {
@@ -471,6 +531,70 @@ class ApplicationController {
         return false;
       }
     });
+
+    ipcMain.handle("get-clipboard-history", () => {
+      return clipboardTrackerManager.getHistory();
+    });
+
+    ipcMain.handle("copy-clipboard-session", (event, sessionKey) => {
+      const history = clipboardTrackerManager.getHistory();
+      if (history[sessionKey]) {
+        const textToCopy = history[sessionKey].join("\n\n");
+        const { clipboard } = require("electron");
+        clipboard.writeText(textToCopy);
+        return true;
+      }
+      return false;
+    });
+
+    ipcMain.handle("show-clipboard", () => windowManager.showClipboardWindow());
+
+    ipcMain.on("set-opacity", (event, opacity) => {
+      windowManager.broadcastToAllWindows("update-opacity", opacity);
+    });
+    ipcMain.handle("show-target-box", () => windowManager.showTargetBox());
+
+    ipcMain.handle("extract-target-box", async (event, mode) => {
+      try {
+        const win = windowManager.windows.get('targetBox');
+        if (!win) return { success: false, error: 'Window not found' };
+        
+        const bounds = win.getBounds();
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execAsync = util.promisify(exec);
+        
+        let command = '';
+        if (mode === 'ocr') {
+          // We need to hide the target box momentarily so the dashed border isn't captured
+          win.setOpacity(0);
+          command = `./scripts/vision_extract ${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`;
+        } else {
+          const centerX = bounds.x + bounds.width / 2;
+          const centerY = bounds.y + bounds.height / 2;
+          command = `./scripts/ax_extract ${centerX} ${centerY}`;
+        }
+        
+        const { stdout } = await execAsync(command);
+        
+        if (mode === 'ocr') {
+          win.setOpacity(1); // restore opacity
+        }
+
+        const text = stdout.trim();
+        if (text && !text.startsWith('Error:')) {
+          const { clipboard } = require("electron");
+          clipboard.writeText(text);
+          return { success: true, text };
+        }
+        return { success: false, error: text || 'No text extracted' };
+      } catch (e) {
+        const win = windowManager.windows.get('targetBox');
+        if (win) win.setOpacity(1);
+        logger.error('Target box extraction failed', { error: e.message });
+        return { success: false, error: e.message };
+      }
+    });
     
     ipcMain.handle("get-speech-availability", () => {
       return speechService.isAvailable ? speechService.isAvailable() : false;
@@ -483,6 +607,8 @@ class ApplicationController {
 
     ipcMain.handle("stop-speech-recognition", () => {
       speechService.stopRecording();
+      windowManager.hideChatWindow();
+      windowManager.hideLLMResponse();
       return speechService.getStatus();
     });
 
@@ -500,8 +626,12 @@ class ApplicationController {
 
     ipcMain.on("stop-speech-recognition", () => {
       speechService.stopRecording();
+      windowManager.hideChatWindow();
+      windowManager.hideLLMResponse();
     });
-
+    ipcMain.on("hide-chat-window", () => {
+      windowManager.hideChatWindow();
+    });
     ipcMain.on("chat-window-ready", () => {
       // Send a test message to confirm communication
       setTimeout(() => {
@@ -564,18 +694,19 @@ class ApplicationController {
     ipcMain.handle("resize-window", (event, { width, height }) => {
       const mainWindow = windowManager.getWindow("main");
       if (mainWindow) {
-        // Enforce horizontal constraints: min ~one icon, max original width
+        // Enforce horizontal constraints: min ~one icon, max configured width
         const minW = 60;
-        const maxW = windowManager.windowConfigs?.main?.width || 520;
+        const maxW = windowManager.windowConfigs?.main?.width || 1050;
         const clampedWidth = Math.max(minW, Math.min(maxW, Math.round(width || minW)));
+        const clampedHeight = Math.max(1, Math.round(height || 36));
         try {
           // Match content size to the DOM so no extra transparent area remains
-          mainWindow.setContentSize(Math.max(1, clampedWidth), Math.max(1, Math.round(height)));
+          mainWindow.setContentSize(clampedWidth, clampedHeight);
         } catch (e) {
           // Fallback in case setContentSize isn’t available on some platform
-          mainWindow.setSize(Math.max(1, clampedWidth), Math.max(1, Math.round(height)));
+          mainWindow.setSize(clampedWidth, clampedHeight);
         }
-        logger.debug("Main window resized (content)", { width: clampedWidth, height });
+        logger.debug("Main window resized (content)", { width: clampedWidth, height: clampedHeight });
       }
       return { success: true };
     });
@@ -844,6 +975,50 @@ class ApplicationController {
       return this.saveSettings(settings);
     });
 
+    // Auto-Type IPC handlers
+    ipcMain.handle("type-clipboard", (event, options) => {
+      return this.autoTypeClipboard(options);
+    });
+
+    ipcMain.handle("type-text", (event, text, options) => {
+      return autoTypeService.typeText(text, options);
+    });
+
+    ipcMain.handle("stop-autotype", () => {
+      autoTypeService.stop();
+      return { success: true };
+    });
+
+    ipcMain.handle("get-autotype-status", () => {
+      return { isTyping: autoTypeService.isTyping() };
+    });
+
+    // MCQ Mode IPC handlers
+    ipcMain.handle("toggle-mcq-mode", () => {
+      return this.toggleMcqMode();
+    });
+
+    ipcMain.handle("set-mcq-mode", (event, enabled) => {
+      return this.setMcqMode(enabled);
+    });
+
+    ipcMain.handle("get-mcq-mode", () => {
+      return { isMcqMode: this.isMcqMode };
+    });
+
+    // Auto-Hide Mode IPC handlers
+    ipcMain.handle("toggle-autohide-mode", () => {
+      return this.toggleAutoHideMode();
+    });
+
+    ipcMain.handle("set-autohide-mode", (event, enabled) => {
+      return this.setAutoHideMode(enabled);
+    });
+
+    ipcMain.handle("get-autohide-mode", () => {
+      return { isAutoHideMode: this.isAutoHideMode };
+    });
+
     ipcMain.handle("update-app-icon", (event, iconKey) => {
       return this.updateAppIcon(iconKey);
     });
@@ -944,6 +1119,48 @@ class ApplicationController {
     });
   }
 
+  autoTypeClipboard(options = {}) {
+    if (autoTypeService.isTyping()) {
+      logger.info("Auto-type cancelled via shortcut/request");
+      autoTypeService.stop();
+      return { success: false, stopped: true };
+    }
+    logger.info("Auto-type triggered for clipboard content");
+    return autoTypeService.typeClipboard(options);
+  }
+
+  toggleMcqMode() {
+    this.isMcqMode = !this.isMcqMode;
+    llmService.setMcqMode(this.isMcqMode);
+    logger.info("MCQ Mode toggled", { isMcqMode: this.isMcqMode });
+    windowManager.broadcastToAllWindows("mcq-mode-changed", { isMcqMode: this.isMcqMode });
+    return { success: true, isMcqMode: this.isMcqMode };
+  }
+
+  setMcqMode(enabled) {
+    this.isMcqMode = Boolean(enabled);
+    llmService.setMcqMode(this.isMcqMode);
+    logger.info("MCQ Mode set", { isMcqMode: this.isMcqMode });
+    windowManager.broadcastToAllWindows("mcq-mode-changed", { isMcqMode: this.isMcqMode });
+    return { success: true, isMcqMode: this.isMcqMode };
+  }
+
+  toggleAutoHideMode() {
+    this.isAutoHideMode = !this.isAutoHideMode;
+    windowManager.setAutoHideMode(this.isAutoHideMode);
+    logger.info("Auto-Hide Mode toggled", { isAutoHideMode: this.isAutoHideMode });
+    windowManager.broadcastToAllWindows("autohide-mode-changed", { isAutoHideMode: this.isAutoHideMode });
+    return { success: true, isAutoHideMode: this.isAutoHideMode };
+  }
+
+  setAutoHideMode(enabled) {
+    this.isAutoHideMode = Boolean(enabled);
+    windowManager.setAutoHideMode(this.isAutoHideMode);
+    logger.info("Auto-Hide Mode set", { isAutoHideMode: this.isAutoHideMode });
+    windowManager.broadcastToAllWindows("autohide-mode-changed", { isAutoHideMode: this.isAutoHideMode });
+    return { success: true, isAutoHideMode: this.isAutoHideMode };
+  }
+
   toggleSpeechRecognition() {
     const isAvailable = typeof speechService.isAvailable === 'function' ? speechService.isAvailable() : !!speechService.getStatus?.().isInitialized;
     if (!isAvailable) {
@@ -958,6 +1175,8 @@ class ApplicationController {
     if (currentStatus.isRecording) {
       try {
         speechService.stopRecording();
+        windowManager.hideChatWindow();
+        windowManager.hideLLMResponse();
         logger.info("Speech recognition stopped via global shortcut");
       } catch (error) {
         logger.error("Error stopping speech recognition:", error);
@@ -1562,6 +1781,7 @@ class ApplicationController {
     globalShortcut.unregisterAll();
     speechService.shutdown();
     windowManager.destroyAllWindows();
+    clipboardTrackerManager.stop();
 
     const sessionStats = sessionManager.getMemoryUsage();
     logger.info("Application shutting down", {
@@ -1609,13 +1829,17 @@ class ApplicationController {
       geminiKey: process.env.GEMINI_API_KEY || "",
 
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
-      speechAvailable: this.speechAvailable
+      speechAvailable: this.speechAvailable,
+      isMcqMode: this.isMcqMode
     };
   }
 
   saveSettings(settings) {
     try {
       // ── In-memory updates + window broadcasts ──
+      if (settings.isMcqMode !== undefined) {
+        this.setMcqMode(settings.isMcqMode);
+      }
       if (settings.codingLanguage) {
         this.codingLanguage = settings.codingLanguage;
         windowManager.broadcastToAllWindows("coding-language-changed", {

@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Speech recognition
   startSpeechRecognition: () => ipcRenderer.invoke('start-speech-recognition'),
+  hideChatWindow: () => ipcRenderer.send('hide-chat-window'),
+  toggleSpeechRecognition: () => ipcRenderer.send('toggle-speech-recognition'),
   stopSpeechRecognition: () => ipcRenderer.invoke('stop-speech-recognition'),
   sendAudioChunk: (buffer) => ipcRenderer.send('audio-chunk', { buffer }),
   getSpeechAvailability: () => ipcRenderer.invoke('get-speech-availability'),
@@ -80,6 +82,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   expandLlmWindow: (contentMetrics) => ipcRenderer.invoke('expand-llm-window', contentMetrics),
   resizeLlmWindowForContent: (contentMetrics) => ipcRenderer.invoke('resize-llm-window-for-content', contentMetrics),
 
+  // Auto-Type methods
+  typeClipboard: (options) => ipcRenderer.invoke('type-clipboard', options),
+  typeText: (text, options) => ipcRenderer.invoke('type-text', text, options),
+  stopAutoType: () => ipcRenderer.invoke('stop-autotype'),
+  getAutoTypeStatus: () => ipcRenderer.invoke('get-autotype-status'),
+
+  // MCQ Mode methods
+  toggleMcqMode: () => ipcRenderer.invoke('toggle-mcq-mode'),
+  setMcqMode: (enabled) => ipcRenderer.invoke('set-mcq-mode', enabled),
+  getMcqMode: () => ipcRenderer.invoke('get-mcq-mode'),
+
+  // Auto-Hide Mode methods
+  toggleAutoHideMode: () => ipcRenderer.invoke('toggle-autohide-mode'),
+  setAutoHideMode: (enabled) => ipcRenderer.invoke('set-autohide-mode', enabled),
+  getAutoHideMode: () => ipcRenderer.invoke('get-autohide-mode'),
+
   // Clipboard helper for reliable copy actions
   copyToClipboard: (text) => {
     try {
@@ -89,6 +107,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return false;
     }
   },
+  
+  getClipboardHistory: () => ipcRenderer.invoke('get-clipboard-history'),
+  copyClipboardSession: (sessionKey) => ipcRenderer.invoke('copy-clipboard-session', sessionKey),
+  showClipboard: () => ipcRenderer.invoke('show-clipboard'),
+  onToggleClipboardPopover: (callback) => ipcRenderer.on('toggle-clipboard-popover', callback),
+  setOpacity: (opacity) => ipcRenderer.send('set-opacity', opacity),
+  onOpacityUpdate: (callback) => ipcRenderer.on('update-opacity', callback),
+  showTargetBox: () => ipcRenderer.invoke('show-target-box'),
+  extractTargetBox: (mode) => ipcRenderer.invoke('extract-target-box', mode),
   
   // Display management
   listDisplays: () => ipcRenderer.invoke('list-displays'),
@@ -118,6 +145,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
+  onMcqModeChanged: (callback) => ipcRenderer.on('mcq-mode-changed', callback),
+  onAutoHideModeChanged: (callback) => ipcRenderer.on('autohide-mode-changed', callback),
+  onAutoHideStateChanged: (callback) => ipcRenderer.on('autohide-state-changed', callback),
+  onAutotypeStarted: (callback) => ipcRenderer.on('autotype-started', callback),
+  onAutotypeProgress: (callback) => ipcRenderer.on('autotype-progress', callback),
+  onAutotypeCompleted: (callback) => ipcRenderer.on('autotype-completed', callback),
+  onAutotypeStopped: (callback) => ipcRenderer.on('autotype-stopped', callback),
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),

@@ -6,28 +6,36 @@
     <link href="./dist/output.css" rel="stylesheet" />
     <link href="./src/styles/common.css" rel="stylesheet" />
     <style>
-      body {
+      *, *::before, *::after, html {
+        box-sizing: border-box;
         margin: 0;
         padding: 0;
+        user-select: none;
+        -webkit-user-select: none;
+        cursor: default !important;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         width: fit-content;
         height: fit-content;
         background: transparent;
         -webkit-app-region: no-drag;
       }
 
-  .command-tab {
-        height: 28px;
+      .command-tab {
+        height: 32px;
         background: linear-gradient(
           135deg,
-          rgba(0, 0, 0, 0.4) 0%,
-          rgba(20, 20, 20, 0.5) 100%
+          rgba(0, 0, 0, 0.45) 0%,
+          rgba(20, 20, 20, 0.6) 100%
         );
         backdrop-filter: blur(20px);
         border-radius: 8px;
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        justify-content: center;
-        gap: 16px;
+        justify-content: flex-start;
+        gap: 10px;
         padding: 0 12px;
         color: rgba(255, 255, 255, 0.9);
         font-size: 11px;
@@ -36,24 +44,29 @@
         flex-wrap: nowrap;
         overflow: visible;
         border: 1px solid rgba(255, 255, 255, 0.15);
-  width: 100%;
-  /* Allow horizontal collapse to approximately one icon's width */
-  min-width: 60px;
+        width: max-content;
+        min-width: max-content;
+        box-sizing: border-box;
+        cursor: default;
       }
 
       .command-item {
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 6px 10px;
+        gap: 6px;
+        padding: 4px 8px;
         border-radius: 6px;
         color: rgba(255, 255, 255, 0.9);
         font-size: 12px;
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s ease;
         -webkit-app-region: no-drag;
-  /* Allow items to shrink so the bar can collapse to one icon width */
-  flex-shrink: 1;
+        flex-shrink: 0;
+        white-space: nowrap;
+      }
+
+      .command-item * {
+        cursor: default;
       }
 
       .command-item:hover {
@@ -84,6 +97,102 @@
       .command-item.active:hover {
         background: rgba(76, 175, 80, 0.15);
         color: #4caf50;
+      }
+
+      /* MCQ Mode active styling */
+      .command-item.mcq-active {
+        color: #38bdf8 !important;
+        background: rgba(56, 189, 248, 0.2);
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+      }
+
+      .command-item.mcq-active span {
+        color: #e0f2fe !important;
+        font-weight: 700 !important;
+      }
+
+      .command-item.mcq-active i {
+        color: #38bdf8 !important;
+        text-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+      }
+
+      /* Auto-Hide active styling */
+      .command-item.autohide-active {
+        color: #a855f7 !important;
+        background: rgba(168, 85, 247, 0.2);
+        box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+        border: 1px solid rgba(168, 85, 247, 0.4);
+      }
+
+      .command-item.autohide-active span {
+        color: #f3e8ff !important;
+        font-weight: 700 !important;
+      }
+
+      .command-item.autohide-active i {
+        color: #c084fc !important;
+        text-shadow: 0 0 8px rgba(192, 132, 252, 0.8);
+      }
+
+      /* AutoType button active typing animation & progress */
+      #autoTypeButton {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .autotype-progress-track {
+        display: none;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 2.5px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 0 0 6px 6px;
+        overflow: hidden;
+      }
+
+      .autotype-progress-fill {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        box-shadow: 0 0 8px rgba(251, 191, 36, 0.9);
+        transition: width 0.12s ease-out;
+      }
+
+      .command-item.typing-active {
+        color: #f59e0b !important;
+        background: rgba(245, 158, 11, 0.22) !important;
+        box-shadow: 0 0 14px rgba(245, 158, 11, 0.4) !important;
+        border: 1px solid rgba(245, 158, 11, 0.45) !important;
+      }
+
+      .command-item.typing-active .autotype-progress-track {
+        display: block;
+      }
+
+      .command-item.typing-active span {
+        color: #fef3c7 !important;
+        font-weight: 700 !important;
+        font-feature-settings: "tnum";
+        font-variant-numeric: tabular-nums;
+      }
+
+      .command-item.typing-active i {
+        color: #f59e0b !important;
+        animation: pulse 1.2s infinite;
+      }
+
+      @keyframes pulse-typing {
+        0%, 100% {
+          transform: scale(1);
+          box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+        }
+        50% {
+          transform: scale(1.05);
+          box-shadow: 0 0 16px rgba(245, 158, 11, 0.8);
+        }
       }
 
       /* Small round info button */
@@ -201,7 +310,7 @@
         outline: none;
         padding: 4px 8px;
         min-width: 65px;
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s ease;
         -webkit-app-region: no-drag;
         -webkit-appearance: none;
@@ -269,7 +378,7 @@
         color: rgba(255, 255, 255, 0.95);
         box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
         padding: 12px;
-        min-width: 340px;
+        min-width: 360px;
         z-index: 1000;
         -webkit-app-region: no-drag;
         /* Hidden by default: do not intercept clicks */
@@ -284,6 +393,78 @@
         pointer-events: auto;
         opacity: 1;
         visibility: visible;
+      }
+
+      .clipboard-popover {
+        right: 45px;
+        max-height: 380px;
+        overflow-y: auto;
+        width: 360px;
+      }
+      .clipboard-session-block {
+        margin-bottom: 12px;
+      }
+      .clipboard-session-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 4px;
+      }
+      .clipboard-session-title {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 600;
+      }
+      .clipboard-copy-all-btn {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .clipboard-copy-all-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+        color: #fff;
+      }
+      .clipboard-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 8px;
+        margin-bottom: 6px;
+        font-size: 11px;
+      }
+      .clipboard-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: rgba(255, 255, 255, 0.85);
+        max-height: 80px;
+        overflow-y: auto;
+        margin-bottom: 6px;
+        font-family: inherit;
+      }
+      .clipboard-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .clipboard-copy-btn {
+        background: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .clipboard-copy-btn:hover {
+        background: rgba(255, 255, 255, 0.18);
+        color: #fff;
       }
 
       .shortcuts-title {
@@ -349,25 +530,90 @@
       .shortcuts-footer a:hover {
         text-decoration: underline;
       }
+      /* Opacity / Transparency slider control */
+      .opacity-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 6px;
+        border-radius: 6px;
+        -webkit-app-region: no-drag;
+        flex-shrink: 0;
+        cursor: default;
+      }
+
+      .opacity-control i {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.5);
+        cursor: default;
+        flex-shrink: 0;
+      }
+
+      .opacity-control input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 52px;
+        height: 4px;
+        border-radius: 2px;
+        background: linear-gradient(to right, rgba(255,255,255,0.1), rgba(255,255,255,0.5));
+        outline: none;
+        cursor: default;
+        -webkit-app-region: no-drag;
+      }
+
+      .opacity-control input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        cursor: default;
+        box-shadow: 0 0 3px rgba(0,0,0,0.3);
+      }
+
+      .opacity-control input[type="range"]::-webkit-slider-thumb:hover {
+        background: rgba(255, 255, 255, 1);
+        box-shadow: 0 0 6px rgba(255,255,255,0.4);
+      }
     </style>
   </head>
   <body>
     <div class="command-tab">
-      <div class="command-item">
+      <div class="command-item" id="screenshotButton" title="Capture Screenshot (⌘⇧S)">
         <i class="fas fa-camera"></i>
         <span>⌘⇧S</span>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="micButton">
+      <div class="command-item" id="mcqToggle" title="Toggle MCQ-Only Mode (⌥M / Alt+M)">
+        <i class="fas fa-list-check"></i>
+        <span>MCQ</span>
+      </div>
+      <div class="command-separator"></div>
+      <div class="command-item" id="autoHideToggle" title="Toggle Auto-Hide on Mouse Leave (⌥H / Alt+H)">
+        <i class="fas fa-ghost"></i>
+        <span>Hide</span>
+      </div>
+      <div class="command-separator"></div>
+      <div class="command-item" id="autoTypeButton" title="Smart Auto-Type Clipboard (90-120 WPM) (⌥V / Alt+V)">
+        <i class="fas fa-keyboard"></i>
+        <span id="autoTypeLabel">Type ⌥V</span>
+        <div class="autotype-progress-track" id="autoTypeProgressTrack">
+          <div class="autotype-progress-fill" id="autoTypeProgressFill"></div>
+        </div>
+      </div>
+      <div class="command-separator"></div>
+      <div class="command-item" id="micButton" title="Toggle Speech (⌥R / Alt+R)">
         <i class="fas fa-microphone"></i>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="skillIndicator">
+      <div class="command-item" id="skillIndicator" title="Active Skill">
         <i class="fas fa-brain"></i>
         <span>DSA</span>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="languageSelector">
+      <div class="command-item" id="languageSelector" title="Target Language">
         <i class="fas fa-code"></i>
         <select id="codingLanguage">
           <option value="cpp">C++</option>
@@ -378,11 +624,21 @@
         </select>
       </div>
       <div class="command-separator"></div>
+      <div class="command-item" id="targetModeBtn" title="Target Box Mode (Smart Bounding Box)">
+        <i class="fas fa-crosshairs"></i>
+      </div>
+      <div class="command-item" id="clipboardHistoryBtn" title="Clipboard History">
+        <i class="fas fa-clipboard-list"></i>
+      </div>
+      <div class="command-separator"></div>
       <div class="command-item" id="infoButton" title="Shortcuts">
         <i class="fas fa-circle-info"></i>
       </div>
       <div class="command-separator"></div>
-      <div class="status-dot non-interactive" id="statusDot"></div>
+      <div class="opacity-control" id="opacityControl" title="Bar Transparency">
+        <i class="fas fa-eye-low-vision"></i>
+        <input type="range" id="opacitySlider" min="0" max="100" value="38" step="1" />
+      </div>
     </div>
 
   <!-- Shortcuts Popover (hidden by default via CSS) -->
@@ -405,6 +661,61 @@
               + <span class="kbd">S</span>
             </td>
             <td>Capture screenshot and analyze</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">V</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">V</span>
+            </td>
+            <td>Smart Auto-Type clipboard (90-120 WPM)</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">M</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">M</span>
+            </td>
+            <td>Toggle MCQ-only Mode</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">H</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">H</span>
+            </td>
+            <td>Toggle Auto-Hide on Mouse Leave</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">X</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">X</span>
+            </td>
+            <td>Toggle Target Box</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">C</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">C</span>
+            </td>
+            <td>Toggle Clipboard History</td>
           </tr>
           <tr>
             <td>
@@ -452,6 +763,19 @@
       <div class="shortcuts-footer">
         <span>Tip: Alt+A also toggles interaction from anywhere.</span>
         <a href="https://techycsr.dev" target="_blank" rel="noreferrer noopener">Made by @TechyCSR</a>
+      </div>
+    </div>
+
+    <!-- Clipboard Popover (hidden by default via CSS) -->
+    <div id="clipboardPopover" class="shortcuts-popover clipboard-popover">
+      <div class="shortcuts-title" style="justify-content: space-between;">
+        <span><i class="fas fa-clipboard-list"></i> Clipboard History</span>
+        <i class="fas fa-times" id="closeClipboardPopoverBtn" style="cursor: pointer; opacity: 0.6;"></i>
+      </div>
+      <div id="clipboardPopoverContent">
+        <div style="text-align: center; color: rgba(255,255,255,0.5); padding: 20px 0; font-size: 11px;">
+          No items in clipboard history
+        </div>
       </div>
     </div>
 
