@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/OCR-Native%20Apple%20Vision-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Vision OCR" />
 </p>
 
-[**Website**](https://opencluely.techycsr.dev) &nbsp;|&nbsp; [**Download**](#-download) &nbsp;|&nbsp; [**Quick Start**](#-quick-start) &nbsp;|&nbsp; [**Architecture & Features**](#-major-contributions--features)
+[**Website**](https://opencluely.techycsr.dev) &nbsp;|&nbsp; [**Download**](#-download) &nbsp;|&nbsp; [**Quick Start**](#-quick-start) &nbsp;|&nbsp; [**Architecture & Features**](#-major-contributions--features) &nbsp;|&nbsp; [**Feature Showcase**](FEATURE_SHOWCASE.md) &nbsp;|&nbsp; [**License**](LICENSE)
 
 ---
 
