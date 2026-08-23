@@ -88,15 +88,10 @@
             background: transparent;
         }
 
-        /* Split layout improvements */
-        .split-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-            height: 100vh;
-            padding: 0;
-            box-sizing: border-box;
-            overflow: hidden;
+        /* Split layout is retired. Coding answers stay in one stacked card. */
+        .split-layout,
+        #split-layout {
+            display: none !important;
         }
 
         /* Panel improvements with proper scrolling */
@@ -431,23 +426,31 @@
         body.interview-card .loading {
             height: 100vh;
         }
+        body.interview-card #split-layout {
+            display: none !important;
+        }
         body.interview-card .loading {
             background: linear-gradient(135deg, rgba(0, 0, 0, 0.92) 0%, rgba(8, 8, 8, 0.96) 100%);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
             backdrop-filter: blur(20px);
         }
-        body.interview-card .full-content-inner,
-        body.interview-card .text-panel,
-        body.interview-card .code-panel {
+        body.interview-card .full-content-inner {
             background: linear-gradient(135deg, rgba(0, 0, 0, 0.92) 0%, rgba(8, 8, 8, 0.96) 100%);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
             backdrop-filter: blur(20px);
         }
+        body.interview-card .text-panel,
+        body.interview-card .code-panel {
+            background: transparent;
+            border: none;
+            border-radius: 0;
+        }
         body.interview-card .full-content-inner,
-        body.interview-card .panel-content {
-            padding: 16px 18px;
+        body.interview-card .panel-content,
+        body.interview-card .loading {
+            padding: 36px 18px 16px 18px;
         }
         body.interview-card .markdown-content {
             font-size: 1.05rem;
@@ -467,10 +470,119 @@
         body.interview-card .markdown-content pre code {
             font-size: 0.98rem;
         }
+
+        .asked-question {
+            margin: 0 0 14px 0;
+            padding: 0 0 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+        }
+        .asked-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #d0d0d0;
+        }
+        .asked-question p,
+        #question-text,
+        #loading-question-text {
+            margin: 6px 0 0 0;
+            color: #ffffff;
+            font-size: 1.02rem;
+            font-weight: 650;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+        }
+        body.interview-card .asked-question p,
+        body.interview-card #question-text,
+        body.interview-card #loading-question-text {
+            font-size: 1.06rem;
+            color: #ffffff;
+        }
+        body.interview-card .markdown-content,
+        body.interview-card .markdown-content p,
+        body.interview-card .markdown-content li {
+            color: #f5f5f5;
+        }
+        body.interview-card .markdown-content pre {
+            background: rgba(0, 0, 0, 0.62);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 14px 16px;
+            margin: 12px 0 4px 0;
+            overflow-x: auto;
+            overflow-y: visible;
+            max-height: none;
+        }
+        body.interview-card .markdown-content pre code {
+            color: #f3f3f3;
+            font-size: 0.96rem;
+            line-height: 1.5;
+            white-space: pre;
+        }
+        .history-nav {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            z-index: 80;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 6px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.62);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            -webkit-app-region: no-drag;
+        }
+        .history-nav.hidden { display: none !important; }
+        .history-nav button {
+            width: 28px;
+            height: 26px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .history-nav button:disabled {
+            opacity: 0.35;
+            cursor: default;
+        }
+        .history-nav button:not(:disabled):hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+        .history-pos {
+            min-width: 36px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #f0f0f0;
+        }
+        body.interview-card .loading {
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            padding: 36px 18px 16px 18px;
+        }
+        body.interview-card .loading .asked-question {
+            margin-bottom: 16px;
+        }
+        body.interview-card .loading-compact {
+            width: auto;
+            height: auto;
+            justify-content: flex-start;
+        }
     </style>
 </head>
 <body class="text-white">
     <div class="main-container has-header">
+        <div id="history-nav" class="history-nav hidden">
+            <button id="history-prev" type="button" title="Previous answer (Alt+Left)">‹</button>
+            <span id="history-pos">1/1</span>
+            <button id="history-next" type="button" title="Next answer (Alt+Right)">›</button>
+        </div>
         <!-- Draggable Header -->
         <div class="window-header">
             <div class="window-title">AI Response</div>
@@ -481,6 +593,10 @@
 
         <!-- Loading State -->
         <div id="loading" class="loading">
+            <div id="loading-question-block" class="asked-question hidden">
+                <div class="asked-label">Question</div>
+                <div id="loading-question-text"></div>
+            </div>
             <div class="loading-compact">
                 <span class="text-gray-300 text-sm font-medium mr-2">Analyzing</span>
                 <div class="dots-container">
@@ -524,12 +640,27 @@
         let currentLayout = 'split';
         let liveStreamBuffer = '';
         let hasCode = false;
-        let currentSkill = 'dsa';
         let isInteractive = false;
         let scrollableElements = [];
         let initialized = false;
         let interviewHud = false;
+        let compactCard = false;
+        let answerCardFrozen = false;
+        let liveStreamActive = false;
         let interviewResizeTimer = null;
+        let currentQuestion = '';
+        let currentResponse = '';
+        let liveQuestion = '';
+        const MAX_TURN_HISTORY = 25;
+        let turnHistory = [];
+        let historyIndex = -1;
+        let viewingHistory = false;
+
+        function ipcData(args) {
+            if (!args || args.length === 0) return null;
+            if (args.length >= 2 && args[1] !== undefined) return args[1];
+            return args[0];
+        }
         
         // Immediate logging to verify script execution
         console.log('[LLM-RESPONSE] Script tag executed');
@@ -584,26 +715,50 @@
                 
                 // Set up show-loading event listener
                 window.electronAPI.onShowLoading((...args) => {
-                    const data = args.length >= 2 ? args[1] : args[0];
+                    const data = ipcData(args) || (args.length >= 2 ? args[1] : args[0]);
                     if (data && data.compact) {
+                        compactCard = true;
                         setInterviewHud(true);
                     }
+                    snapshotCurrentTurn();
+                    unfreezeAnswerCard();
+                    liveStreamActive = true;
+                    currentResponse = '';
+                    liveStreamBuffer = '';
+                    viewingHistory = false;
+                    liveQuestion = (data && data.question) || '';
+                    setAskedQuestion(liveQuestion);
                     console.log('[LLM-RESPONSE] show-loading received');
                     showLoadingState();
+                    updateHistoryNav();
                 });
                 if (window.electronAPI.onInterviewHud) {
-                    window.electronAPI.onInterviewHud((_event, payload) => {
-                        setInterviewHud(!!(payload && payload.enabled));
+                    window.electronAPI.onInterviewHud(function () {
+                        applyInterviewHudPayload(ipcData(arguments), { clearHistory: true });
+                    });
+                }
+                if (window.electronAPI.onInterviewHistoryNav) {
+                    window.electronAPI.onInterviewHistoryNav(function () {
+                        const payload = ipcData(arguments);
+                        navigateHistory(payload && payload.direction === 'next' ? 1 : -1);
                     });
                 }
                 if (window.electronAPI.onInterviewUpdate) {
-                    window.electronAPI.onInterviewUpdate((_event, payload) => {
-                        setInterviewHud(!!(payload && payload.enabled));
+                    window.electronAPI.onInterviewUpdate(function () {
+                        // Caption updates must never wipe answer history if the
+                        // payload is missing/malformed. Only apply a real boolean.
+                        applyInterviewHudPayload(ipcData(arguments), { clearHistory: false });
+                    });
+                }
+                if (window.electronAPI.onInteractionModeChanged) {
+                    window.electronAPI.onInteractionModeChanged(function () {
+                        const data = ipcData(arguments);
+                        isInteractive = !!(data === true || (data && data.interactive));
                     });
                 }
                 if (window.electronAPI.getInterviewState) {
                     window.electronAPI.getInterviewState().then((state) => {
-                        setInterviewHud(!!(state && state.enabled));
+                        applyInterviewHudPayload(state, { clearHistory: false });
                     }).catch(() => {});
                 }
                 
@@ -631,7 +786,26 @@
                             hideLoadingState();
                             return;
                         }
-                        
+
+                        if (actualData.metadata && actualData.metadata.compactCard) {
+                            compactCard = true;
+                            setInterviewHud(true);
+                        }
+                        setAskedQuestion(
+                            actualData.question
+                            || (actualData.metadata && actualData.metadata.question)
+                        );
+                        liveStreamActive = false;
+                        if (viewingHistory || answerCardFrozen) {
+                            if (useSingleColumn()) {
+                                rememberTurn(
+                                    currentQuestion,
+                                    actualData.content || actualData.response
+                                );
+                            }
+                            updateHistoryNav();
+                            return;
+                        }
                         hideLoadingState();
                         displayResponse(actualData);
                         setupScrolling();
@@ -645,7 +819,20 @@
                 
                 if (window.electronAPI.onTranscriptionLlmResponseStart) {
                     window.electronAPI.onTranscriptionLlmResponseStart(function () {
+                        const data = ipcData(arguments);
+                        snapshotCurrentTurn();
+                        unfreezeAnswerCard();
+                        liveStreamActive = true;
+                        currentResponse = '';
                         liveStreamBuffer = '';
+                        viewingHistory = false;
+                        liveQuestion = (data && data.question) || liveQuestion;
+                        setAskedQuestion(liveQuestion);
+                        updateHistoryNav();
+                        if (useSingleColumn()) {
+                            showLoadingState();
+                            return;
+                        }
                         hideLoadingState();
                         const responseElement = document.getElementById('response-content');
                         if (responseElement) responseElement.classList.remove('hidden');
@@ -654,16 +841,62 @@
                 }
                 if (window.electronAPI.onTranscriptionLlmResponseChunk) {
                     window.electronAPI.onTranscriptionLlmResponseChunk(function () {
-                        let data = arguments.length >= 2 ? arguments[1] : arguments[0];
+                        const data = ipcData(arguments);
                         const delta = (data && data.delta) || '';
                         if (!delta) return;
                         liveStreamBuffer += delta;
+                        if (useSingleColumn()) {
+                            rememberTurn(liveQuestion || currentQuestion, liveStreamBuffer);
+                        }
+                        if (viewingHistory || answerCardFrozen) return;
                         hideLoadingState();
                         const responseElement = document.getElementById('response-content');
                         if (responseElement) responseElement.classList.remove('hidden');
                         renderLiveStream(liveStreamBuffer);
                     });
                 }
+                if (window.electronAPI.onTranscriptionLlmResponse) {
+                    window.electronAPI.onTranscriptionLlmResponse(function () {
+                        const data = ipcData(arguments);
+                        const response = (data && (data.response || data.content)) || liveStreamBuffer;
+                        if (!response) return;
+                        if (data && data.question) {
+                            liveQuestion = data.question;
+                            setAskedQuestion(liveQuestion);
+                        }
+                        currentResponse = response;
+                        liveStreamBuffer = response;
+                        if (useSingleColumn()) {
+                            rememberTurn(liveQuestion || currentQuestion, response);
+                        }
+                        liveStreamActive = false;
+                        if (viewingHistory || answerCardFrozen) {
+                            updateHistoryNav();
+                            return;
+                        }
+                        hideLoadingState();
+                        const responseElement = document.getElementById('response-content');
+                        if (responseElement) responseElement.classList.remove('hidden');
+                        renderAnswer(response);
+                        if (useSingleColumn()) {
+                            requestInterviewResize({ freeze: true });
+                        }
+                        updateHistoryNav();
+                    });
+                }
+
+                const prevBtn = document.getElementById('history-prev');
+                const nextBtn = document.getElementById('history-next');
+                if (prevBtn) prevBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navigateHistory(-1);
+                });
+                if (nextBtn) nextBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navigateHistory(1);
+                });
 
                 console.log('[LLM-RESPONSE] IPC listeners set up successfully');
             } else {
@@ -671,29 +904,209 @@
             }
         } // end initLLMResponseWindow
 
-        function setInterviewHud(enabled) {
-            interviewHud = !!enabled;
-            document.body.classList.toggle('interview-card', interviewHud);
+        function applyInterviewHudPayload(payload, { clearHistory = false } = {}) {
+            if (!payload || typeof payload !== 'object' || typeof payload.enabled !== 'boolean') {
+                return;
+            }
+            setInterviewHud(payload.enabled, { clearHistory: clearHistory && payload.enabled === false });
         }
 
-        function requestInterviewResize() {
-            if (!interviewHud || !window.electronAPI || !window.electronAPI.resizeInterviewCard) {
+        function setInterviewHud(enabled, { clearHistory = false } = {}) {
+            interviewHud = !!enabled;
+            if (interviewHud) compactCard = true;
+            document.body.classList.toggle('interview-card', interviewHud || compactCard);
+            if (!interviewHud && clearHistory) {
+                turnHistory = [];
+                historyIndex = -1;
+                viewingHistory = false;
+                compactCard = false;
+            }
+            updateHistoryNav();
+        }
+
+        function setAskedQuestion(question) {
+            currentQuestion = String(question || '').trim();
+            const targets = [
+                ['loading-question-block', 'loading-question-text'],
+            ];
+            targets.forEach(([blockId, textId]) => {
+                const block = document.getElementById(blockId);
+                const textEl = document.getElementById(textId);
+                if (!block || !textEl) return;
+                if (currentQuestion) {
+                    textEl.textContent = currentQuestion;
+                    block.classList.remove('hidden');
+                } else {
+                    textEl.textContent = '';
+                    block.classList.add('hidden');
+                }
+            });
+        }
+
+        function askedQuestionHtml() {
+            if (!currentQuestion) return '';
+            const label = viewingHistory ? 'Earlier question' : 'Question';
+            return `<div class="asked-question"><div class="asked-label">${label}</div><p>${escapeHtml(currentQuestion)}</p></div>`;
+        }
+
+        function useSingleColumn() {
+            return interviewHud
+                || compactCard
+                || document.body.classList.contains('interview-card');
+        }
+
+        function snapshotCurrentTurn() {
+            const response = String(currentResponse || liveStreamBuffer || '').trim();
+            if (!response) return;
+            rememberTurn(liveQuestion || currentQuestion, response);
+        }
+
+        function unfreezeAnswerCard() {
+            answerCardFrozen = false;
+        }
+
+        function measureAnswerCardHeight() {
+            const loading = document.getElementById('loading');
+            if (loading && !loading.classList.contains('hidden')) {
+                const block = document.getElementById('loading-question-block');
+                const compact = loading.querySelector('.loading-compact');
+                let height = 52;
+                if (block && !block.classList.contains('hidden')) {
+                    height += block.offsetHeight || block.scrollHeight || 0;
+                }
+                if (compact) {
+                    height += compact.offsetHeight || 40;
+                }
+                return Math.max(280, Math.ceil(height + 16));
+            }
+            const markdown = document.getElementById('full-markdown');
+            const inner = document.querySelector('#full-content .full-content-inner');
+            if (markdown) {
+                let pad = 52;
+                if (inner) {
+                    const styles = window.getComputedStyle(inner);
+                    pad = (parseFloat(styles.paddingTop) || 0)
+                        + (parseFloat(styles.paddingBottom) || 0);
+                }
+                return Math.max(280, Math.ceil(markdown.scrollHeight + pad + 8));
+            }
+            return 280;
+        }
+
+        function rememberTurn(question, response) {
+            const q = String(question || '').trim();
+            const r = String(response || '').trim();
+            if (!r) return;
+            const last = turnHistory[turnHistory.length - 1];
+            if (last && last.question === q && last.response === r) {
+                if (!viewingHistory) historyIndex = turnHistory.length - 1;
+                updateHistoryNav();
                 return;
             }
-            if (interviewResizeTimer) {
+            if (last && last.question === q && r.startsWith(last.response)) {
+                last.response = r;
+                if (!viewingHistory) historyIndex = turnHistory.length - 1;
+                updateHistoryNav();
                 return;
             }
-            interviewResizeTimer = setTimeout(() => {
+            turnHistory.push({ question: q, response: r });
+            if (turnHistory.length > MAX_TURN_HISTORY) {
+                turnHistory.shift();
+                if (viewingHistory && historyIndex > 0) {
+                    historyIndex -= 1;
+                }
+            }
+            if (!viewingHistory) {
+                historyIndex = turnHistory.length - 1;
+            }
+            updateHistoryNav();
+        }
+
+        function updateHistoryNav() {
+            const nav = document.getElementById('history-nav');
+            const pos = document.getElementById('history-pos');
+            const prevBtn = document.getElementById('history-prev');
+            const nextBtn = document.getElementById('history-next');
+            if (!nav) return;
+            const count = turnHistory.length;
+            if (!useSingleColumn() || count === 0) {
+                nav.classList.add('hidden');
+                return;
+            }
+            nav.classList.remove('hidden');
+            const index = viewingHistory
+                ? historyIndex
+                : Math.max(0, count - 1);
+            if (pos) pos.textContent = `${index + 1}/${count}`;
+            if (prevBtn) prevBtn.disabled = index <= 0;
+            if (nextBtn) nextBtn.disabled = index >= count - 1;
+        }
+
+        function navigateHistory(direction) {
+            if (turnHistory.length === 0) return;
+            const current = viewingHistory ? historyIndex : turnHistory.length - 1;
+            const next = current + direction;
+            if (next < 0 || next >= turnHistory.length) return;
+            viewingHistory = next < turnHistory.length - 1;
+            historyIndex = next;
+            unfreezeAnswerCard();
+            hideLoadingState();
+            const responseElement = document.getElementById('response-content');
+            if (responseElement) responseElement.classList.remove('hidden');
+            const followLive = !viewingHistory && liveStreamActive && liveStreamBuffer;
+            if (followLive) {
+                setAskedQuestion(liveQuestion || turnHistory[next].question);
+                currentResponse = liveStreamBuffer;
+                renderAnswer(liveStreamBuffer);
+                requestInterviewResize({ force: true, fit: true });
+            } else {
+                const turn = turnHistory[next];
+                setAskedQuestion(turn.question);
+                currentResponse = turn.response;
+                renderAnswer(turn.response);
+                requestInterviewResize({ freeze: true, force: true, fit: true });
+            }
+            updateHistoryNav();
+            setupScrolling();
+        }
+
+        function renderAnswer(response) {
+            const codeBlocks = extractCodeBlocks(response);
+            hasCode = codeBlocks.length > 0;
+            displayFullLayout(response);
+        }
+
+        function requestInterviewResize(options = {}) {
+            if (!useSingleColumn() || !window.electronAPI || !window.electronAPI.resizeInterviewCard) {
+                return;
+            }
+            if ((viewingHistory || answerCardFrozen) && !options.force && !options.freeze) {
+                return;
+            }
+            const freezeAfter = !!options.freeze;
+            const run = () => {
                 interviewResizeTimer = null;
-                const root = document.getElementById('response-content');
-                const contentHeight = root && !root.classList.contains('hidden')
-                    ? Math.ceil(root.scrollHeight) + 24
-                    : 280;
+                const contentHeight = measureAnswerCardHeight();
                 window.electronAPI.resizeInterviewCard({
                     hasCode,
-                    contentHeight
-                }).catch(() => {});
-            }, 80);
+                    contentHeight,
+                    frozen: freezeAfter,
+                    fit: !!options.fit
+                }).then(() => {
+                    if (freezeAfter) answerCardFrozen = true;
+                }).catch(() => {
+                    if (freezeAfter) answerCardFrozen = true;
+                });
+            };
+            if (interviewResizeTimer) {
+                clearTimeout(interviewResizeTimer);
+                interviewResizeTimer = null;
+            }
+            if (freezeAfter || options.immediate) {
+                run();
+                return;
+            }
+            interviewResizeTimer = setTimeout(run, 80);
         }
 
         function showLoadingState() {
@@ -781,23 +1194,25 @@
                 return;
             }
             
-            // Check if response contains code blocks
-            const codeBlocks = extractCodeBlocks(response);
-            hasCode = codeBlocks.length > 0;
-
-            // Calculate content metrics for dynamic sizing
-            const contentMetrics = calculateContentMetrics(response, codeBlocks);
-
-            if (hasCode) {
-                // Split layout: text on left, code on right
-                displaySplitLayout(response, codeBlocks);
-            } else {
-                // Full layout: all content in one panel
-                displayFullLayout(response);
+            currentResponse = response;
+            liveQuestion = currentQuestion || liveQuestion;
+            if (data && data.metadata && data.metadata.compactCard) {
+                compactCard = true;
+                setInterviewHud(true);
             }
+            if (useSingleColumn()) {
+                rememberTurn(currentQuestion, response);
+            }
+            liveStreamActive = false;
+            if (viewingHistory || answerCardFrozen) {
+                return;
+            }
+            const codeBlocks = extractCodeBlocks(response);
+            const contentMetrics = calculateContentMetrics(response, codeBlocks);
+            renderAnswer(response);
 
-            if (interviewHud || (data && data.metadata && data.metadata.compactCard)) {
-                requestInterviewResize();
+            if (useSingleColumn() || (data && data.metadata && data.metadata.compactCard)) {
+                requestInterviewResize({ freeze: true });
                 return;
             }
             if (window.electronAPI.getInterviewState) {
@@ -820,14 +1235,15 @@
         }
 
         function renderLiveStream(text) {
-            const codeBlocks = extractCodeBlocks(text);
-            hasCode = codeBlocks.length > 0;
-            if (hasCode) {
-                displaySplitLayout(text, codeBlocks);
-            } else {
-                displayFullLayout(text);
+            currentResponse = text;
+            if (useSingleColumn()) {
+                rememberTurn(liveQuestion || currentQuestion, text);
             }
-            if (interviewHud) {
+            if (viewingHistory || answerCardFrozen) {
+                return;
+            }
+            renderAnswer(text);
+            if (useSingleColumn()) {
                 requestInterviewResize();
             }
         }
@@ -835,16 +1251,9 @@
         function setupScrolling() {
             // Set up scrollable elements based on current layout
             setTimeout(() => {
-                if (hasCode) {
-                    scrollableElements = [
-                        document.querySelector('.text-panel .panel-content'),
-                        document.querySelector('.code-panel .panel-content')
-                    ].filter(el => el !== null);
-                } else {
-                    scrollableElements = [
-                        document.querySelector('.full-content-inner')
-                    ].filter(el => el !== null);
-                }
+                scrollableElements = [
+                    document.querySelector('.full-content-inner')
+                ].filter(el => el !== null);
                 // Reset scroll positions and ensure elements are focusable
                 scrollableElements.forEach(element => {
                     element.scrollTop = 0;
@@ -979,7 +1388,7 @@
             textContent = textContent.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
 
             // Render text content
-            const textHtml = renderMarkdown(textContent);
+            const textHtml = askedQuestionHtml() + renderMarkdown(textContent);
             document.getElementById('text-content').innerHTML = textHtml;
             if (window.renderMathInElement) window.renderMathInElement(document.getElementById('text-content'));
 
@@ -1023,7 +1432,7 @@
             document.getElementById('full-content').classList.remove('hidden');
 
             // Render full markdown
-            const html = renderMarkdown(response);
+            const html = askedQuestionHtml() + renderMarkdown(response || '');
             const full = document.getElementById('full-markdown');
             full.innerHTML = html;
             if (window.renderMathInElement) window.renderMathInElement(full);
@@ -1067,6 +1476,16 @@
 
         // Add keyboard scrolling support for when interactive
         document.addEventListener('keydown', (e) => {
+            if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'Left')) {
+                e.preventDefault();
+                navigateHistory(-1);
+                return;
+            }
+            if (e.altKey && (e.key === 'ArrowRight' || e.key === 'Right')) {
+                e.preventDefault();
+                navigateHistory(1);
+                return;
+            }
             if (!isInteractive) return;
             
             const activeElement = document.activeElement;

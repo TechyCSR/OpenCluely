@@ -169,7 +169,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 - AI response window with markdown and syntax highlighting
 - Global shortcuts for capture, visibility, interaction, chat, and settings
 - Session memory and a full chat UI
-- Language picker and a DSA skill prompt
+- Language picker for screenshot coding answers
 - Optional Azure Speech and local Whisper, with an auto hiding mic button
 - Multi-monitor and area capture support
 - Window binding and positioning

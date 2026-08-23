@@ -110,14 +110,7 @@ class ChatWindowUI {
                     this.handleRecordingStopped(); // Stop recording on error
                 }
             });
-            
-            // Skill handlers
-            window.electronAPI.onSkillChanged((event, data) => {
-                if (data && data.skill) {
-                    this.handleSkillActivated(data.skill);
-                }
-            });
-            
+
             // Session handlers
             window.electronAPI.onSessionCleared(() => {
                 this.addMessage('Session memory has been cleared', 'system');
@@ -283,45 +276,6 @@ class ChatWindowUI {
         } else {
             console.warn('❌ Transcription text is empty or invalid:', text);
         }
-    }
-
-    async handleSkillActivated(skillName) {
-        try {
-            // Request the actual skill prompt from the main process
-            const skillPrompt = await window.electronAPI.getSkillPrompt(skillName);
-            
-            if (skillPrompt) {
-                // Extract the title/first line for display
-                const lines = skillPrompt.split('\n').filter(line => line.trim());
-                const title = lines.find(line => line.startsWith('#')) || `# ${skillName.toUpperCase()} Mode`;
-                const cleanTitle = title.replace(/^#+\s*/, '').trim();
-                
-                // Show a brief activation message with the skill title
-                const icons = {
-                    'dsa': '🧠',
-                    'behavioral': '💼', 
-                    'sales': '💰',
-                    'presentation': '🎤',
-                    'data-science': '📊',
-                    'programming': '💻',
-                    'devops': '🚀',
-                    'system-design': '🏗️',
-                    'negotiation': '🤝'
-                };
-                
-                const icon = icons[skillName] || '🎯';
-                this.addMessage(`${icon} ${cleanTitle} - Ready to help!`, 'system');
-            } else {
-                // Fallback if prompt not found
-                this.addMessage(`🎯 ${skillName.toUpperCase()} Mode: Ready to help!`, 'system');
-            }
-        } catch (error) {
-            logger.error('Failed to load skill prompt', { skill: skillName, error: error.message });
-            // Fallback message
-            this.addMessage(`🎯 ${skillName.toUpperCase()} Mode: Ready to help!`, 'system');
-        }
-        
-        logger.info('Skill activated in chat', { skill: skillName });
     }
 
     async sendMessage() {

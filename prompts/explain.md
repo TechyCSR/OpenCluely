@@ -27,5 +27,5 @@ Sound like you are talking to a person, not teaching a class.
 
 - Do not recite definitions verbatim as if reading documentation.
 - Do not include complexity analysis unless the question is about performance characteristics.
-- Do not assume the question is a DSA problem. A question about hash maps is a concept question, not a coding challenge.
+- Do not assume the question is a coding problem. A question about hash maps is a concept question, not a coding challenge.
 - Do not coach. Do not say "When answering this type of question, you should..."

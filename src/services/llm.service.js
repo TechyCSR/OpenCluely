@@ -12,8 +12,26 @@ class LLMService {
     this.isInitialized = false;
     this.requestCount = 0;
     this.errorCount = 0;
+    this.answerStylePrompt = String(process.env.ANSWER_STYLE_PROMPT || '').trim();
     
     this.initializeClient();
+  }
+
+  setAnswerStylePrompt(text) {
+    this.answerStylePrompt = String(text || '').trim();
+    return this.answerStylePrompt;
+  }
+
+  _customAnswerStyleBlock() {
+    const style = String(this.answerStylePrompt || '').trim();
+    if (!style) return '';
+    return [
+      '## USER ANSWER STYLE (highest priority for tone, length, and layout)',
+      'Follow these instructions for how the answer should look and sound.',
+      'Do not invent facts. Keep resume grounding and the coding language.',
+      '',
+      style
+    ].join('\n');
   }
 
   initializeClient() {
@@ -316,7 +334,7 @@ class LLMService {
 
   formatImageInstruction(accompanyingText, _intentMode, programmingLanguage) {
     const langNote = programmingLanguage
-      ? ` If this is a coding or DSA question, answer in ${String(programmingLanguage).toUpperCase()} with a short approach then complete code.`
+      ? ` If this is a coding question, answer in ${String(programmingLanguage).toUpperCase()} with a short approach then complete code.`
       : '';
     if (accompanyingText) {
       return `${accompanyingText}\n\nThe attached image is the question. Answer it.${langNote}`;
@@ -582,15 +600,15 @@ class LLMService {
    * Reads prompt files from disk (cached after first read), layers them in order,
    * and injects resume grounding at the correct priority.
    *
-   * Assembly order for non-DSA:
+   * Assembly order for spoken/general answers:
    *   interview_base.md  (candidate voice, no-code hard rules)
    *   + mode file        (resume.md | behavioral.md | explain.md)
    *   + CANDIDATE CONTEXT  (from resumeService.getGroundingContext)
    *
-   * For CODE_DSA:
-   *   dsa.md + language injection only. No base persona (conflicting rules).
+   * For CODE:
+   *   coding.md + language injection only. No base persona (conflicting rules).
    *
-   * @param {string} intentMode  - 'CODE_DSA'|'RESUME_PROJECT'|'BEHAVIORAL'|'EXPLAIN'|'general'
+   * @param {string} intentMode  - 'CODE'|'RESUME_PROJECT'|'BEHAVIORAL'|'EXPLAIN'|'general'
    * @param {string} text        - Raw user question (used for grounding retrieval)
    * @param {string|null} programmingLanguage
    * @returns {string} Assembled system instruction text
@@ -602,9 +620,10 @@ class LLMService {
 
     // Map old router values to new enum (backward-compat until Step 2 router expansion)
     const modeNormalizer = {
-      'code':    'CODE_DSA',
-      'explain': 'EXPLAIN',
-      'general': 'RESUME_PROJECT',  // conservative: treat unclassified as candidate voice
+      'code':     'CODE',
+      'CODE_DSA': 'CODE',
+      'explain':  'EXPLAIN',
+      'general':  'RESUME_PROJECT',
     };
     const resolvedMode = modeNormalizer[intentMode] || intentMode;
 
@@ -621,18 +640,16 @@ class LLMService {
       }
     };
 
-    // ── CODE_DSA ─────────────────────────────────────────────────────────────
-    // Use dsa.md as the complete persona. Append language injection if needed.
-    if (resolvedMode === 'CODE_DSA') {
-      let dsaPrompt = readPrompt('dsa.md');
+    if (resolvedMode === 'CODE') {
+      let codingPrompt = readPrompt('coding.md');
       if (programmingLanguage) {
-        dsaPrompt = promptLoader.getSkillPrompt('dsa', programmingLanguage) || dsaPrompt;
+        codingPrompt = promptLoader.getSkillPrompt('coding', programmingLanguage) || codingPrompt;
       }
-      logger.debug('_buildSystemInstruction: CODE_DSA', { programmingLanguage });
-      return dsaPrompt;
+      const styleBlock = this._customAnswerStyleBlock();
+      if (styleBlock) codingPrompt = `${codingPrompt}\n\n---\n\n${styleBlock}`;
+      logger.debug('_buildSystemInstruction: CODE', { programmingLanguage });
+      return codingPrompt;
     }
-
-    // ── Non-DSA modes ─────────────────────────────────────────────────────────
     const base = readPrompt('interview_base.md');
 
     const modeFileMap = {
@@ -654,10 +671,11 @@ class LLMService {
       }
     }
 
-    const parts = [base, modePrompt, groundingBlock].filter(Boolean);
+    const styleBlock = this._customAnswerStyleBlock();
+    const parts = [base, modePrompt, groundingBlock, styleBlock].filter(Boolean);
     const assembled = parts.join('\n\n---\n\n').trim();
 
-    logger.debug('_buildSystemInstruction: non-DSA', {
+    logger.debug('_buildSystemInstruction: spoken/general', {
       intentMode,
       resolvedMode,
       modeFile: modeFile || 'none',
@@ -1384,22 +1402,12 @@ class LLMService {
     });
   }
 
-  generateFallbackResponse(text, activeSkill) {
-    logger.info('Generating fallback response', { activeSkill });
+  generateFallbackResponse(text, _activeSkill) {
+    logger.info('Generating fallback response');
 
-    const fallbackResponses = {
-      'dsa': 'This appears to be a data structures and algorithms problem. Consider breaking it down into smaller components and identifying the appropriate algorithm or data structure to use.',
-      'system-design': 'For this system design question, consider scalability, reliability, and the trade-offs between different architectural approaches.',
-      'programming': 'This looks like a programming challenge. Focus on understanding the requirements, edge cases, and optimal time/space complexity.',
-      'default': 'I can help analyze this content. Please ensure your Gemini API key is properly configured for detailed analysis.'
-    };
-
-    const response = fallbackResponses[activeSkill] || fallbackResponses.default;
-    
     return {
-      response,
+      response: 'I can help analyze this content. Please ensure your Gemini API key is properly configured for detailed analysis.',
       metadata: {
-        skill: activeSkill,
         processingTime: 0,
         requestId: this.requestCount,
         usedFallback: true
@@ -1407,41 +1415,20 @@ class LLMService {
     };
   }
 
-  generateIntelligentFallbackResponse(text, activeSkill) {
-    logger.info('Generating intelligent fallback response for transcription', { activeSkill });
+  generateIntelligentFallbackResponse(text, _activeSkill) {
+    logger.info('Generating intelligent fallback response for transcription');
 
-    // Simple heuristic to determine if message seems skill-related
-    const skillKeywords = {
-      'dsa': ['algorithm', 'data structure', 'array', 'tree', 'graph', 'sort', 'search', 'complexity', 'big o'],
-      'programming': ['code', 'function', 'variable', 'class', 'method', 'bug', 'debug', 'syntax'],
-      'system-design': ['scalability', 'database', 'architecture', 'microservice', 'load balancer', 'cache'],
-      'behavioral': ['interview', 'experience', 'situation', 'leadership', 'conflict', 'team'],
-      'sales': ['customer', 'deal', 'negotiation', 'price', 'revenue', 'prospect'],
-      'presentation': ['slide', 'audience', 'public speaking', 'presentation', 'nervous'],
-      'data-science': ['data', 'model', 'machine learning', 'statistics', 'analytics', 'python', 'pandas'],
-      'devops': ['deployment', 'ci/cd', 'docker', 'kubernetes', 'infrastructure', 'monitoring'],
-      'negotiation': ['negotiate', 'compromise', 'agreement', 'terms', 'conflict resolution']
-    };
-
-    const textLower = text.toLowerCase();
-    const relevantKeywords = skillKeywords[activeSkill] || [];
-    const hasRelevantKeywords = relevantKeywords.some(keyword => textLower.includes(keyword));
-    
-    // Check for question indicators
+    const textLower = String(text || '').toLowerCase();
     const questionIndicators = ['how', 'what', 'why', 'when', 'where', 'can you', 'could you', 'should i', '?'];
     const seemsLikeQuestion = questionIndicators.some(indicator => textLower.includes(indicator));
 
-    let response;
-    if (hasRelevantKeywords || seemsLikeQuestion) {
-      response = `I'm having trouble processing that right now, but it sounds like a ${activeSkill} question. Could you rephrase or ask more specifically about what you need help with?`;
-    } else {
-      response = `Yeah, I'm listening. Ask your question relevant to ${activeSkill}.`;
-    }
-    
+    const response = seemsLikeQuestion
+      ? "I'm having trouble processing that right now. Could you rephrase or ask more specifically about what you need help with?"
+      : "Yeah, I'm listening. Ask your question.";
+
     return {
       response,
       metadata: {
-        skill: activeSkill,
         processingTime: 0,
         requestId: this.requestCount,
         usedFallback: true,

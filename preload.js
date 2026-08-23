@@ -24,7 +24,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   enableWindowInteraction: () => ipcRenderer.invoke('enable-window-interaction'),
   disableWindowInteraction: () => ipcRenderer.invoke('disable-window-interaction'),
   switchToChat: () => ipcRenderer.invoke('switch-to-chat'),
-  switchToSkills: () => ipcRenderer.invoke('switch-to-skills'),
   resizeWindow: (width, height) => ipcRenderer.invoke('resize-window', { width, height }),
   moveWindow: (deltaX, deltaY) => ipcRenderer.invoke('move-window', { deltaX, deltaY }),
   getWindowStats: () => ipcRenderer.invoke('get-window-stats'),
@@ -35,8 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearSessionMemory: () => ipcRenderer.invoke('clear-session-memory'),
   formatSessionHistory: () => ipcRenderer.invoke('format-session-history'),
   sendChatMessage: (text) => ipcRenderer.invoke('send-chat-message', text),
-  getSkillPrompt: (skillName) => ipcRenderer.invoke('get-skill-prompt', skillName),
-  
+
   // Gemini LLM configuration
   setGeminiApiKey: (apiKey) => ipcRenderer.invoke('set-gemini-api-key', apiKey),
   getGeminiStatus: () => ipcRenderer.invoke('get-gemini-status'),
@@ -64,7 +62,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('install-progress', wrapped);
   },
   updateAppIcon: (iconKey) => ipcRenderer.invoke('update-app-icon', iconKey),
-  updateActiveSkill: (skill) => ipcRenderer.invoke('update-active-skill', skill),
   restartAppForStealth: () => ipcRenderer.invoke('restart-app-for-stealth'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
   notifyMainWindowReady: () => {
@@ -124,7 +121,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onOpenGeminiConfig: (callback) => ipcRenderer.on('open-gemini-config', callback),
   onDisplayLlmResponse: (callback) => ipcRenderer.on('display-llm-response', callback),
   onShowLoading: (callback) => ipcRenderer.on('show-loading', callback),
-  onSkillChanged: (callback) => ipcRenderer.on('skill-changed', callback),
   onInteractionModeChanged: (callback) => ipcRenderer.on('interaction-mode-changed', callback),
   onRecordingStarted: (callback) => ipcRenderer.on('recording-started', callback),
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
@@ -132,6 +128,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
   onInterviewUpdate: (callback) => ipcRenderer.on('interview-update', callback),
   onInterviewHud: (callback) => ipcRenderer.on('interview-hud', callback),
+  onInterviewHistoryNav: (callback) => ipcRenderer.on('interview-history-nav', callback),
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),
@@ -148,7 +145,6 @@ contextBridge.exposeInMainWorld('api', {
             'save-settings',
             'toggle-recording',
             'toggle-interaction-mode',
-            'update-skill',
             'window-loaded'
         ];
         if (validChannels.includes(channel)) {
@@ -162,8 +158,6 @@ contextBridge.exposeInMainWorld('api', {
             'load-settings',
             'recording-state-changed',
             'interaction-mode-changed',
-            'skill-updated',
-            'update-skill',
             'recording-started',
             'recording-stopped'
         ];

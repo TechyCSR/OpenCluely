@@ -33,10 +33,40 @@ function resolveEnvPath() {
 const ENV_PATH = resolveEnvPath();
 require("dotenv").config({ path: ENV_PATH });
 
-const CODING_LANGUAGES = new Set(["cpp", "c", "python", "java", "javascript"]);
+const LANGUAGE_ALIASES = {
+  "c++": "cpp",
+  "c#": "csharp",
+  js: "javascript",
+  ts: "typescript",
+  golang: "go",
+  "node.js": "javascript",
+};
 function resolveCodingLanguage(raw) {
-  const value = String(raw || "").trim().toLowerCase();
-  return CODING_LANGUAGES.has(value) ? value : "cpp";
+  const value = String(raw || "").trim();
+  if (!value) return "java";
+  const key = value.toLowerCase();
+  return LANGUAGE_ALIASES[key] || value;
+}
+
+function answerStyleFilePath() {
+  return path.join(path.dirname(ENV_PATH), "answer-style.txt");
+}
+
+function readAnswerStylePrompt() {
+  try {
+    return fs.readFileSync(answerStyleFilePath(), "utf8");
+  } catch (_) {
+    return process.env.ANSWER_STYLE_PROMPT || "";
+  }
+}
+
+function writeAnswerStylePrompt(text) {
+  const body = String(text || "").replace(/\r\n/g, "\n").trimEnd();
+  const file = answerStyleFilePath();
+  const dir = path.dirname(file);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(file, body, "utf8");
+  return body;
 }
 
 // Format a value for a single .env line. Newlines are collapsed to spaces and
@@ -122,8 +152,8 @@ class ApplicationController {
   constructor() {
     this.isReady = false;
     this.starting = false;
-    this.activeSkill = "dsa";
     this.codingLanguage = resolveCodingLanguage(process.env.CODING_LANGUAGE);
+    this.answerStylePrompt = "";
     this.speechAvailable = false;
 
     // Utterance coalescing: VAD emits a transcript per natural pause, but a
@@ -253,6 +283,10 @@ class ApplicationController {
     try {
       this.setupPermissions();
       this.setupNetworkConfiguration();
+      this.answerStylePrompt = readAnswerStylePrompt();
+      if (typeof llmService.setAnswerStylePrompt === "function") {
+        llmService.setAnswerStylePrompt(this.answerStylePrompt);
+      }
 
       // Small delay to ensure desktop/space detection is accurate
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -659,11 +693,6 @@ class ApplicationController {
       return windowManager.getWindowStats();
     });
 
-    ipcMain.handle("switch-to-skills", () => {
-      windowManager.switchToWindow("skills");
-      return windowManager.getWindowStats();
-    });
-
     ipcMain.handle("resize-window", (event, { width, height }) => {
       const mainWindow = windowManager.getWindow("main");
       if (mainWindow) {
@@ -725,10 +754,7 @@ class ApplicationController {
       sessionManager.addUserInput(text, 'chat');
       logger.debug('Chat message added to session memory', { textLength: text.length });
 
-      // Typed messages need the full skill pipeline (with history context),
-      // NOT the voice "intelligent filter" pipeline. Voice keeps its filter
-      // behaviour; typed chat goes through processWithLLM so it gets real
-      // answers using the active skill prompt and recent conversation history.
+      // Typed messages use the intent router + prompt assembler (same as voice).
       (async () => {
         try {
           const sessionHistory = sessionManager.getOptimizedHistory();
@@ -742,17 +768,6 @@ class ApplicationController {
       })();
 
       return { success: true };
-    });
-
-    ipcMain.handle("get-skill-prompt", (event, skillName) => {
-      try {
-        const { promptLoader } = require('./prompt-loader');
-        const skillPrompt = promptLoader.getSkillPrompt(skillName);
-        return skillPrompt;
-      } catch (error) {
-        logger.error('Failed to get skill prompt', { skillName, error: error.message });
-        return null;
-      }
     });
 
     ipcMain.handle("set-gemini-api-key", (event, apiKey) => {
@@ -951,12 +966,6 @@ class ApplicationController {
       return this.updateAppIcon(iconKey);
     });
 
-    ipcMain.handle("update-active-skill", (event, skill) => {
-      this.activeSkill = skill;
-      windowManager.broadcastToAllWindows("skill-changed", { skill });
-      return { success: true };
-    });
-
     ipcMain.handle("restart-app-for-stealth", () => {
       // Force restart the app to ensure stealth name changes take effect
       const { app } = require("electron");
@@ -1038,12 +1047,6 @@ class ApplicationController {
     // Handle save settings (synchronous)
     ipcMain.on("save-settings", (event, settings) => {
       this.saveSettings(settings);
-    });
-
-    // Handle update skill
-    ipcMain.on("update-skill", (event, skill) => {
-      this.activeSkill = skill;
-      windowManager.broadcastToAllWindows("skill-updated", { skill });
     });
 
     // Handle quit app (alternative method)
@@ -1165,9 +1168,11 @@ class ApplicationController {
     if (enabled && !this._interviewShortcutsRegistered) {
       const spaceOk = globalShortcut.register("Space", () => this.submitInterviewTranscript());
       const escOk = globalShortcut.register("Escape", () => this.clearInterviewTranscript());
+      const prevOk = globalShortcut.register("Alt+Left", () => this.navigateInterviewHistory(-1));
+      const nextOk = globalShortcut.register("Alt+Right", () => this.navigateInterviewHistory(1));
       this._interviewShortcutsRegistered = true;
       this._startRightCtrlDockHook();
-      logger.info("Interview Mode shortcuts registered", { spaceOk, escOk });
+      logger.info("Interview Mode shortcuts registered", { spaceOk, escOk, prevOk, nextOk });
       if (!spaceOk) {
         logger.warn("Electron failed to register global Space; using OS hook fallback");
       }
@@ -1176,6 +1181,8 @@ class ApplicationController {
     if (!enabled && this._interviewShortcutsRegistered) {
       globalShortcut.unregister("Space");
       globalShortcut.unregister("Escape");
+      globalShortcut.unregister("Alt+Left");
+      globalShortcut.unregister("Alt+Right");
       this._stopRightCtrlDockHook();
       this._interviewShortcutsRegistered = false;
     }
@@ -1243,6 +1250,20 @@ class ApplicationController {
     }
     this.broadcastInterviewUpdate();
     return this.interview.toPayload();
+  }
+
+  navigateInterviewHistory(direction) {
+    if (!this.interview.enabled) {
+      return;
+    }
+    const llmWindow = windowManager.getWindow("llmResponse");
+    if (!llmWindow || llmWindow.isDestroyed()) {
+      return;
+    }
+    llmWindow.webContents.send("interview-history-nav", {
+      direction: direction > 0 ? "next" : "prev"
+    });
+    windowManager.showInterviewAnswerCard();
   }
 
   async submitInterviewTranscript() {
@@ -1483,11 +1504,7 @@ class ApplicationController {
     }
     const isInteractive = windowManager.getWindowStats().isInteractive;
 
-    if (isInteractive) {
-      // Interactive mode: Navigate to previous skill
-      this.navigateSkill(-1);
-    } else {
-      // Non-interactive mode: Move window up
+    if (!isInteractive) {
       windowManager.moveBoundWindows(0, -20);
     }
   }
@@ -1495,11 +1512,7 @@ class ApplicationController {
   handleDownArrow() {
     const isInteractive = windowManager.getWindowStats().isInteractive;
 
-    if (isInteractive) {
-      // Interactive mode: Navigate to next skill
-      this.navigateSkill(1);
-    } else {
-      // Non-interactive mode: Move window down
+    if (!isInteractive) {
       windowManager.moveBoundWindows(0, 20);
     }
   }
@@ -1530,44 +1543,6 @@ class ApplicationController {
       windowManager.moveBoundWindows(20, 0);
     }
     // Interactive mode: Right arrow does nothing
-  }
-
-  navigateSkill(direction) {
-    const availableSkills = [
-      "dsa",
-    ];
-
-    const currentIndex = availableSkills.indexOf(this.activeSkill);
-    if (currentIndex === -1) {
-      logger.warn("Current skill not found in available skills", {
-        currentSkill: this.activeSkill,
-        availableSkills,
-      });
-      return;
-    }
-
-    // Calculate new index with wrapping
-    let newIndex = currentIndex + direction;
-    if (newIndex >= availableSkills.length) {
-      newIndex = 0; // Wrap to beginning
-    } else if (newIndex < 0) {
-      newIndex = availableSkills.length - 1; // Wrap to end
-    }
-
-    const newSkill = availableSkills[newIndex];
-    this.activeSkill = newSkill;
-
-    // Update session manager with the new skill
-    sessionManager.setActiveSkill(newSkill);
-
-    logger.info("Skill navigated via global shortcut", {
-      from: availableSkills[currentIndex],
-      to: newSkill,
-      direction: direction > 0 ? "down" : "up",
-    });
-
-    // Broadcast the skill change to all windows
-    windowManager.broadcastToAllWindows("skill-updated", { skill: newSkill });
   }
 
   async triggerScreenshotOCR() {
@@ -1612,14 +1587,13 @@ class ApplicationController {
       this._responseSeq = (this._responseSeq || 0) + 1;
       const messageId = `img-${Date.now()}-${this._responseSeq}`;
       this.sendToVoiceResponseWindows("transcription-llm-response-start", {
-        messageId,
-        skill: this.activeSkill
+        messageId
       });
 
       const llmResult = await llmService.processImageWithSkillStream(
         capture.imageBuffer,
         capture.mimeType || 'image/png',
-        this.activeSkill,
+        null,
         sessionHistory.recent,
         programmingLanguage,
         (delta) => {
@@ -1637,7 +1611,6 @@ class ApplicationController {
 
       const answer = String((llmResult && llmResult.response) || '').trim();
       sessionManager.addModelResponse(answer, {
-        skill: this.activeSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
         isImageAnalysis: true
@@ -1646,7 +1619,6 @@ class ApplicationController {
       this.broadcastTranscriptionLLMResponse(llmResult);
 
       windowManager.showLLMResponse(answer || "No answer came back for that screenshot. Try again.", {
-        skill: this.activeSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
         isImageAnalysis: true
@@ -1686,21 +1658,21 @@ class ApplicationController {
       sessionManager.addUserInput(text, 'llm_input');
 
       // Route intent: only pass programmingLanguage when the question is a coding request.
-      const { mode: intentMode, reason: intentReason } = routeIntent(text, this.activeSkill);
+      const { mode: intentMode, reason: intentReason } = routeIntent(text);
       const programmingLanguage = (intentMode === 'code') ? this.codingLanguage : null;
-      logger.debug('Intent routed for chat message', { intentMode, intentReason, skill: this.activeSkill });
+      logger.debug('Intent routed for chat message', { intentMode, intentReason });
 
       this._responseSeq = (this._responseSeq || 0) + 1;
       const messageId = `chat-${Date.now()}-${this._responseSeq}`;
       windowManager.broadcastToAllWindows("transcription-llm-response-start", {
         messageId,
-        skill: this.activeSkill
+        question: text
       });
-      windowManager.showLLMLoading();
+      windowManager.showLLMLoading({ question: text });
 
       const llmResult = await llmService.processTextWithSkillStream(
         text,
-        this.activeSkill,
+        null,
         sessionHistory.recent,
         programmingLanguage,
         (delta) => {
@@ -1711,11 +1683,10 @@ class ApplicationController {
         },
         intentMode
       );
-      llmResult.metadata = { ...llmResult.metadata, messageId };
+      llmResult.metadata = { ...llmResult.metadata, messageId, question: text };
 
       logger.info("LLM processing completed, showing response", {
         responseLength: llmResult.response.length,
-        skill: this.activeSkill,
         intentMode,
         programmingLanguage: programmingLanguage || 'not applicable',
         processingTime: llmResult.metadata.processingTime,
@@ -1724,7 +1695,6 @@ class ApplicationController {
 
       // Add LLM response to session memory
       sessionManager.addModelResponse(llmResult.response, {
-        skill: this.activeSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
       });
@@ -1732,14 +1702,13 @@ class ApplicationController {
       this.broadcastTranscriptionLLMResponse(llmResult);
 
       windowManager.showLLMResponse(llmResult.response, {
-        skill: this.activeSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
+        question: text
       });
     } catch (error) {
       logger.error("LLM processing failed", {
         error: error.message,
-        skill: this.activeSkill,
       });
 
       windowManager.hideLLMResponse();
@@ -1748,8 +1717,7 @@ class ApplicationController {
         content: `LLM processing failed: ${error.message}`,
         action: 'llm_error',
         metadata: {
-          error: error.message,
-          skill: this.activeSkill
+          error: error.message
         }
       });
 
@@ -1859,15 +1827,14 @@ class ApplicationController {
       }
 
       logger.info("Processing transcription with intelligent LLM response", {
-        skill: this.activeSkill,
         textLength: cleanText.length,
         textPreview: cleanText.substring(0, 100) + "..."
       });
 
       // Route intent: only pass programmingLanguage when the question is a coding request.
-      const { mode: intentMode, reason: intentReason } = routeIntent(cleanText, this.activeSkill);
+      const { mode: intentMode, reason: intentReason } = routeIntent(cleanText);
       const programmingLanguage = (intentMode === 'code') ? this.codingLanguage : null;
-      logger.debug('Intent routed for transcription', { intentMode, intentReason, skill: this.activeSkill });
+      logger.debug('Intent routed for transcription', { intentMode, intentReason });
 
       // Stream the answer progressively to the configured speech target.
       // A unique messageId ties the start/chunk/final events to one bubble so
@@ -1876,19 +1843,19 @@ class ApplicationController {
       messageId = `tr-${Date.now()}-${this._responseSeq}`;
       this.sendToVoiceResponseWindows("transcription-llm-response-start", {
         messageId,
-        skill: this.activeSkill
+        question: cleanText
       });
       if (this.interview.enabled) {
         perfTrace.mark("geminiRequest");
         perfTrace.setMeta({ transcriptLength: cleanText.length });
         this._recordPerfRuntimeMeta();
-      }
-      if (this.shouldShowVoiceOverlay() && !this.interview.enabled) {
-        windowManager.showLLMLoading();
+        windowManager.showLLMLoading({ question: cleanText });
+      } else if (this.shouldShowVoiceOverlay()) {
+        windowManager.showLLMLoading({ question: cleanText });
       }
       const llmResult = await llmService.processTranscriptionWithIntelligentResponseStream(
         cleanText,
-        this.activeSkill,
+        null,
         sessionHistory.recent,
         programmingLanguage,
         (delta) => {
@@ -1905,11 +1872,10 @@ class ApplicationController {
           });
         }
       );
-      llmResult.metadata = { ...llmResult.metadata, messageId };
+      llmResult.metadata = { ...llmResult.metadata, messageId, question: cleanText };
 
       // Add LLM response to session memory
       sessionManager.addModelResponse(llmResult.response, {
-        skill: this.activeSkill,
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
         isTranscriptionResponse: true
@@ -1918,16 +1884,15 @@ class ApplicationController {
       this.sendTranscriptionLLMResponseToVoiceTargets(llmResult);
       if (this.shouldShowVoiceOverlay() || this.interview.enabled) {
         windowManager.showLLMResponse(llmResult.response, {
-          skill: this.activeSkill,
           processingTime: llmResult.metadata.processingTime,
           usedFallback: llmResult.metadata.usedFallback,
-          isTranscriptionResponse: true
+          isTranscriptionResponse: true,
+          question: cleanText
         });
       }
 
       logger.info("Transcription LLM response completed", {
         responseLength: llmResult.response.length,
-        skill: this.activeSkill,
         intentMode,
         programmingLanguage: programmingLanguage || 'not applicable',
         processingTime: llmResult.metadata.processingTime
@@ -1943,13 +1908,12 @@ class ApplicationController {
       logger.error("Transcription LLM processing failed", {
         error: error.message,
         errorStack: error.stack,
-        skill: this.activeSkill,
         text: text ? text.substring(0, 100) : 'undefined'
       });
 
       // Try to provide a fallback response
       try {
-        const fallbackResult = llmService.generateIntelligentFallbackResponse(text, this.activeSkill);
+        const fallbackResult = llmService.generateIntelligentFallbackResponse(text, null);
         // Carry the streaming messageId so the target replaces the live
         // bubble instead of leaving it stuck and appending a duplicate.
         if (messageId) {
@@ -1957,7 +1921,6 @@ class ApplicationController {
         }
 
         sessionManager.addModelResponse(fallbackResult.response, {
-          skill: this.activeSkill,
           processingTime: fallbackResult.metadata.processingTime,
           usedFallback: true,
           isTranscriptionResponse: true,
@@ -1967,14 +1930,13 @@ class ApplicationController {
         this.sendTranscriptionLLMResponseToVoiceTargets(fallbackResult);
         if (this.shouldShowVoiceOverlay() || this.interview.enabled) {
           windowManager.showLLMResponse(fallbackResult.response, {
-            skill: this.activeSkill,
             processingTime: fallbackResult.metadata.processingTime,
             usedFallback: true,
-            isTranscriptionResponse: true
+            isTranscriptionResponse: true,
+            question: typeof text === 'string' ? text.trim() : ''
           });
         }
         logger.info("Used fallback response for transcription", {
-          skill: this.activeSkill,
           fallbackResponse: fallbackResult.response
         });
         
@@ -1988,8 +1950,7 @@ class ApplicationController {
           content: `Transcription LLM processing failed: ${error.message}`,
           action: 'transcription_llm_error',
           metadata: {
-            error: error.message,
-            skill: this.activeSkill
+            error: error.message
           }
         });
       }
@@ -2014,12 +1975,10 @@ class ApplicationController {
     const broadcastData = {
       response: llmResult.response,
       metadata: llmResult.metadata,
-      skill: this.activeSkill, // Add the current active skill to the top level
     };
 
     logger.info("Broadcasting LLM success to all windows", {
       responseLength: llmResult.response.length,
-      skill: this.activeSkill,
       dataKeys: Object.keys(broadcastData),
       responsePreview: llmResult.response.substring(0, 100) + "...",
     });
@@ -2039,13 +1998,11 @@ class ApplicationController {
       response: llmResult.response,
       metadata: llmResult.metadata,
       messageId: llmResult.metadata && llmResult.metadata.messageId,
-      skill: this.activeSkill,
       isTranscriptionResponse: true
     };
 
     logger.info("Broadcasting transcription LLM response to all windows", {
       responseLength: llmResult.response.length,
-      skill: this.activeSkill,
       responsePreview: llmResult.response.substring(0, 100) + "..."
     });
 
@@ -2090,8 +2047,8 @@ class ApplicationController {
       response: llmResult.response,
       metadata: llmResult.metadata,
       messageId: llmResult.metadata && llmResult.metadata.messageId,
-      skill: this.activeSkill,
-      isTranscriptionResponse: true
+      isTranscriptionResponse: true,
+      question: (llmResult.metadata && llmResult.metadata.question) || ''
     };
     this.sendToVoiceResponseWindows("transcription-llm-response", data);
   }
@@ -2155,8 +2112,8 @@ class ApplicationController {
     // using. Empty strings are returned rather than skipped so the UI can
     // distinguish "unset" from "stale value from a previous load".
     return {
-      codingLanguage: this.codingLanguage || "cpp",
-      activeSkill: this.activeSkill || "dsa",
+      codingLanguage: this.codingLanguage || "java",
+      answerStylePrompt: this.answerStylePrompt || readAnswerStylePrompt(),
       appIcon: this.appIcon || "terminal",
       selectedIcon: this.appIcon || "terminal",
       windowGap: windowManager.windowGap,
@@ -2192,11 +2149,11 @@ class ApplicationController {
           language: this.codingLanguage,
         });
       }
-      if (settings.activeSkill) {
-        this.activeSkill = settings.activeSkill;
-        windowManager.broadcastToAllWindows("skill-updated", {
-          skill: settings.activeSkill,
-        });
+      if (settings.answerStylePrompt !== undefined) {
+        this.answerStylePrompt = writeAnswerStylePrompt(settings.answerStylePrompt);
+        if (typeof llmService.setAnswerStylePrompt === "function") {
+          llmService.setAnswerStylePrompt(this.answerStylePrompt);
+        }
       }
       if (settings.appIcon) {
         this.appIcon = settings.appIcon;
@@ -2321,6 +2278,11 @@ class ApplicationController {
       const loggedSettings = { ...settings };
       if (Object.prototype.hasOwnProperty.call(loggedSettings, "deepgramKey")) {
         loggedSettings.deepgramKey = loggedSettings.deepgramKey ? "[set]" : "";
+      }
+      if (Object.prototype.hasOwnProperty.call(loggedSettings, "answerStylePrompt")) {
+        loggedSettings.answerStylePrompt = loggedSettings.answerStylePrompt
+          ? `[${String(loggedSettings.answerStylePrompt).length} chars]`
+          : "";
       }
       logger.info("Settings saved successfully", {
         ...loggedSettings,

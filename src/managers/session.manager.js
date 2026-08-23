@@ -8,75 +8,24 @@ class SessionManager {
     this.compressionEnabled = true;
     this.maxSize = config.get('session.maxMemorySize');
     this.compressionThreshold = config.get('session.compressionThreshold');
-    this.currentSkill = 'dsa'; // Default skill is DSA
     this.isInitialized = false;
-    
-    this.initializeWithSkillPrompts();
+
+    this.initializeSession();
   }
 
-  /**
-   * Initialize session memory with all available skill prompts
-   */
-  async initializeWithSkillPrompts() {
+  async initializeSession() {
     if (this.isInitialized) return;
-    
+
     try {
-      // Load prompts from the prompt loader
+      // Keep coding.md loaded so screenshot coding answers can inject the selected language.
       promptLoader.loadPrompts();
-      const availableSkills = promptLoader.getAvailableSkills();
-      
-      // Add initial system context for each skill
-      for (const skill of availableSkills) {
-        const skillPrompt = promptLoader.getSkillPrompt(skill);
-        if (skillPrompt) {
-          const event = this.createConversationEvent({
-            role: 'system',
-            content: skillPrompt,
-            skill: skill,
-            action: 'skill_prompt_initialization',
-            metadata: {
-              isInitialization: true,
-              skillName: skill
-            }
-          });
-          this.sessionMemory.push(event);
-        }
-      }
-      
       this.isInitialized = true;
-      logger.info('Session memory initialized with skill prompts', {
-        skillCount: availableSkills.length,
-        totalEvents: this.sessionMemory.length
-      });
-      
+      logger.info('Session memory initialized');
     } catch (error) {
-      logger.error('Failed to initialize session memory with skill prompts', {
+      logger.error('Failed to initialize session memory', {
         error: error.message
       });
     }
-  }
-
-  /**
-   * Set the current active skill
-   */
-  setActiveSkill(skill) {
-    const previousSkill = this.currentSkill;
-    this.currentSkill = skill;
-    
-    this.addConversationEvent({
-      role: 'system',
-      content: `Switched to ${skill} mode`,
-      action: 'skill_change',
-      metadata: {
-        previousSkill,
-        newSkill: skill
-      }
-    });
-    
-    logger.info('Active skill changed', { 
-      from: previousSkill, 
-      to: skill 
-    });
   }
 
   /**
@@ -86,7 +35,6 @@ class SessionManager {
     const event = this.createConversationEvent({
       role,
       content,
-      skill: this.currentSkill,
       action: action || this.inferActionFromRole(role),
       metadata
     });
@@ -96,7 +44,6 @@ class SessionManager {
     logger.debug('Conversation event added', {
       role,
       action: event.action,
-      skill: this.currentSkill,
       contentLength: content?.length || 0,
       totalEvents: this.sessionMemory.length
     });
@@ -154,13 +101,12 @@ class SessionManager {
   /**
    * Create a conversation event with consistent structure
    */
-  createConversationEvent({ role, content, skill, action, metadata = {} }) {
+  createConversationEvent({ role, content, action, metadata = {} }) {
     return {
       id: this.generateEventId(),
       timestamp: new Date().toISOString(),
       role: role, // 'user', 'model', or 'system'
       content,
-      skill: skill || this.currentSkill,
       action,
       category: this.categorizeAction(action),
       metadata: {
@@ -170,7 +116,6 @@ class SessionManager {
       contextSummary: this.generateContextSummary(action, { 
         role, 
         content, 
-        skill: skill || this.currentSkill,
         ...metadata 
       })
     };
@@ -201,7 +146,6 @@ class SessionManager {
       role: event.role,
       content: event.content,
       timestamp: event.timestamp,
-      skill: event.skill,
       action: event.action
     }));
   }
@@ -218,44 +162,27 @@ class SessionManager {
       role: event.role,
       content: event.content,
       timestamp: event.timestamp,
-      skill: event.skill,
       action: event.action
     }));
   }
 
   /**
-   * Get skill-specific context with optional programming language support
-   * @param {string|null} skillName - Target skill name (defaults to current skill)
-   * @param {string|null} programmingLanguage - Optional programming language for injection
+   * Coding-language context for screenshot/code answers.
+   * coding.md is only used when the caller asks for a programming language.
    */
-  getSkillContext(skillName = null, programmingLanguage = null) {
-    const targetSkill = skillName || this.currentSkill;
-    
-    // Get skill prompt with programming language injection if provided
+  getSkillContext(_skillName = null, programmingLanguage = null) {
     let skillPrompt = null;
-    if (programmingLanguage && promptLoader.requiresProgrammingLanguage(targetSkill)) {
-      // Use prompt loader to get language-enhanced prompt
-      skillPrompt = promptLoader.getSkillPrompt(targetSkill, programmingLanguage);
-    } else {
-      // Find skill prompt from session memory (fallback)
-      const skillPromptEvent = this.sessionMemory.find(event => 
-        event.action === 'skill_prompt_initialization' && 
-        event.skill === targetSkill
-      );
-      skillPrompt = skillPromptEvent?.content || null;
+    if (programmingLanguage) {
+      skillPrompt = promptLoader.getSkillPrompt('coding', programmingLanguage);
     }
-    
-    // Get recent events for this skill
-    const skillEvents = this.sessionMemory
-      .filter(event => event.skill === targetSkill && !event.metadata?.isInitialization)
-      .slice(-10);
-    
+
     return {
       skillPrompt,
-      recentEvents: skillEvents,
-      currentSkill: targetSkill,
+      recentEvents: this.sessionMemory
+        .filter(event => !event.metadata?.isInitialization)
+        .slice(-10),
       programmingLanguage,
-      requiresProgrammingLanguage: promptLoader.requiresProgrammingLanguage(targetSkill)
+      requiresProgrammingLanguage: !!programmingLanguage
     };
   }
 
@@ -325,7 +252,7 @@ class SessionManager {
   extractMetadata(action, details) {
     const metadata = {};
     
-    const metadataFields = ['skill', 'duration', 'size', 'textLength', 'processingTime'];
+    const metadataFields = ['duration', 'size', 'textLength', 'processingTime'];
     metadataFields.forEach(field => {
       if (details[field] !== undefined) {
         metadata[field] = details[field];
@@ -337,30 +264,25 @@ class SessionManager {
 
   generateContextSummary(action, details) {
     const role = details.role;
-    const skill = details.skill || this.currentSkill;
-    
+
     switch (action) {
       case 'speech_transcription':
-        return `User spoke: "${details.content?.substring(0, 50)}..." (${skill} mode)`;
+        return `User spoke: "${details.content?.substring(0, 50)}..."`;
       case 'chat_input':
-        return `User typed: "${details.content?.substring(0, 50)}..." (${skill} mode)`;
+        return `User typed: "${details.content?.substring(0, 50)}..."`;
       case 'llm_response':
-        return `AI responded in ${skill} mode (${details.responseLength || details.contentLength} chars)`;
+        return `AI responded (${details.responseLength || details.contentLength} chars)`;
       case 'ocr_extraction':
-        return `Screenshot text extracted: ${details.textLength || details.contentLength} characters (${skill} mode)`;
-      case 'skill_change':
-        return `Switched from ${details.previousSkill} to ${details.newSkill} mode`;
-      case 'skill_prompt_initialization':
-        return `${skill} skill prompt loaded for context`;
+        return `Screenshot text extracted: ${details.textLength || details.contentLength} characters`;
       case 'user_message':
-        return `User: "${details.content?.substring(0, 50)}..." (${skill})`;
+        return `User: "${details.content?.substring(0, 50)}..."`;
       case 'model_response':
-        return `Model: Response in ${skill} mode (${details.contentLength} chars)`;
+        return `Model: Response (${details.contentLength} chars)`;
       default:
         if (role === 'user') {
-          return `User input in ${skill} mode`;
+          return 'User input';
         } else if (role === 'model') {
-          return `Model response in ${skill} mode`;
+          return 'Model response';
         }
         return action || 'Unknown action';
     }
@@ -563,28 +485,26 @@ class SessionManager {
 
   getPrimaryActivities() {
     const activities = {};
-    
+
     this.sessionMemory.forEach(event => {
-      if (event.metadata?.skill) {
-        activities[event.metadata.skill] = (activities[event.metadata.skill] || 0) + 1;
-      }
+      const key = event.action || event.category || 'unknown';
+      activities[key] = (activities[key] || 0) + 1;
     });
-    
+
     return Object.entries(activities)
       .sort(([,a], [,b]) => b - a)
       .slice(0, 3)
-      .map(([skill, count]) => ({ skill, count }));
+      .map(([action, count]) => ({ action, count }));
   }
 
   clear() {
     const eventCount = this.sessionMemory.length;
     this.sessionMemory = [];
     this.isInitialized = false;
-    
+
     logger.info('Session memory cleared', { eventCount });
-    
-    // Reinitialize with skill prompts
-    this.initializeWithSkillPrompts();
+
+    this.initializeSession();
   }
 
   getMemoryUsage() {

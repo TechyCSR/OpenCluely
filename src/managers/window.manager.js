@@ -8,6 +8,7 @@ const {
   computeInterviewCardSize,
   applyStreamingResize,
   resolveStreamingWidth,
+  chooseInterviewCardHeight,
   MIN_HEIGHT
 } = require('../ui/interview-hud');
 
@@ -39,6 +40,7 @@ class WindowManager {
     this._dockAnim = null;
     this.interviewCardMetrics = { hasCode: false, contentHeight: MIN_HEIGHT };
     this.interviewCardLock = null;
+    this.interviewCardFrozen = false;
     this.INTERVIEW_CARD = { width: 560, height: MIN_HEIGHT };
     
     // Add debouncing to prevent excessive operations
@@ -73,8 +75,8 @@ class WindowManager {
         alwaysOnTop: true
       },
       settings: {
-        width: 400,
-        height: 380,
+        width: 440,
+        height: 560,
         file: 'settings.html',
         title: 'Settings',
         frame: false,
@@ -529,7 +531,6 @@ class WindowManager {
         level: process.platform === 'darwin' ? 'floating' : undefined,
       };
     } else {
-      // Other windows (skills)
       browserWindowOptions = {
         ...baseOptions,
         minWidth: config.get('window.minWidth'),
@@ -1407,10 +1408,14 @@ class WindowManager {
     }
 
     logger.debug('Sending display-llm-response event to window');
+    if (this.interviewModeActive) {
+      llmWindow.webContents.send('interview-hud', { enabled: true });
+    }
     llmWindow.webContents.send('display-llm-response', {
       content,
-      metadata: { ...metadata, compactCard: this.interviewModeActive },
-      timestamp: new Date().toISOString()
+      metadata: { ...metadata, compactCard: this.interviewModeActive, question: metadata.question || '' },
+      timestamp: new Date().toISOString(),
+      question: metadata.question || ''
     });
 
     if (this.interviewModeActive) {
@@ -1434,7 +1439,7 @@ class WindowManager {
     });
   }
 
-  showLLMLoading() {
+  showLLMLoading(options = {}) {
     if (this.isScreenBeingShared) {
       logger.warn('LLM loading shown during screen sharing (stealth overlay)');
     }
@@ -1445,16 +1450,22 @@ class WindowManager {
       return;
     }
 
+    const payload = {
+      compact: !!this.interviewModeActive,
+      question: options.question || ''
+    };
+
     if (this.interviewModeActive) {
+      this.interviewCardFrozen = false;
       this.interviewCardMetrics = { hasCode: false, contentHeight: MIN_HEIGHT };
       llmWindow.webContents.send('interview-hud', { enabled: true });
-      llmWindow.webContents.send('show-loading', { compact: true });
+      llmWindow.webContents.send('show-loading', payload);
       this.showInterviewAnswerCard();
       return;
     }
 
     logger.debug('Showing LLM loading state');
-    llmWindow.webContents.send('show-loading');
+    llmWindow.webContents.send('show-loading', payload);
     this.showOnCurrentDesktop(llmWindow);
 
     if (this.bindWindows) {
@@ -1468,6 +1479,7 @@ class WindowManager {
       llmWindow.hide();
     }
     this.interviewCardLock = null;
+    this.interviewCardFrozen = false;
   }
 
   showSettings() {
@@ -1785,10 +1797,6 @@ class WindowManager {
             newX = displayX + displayWidth - windowWidth - 50;
             newY = displayY + topMargin;
             break;
-          case 'skills':
-            newX = displayX + 50;
-            newY = displayY + topMargin + 100; // Slightly lower to avoid overlap
-            break;
           case 'llmResponse':
             if (this.interviewModeActive) {
               const docked = this.getInterviewAnswerBounds();
@@ -1958,6 +1966,7 @@ class WindowManager {
     const llmWindow = this.windows.get('llmResponse');
     if (this.interviewModeActive) {
       this.loadInterviewHudPrefs();
+      this.interviewCardFrozen = false;
       this.interviewCardMetrics = { hasCode: false, contentHeight: MIN_HEIGHT };
       if (main && !main.isDestroyed()) {
         main.hide();
@@ -1968,6 +1977,7 @@ class WindowManager {
     } else {
       this.hideInterviewBar();
       this.hideLLMResponse();
+      this.interviewCardFrozen = false;
       this.interviewCardMetrics = { hasCode: false, contentHeight: MIN_HEIGHT };
       this.interviewCardLock = null;
       if (llmWindow && !llmWindow.isDestroyed()) {
@@ -2061,6 +2071,9 @@ class WindowManager {
     if (!this.interviewModeActive) {
       return false;
     }
+    if (metrics.frozen === false) {
+      this.interviewCardFrozen = false;
+    }
     const hasCode = metrics.hasCode === true || this._responseLooksLikeCode(metrics.response);
     const contentHeight = Number(metrics.contentHeight) || this.interviewCardMetrics.contentHeight || MIN_HEIGHT;
     this.interviewCardMetrics = { hasCode, contentHeight };
@@ -2071,16 +2084,21 @@ class WindowManager {
     }
 
     if (!this.interviewCardLock) {
-      return this.showInterviewAnswerCard();
+      const shown = this.showInterviewAnswerCard();
+      if (metrics.frozen === true) this.interviewCardFrozen = true;
+      return shown;
     }
 
     const area = this._workArea();
     const widthInfo = resolveStreamingWidth(area, this.interviewCardLock, hasCode);
     const maxHeight = computeInterviewCardSize(area, { hasCode, contentHeight }).maxHeight;
-    const height = Math.max(
-      this.interviewCardLock.height,
-      Math.min(maxHeight, Math.round(contentHeight))
-    );
+    const height = chooseInterviewCardHeight({
+      needed: contentHeight,
+      current: this.interviewCardLock.height,
+      maxHeight,
+      frozen: this.interviewCardFrozen && metrics.frozen !== false,
+      fit: metrics.fit === true
+    });
     const bounds = applyStreamingResize(this.interviewCardLock, {
       width: widthInfo.width,
       height
@@ -2091,6 +2109,9 @@ class WindowManager {
       height: bounds.height,
       widthMode: widthInfo.mode
     };
+    if (metrics.frozen === true) {
+      this.interviewCardFrozen = true;
+    }
     if (!win.isVisible()) {
       this.showOnCurrentDesktop(win);
     }
@@ -2191,6 +2212,7 @@ class WindowManager {
     }
     try { llmWindow.setAlwaysOnTop(true); } catch (e) {}
     try { llmWindow.setBounds(bounds); } catch (e) {}
+    try { llmWindow.webContents.send('interview-hud', { enabled: true }); } catch (e) {}
     this.showOnCurrentDesktop(llmWindow);
     logger.debug('Interview answer card shown', { bounds, dock: this.interviewAnswerDock });
     return true;
@@ -2215,19 +2237,6 @@ class WindowManager {
     this.broadcastToAllWindows('recording-stopped');
     logger.debug('Recording stopped, chat window kept visible for the response');
   }
-
-  broadcastSkillChange(skill) {
-    this.windows.forEach((window, type) => {
-      if (!window.isDestroyed()) {
-        window.webContents.send('skill-changed', { skill });
-      }
-    });
-    
-    logger.info('Skill change broadcasted to all windows', { 
-      skill,
-      windowCount: this.windows.size 
-    });
-    }
 }
 
 module.exports = new WindowManager();

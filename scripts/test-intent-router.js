@@ -43,35 +43,30 @@ const cases = [
     name: 'merge sort → code',
     text: 'merge sort',
     resume: '',
-    activeSkill: 'dsa',
     expected: 'code'
   },
   {
     name: 'binary search → code',
     text: 'binary search',
     resume: '',
-    activeSkill: 'dsa',
     expected: 'code'
   },
   {
     name: 'implement trie → code',
     text: 'implement trie',
     resume: '',
-    activeSkill: 'dsa',
     expected: 'code'
   },
   {
     name: 'find two numbers in an array → code',
     text: 'find two numbers in an array',
     resume: '',
-    activeSkill: 'dsa',
     expected: 'code'
   },
   {
     name: 'inventory service with resume → general',
     text: 'inventory service',
     resume: 'Built an Inventory service for order fulfillment at Acme.',
-    activeSkill: 'dsa',
     expected: 'general',
     expectedReason: 'resume entity match'
   },
@@ -79,28 +74,24 @@ const cases = [
     name: 'inventory service without resume → general',
     text: 'inventory service',
     resume: '',
-    activeSkill: 'dsa',
     expected: 'general'
   },
   {
     name: 'explain distributed caching → explain',
     text: 'explain distributed caching',
     resume: '',
-    activeSkill: 'dsa',
     expected: 'explain'
   },
   {
     name: 'my Kafka project → general',
     text: 'my Kafka project',
     resume: '',
-    activeSkill: 'dsa',
     expected: 'general'
   },
   {
     name: 'graph → general unless explicit coding intent exists',
     text: 'graph',
     resume: '',
-    activeSkill: 'dsa',
     expected: 'general'
   }
 ];
@@ -109,7 +100,7 @@ let failed = 0;
 
 for (const testCase of cases) {
   const { routeIntent } = loadRouter(testCase.resume);
-  const result = routeIntent(testCase.text, testCase.activeSkill);
+  const result = routeIntent(testCase.text);
   const modeOk = result.mode === testCase.expected;
   const reasonOk = !testCase.expectedReason || result.reason === testCase.expectedReason;
   const ok = modeOk && reasonOk;
@@ -118,7 +109,7 @@ for (const testCase of cases) {
 
   const mark = ok ? 'PASS' : 'FAIL';
   console.log(`${mark}  ${testCase.name}`);
-  console.log(`      text=${JSON.stringify(testCase.text)} skill=${testCase.activeSkill} resume=${testCase.resume ? 'yes' : 'no'}`);
+  console.log(`      text=${JSON.stringify(testCase.text)} resume=${testCase.resume ? 'yes' : 'no'}`);
   console.log(`      expected=${testCase.expected}${testCase.expectedReason ? ` (${testCase.expectedReason})` : ''}`);
   console.log(`      actual=${result.mode} (${result.reason})`);
 }

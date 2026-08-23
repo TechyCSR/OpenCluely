@@ -11,6 +11,7 @@
     "test:interview": "node scripts/test-interview-mode.js",
     "test:captions": "node scripts/test-live-captions.js",
     "test:hud": "node scripts/test-interview-hud.js",
+    "test:history": "node scripts/test-answer-history.js",
     "test:perf": "node scripts/test-perf-trace.js",
     "test:rolling": "node scripts/test-rolling-caption.js",
     "test:reliability": "node scripts/test-voice-reliability.js",

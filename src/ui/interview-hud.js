@@ -4,7 +4,7 @@ const CARD_MIN_WIDTH = 560;
 const CARD_MAX_WIDTH = 920;
 const CARD_WIDTH_RATIO = 0.5;
 const MIN_HEIGHT = 280;
-const MAX_HEIGHT_RATIO = 0.62;
+const MAX_HEIGHT_RATIO = 0.78;
 const BAR_HEIGHT = 32;
 const BAR_MARGIN_Y = 6;
 const BAR_SIDE_INSET = 40;
@@ -84,6 +84,33 @@ function resolveStreamingWidth(workArea, lock) {
   return { width: size.width, mode: 'card' };
 }
 
+/**
+ * Pick the next card height.
+ * During a live stream, grow down to fit content and never shrink.
+ * After the answer is frozen, keep the current height so talking / late
+ * tokens / a queued next answer cannot keep expanding the window.
+ */
+function chooseInterviewCardHeight({
+  needed = MIN_HEIGHT,
+  current = 0,
+  maxHeight,
+  frozen = false,
+  fit = false
+} = {}) {
+  const cap = Number.isFinite(Number(maxHeight)) && Number(maxHeight) > 0
+    ? Number(maxHeight)
+    : Math.max(MIN_HEIGHT, Math.round(Number(needed) || MIN_HEIGHT));
+  const want = Math.max(MIN_HEIGHT, Math.min(cap, Math.round(Number(needed) || MIN_HEIGHT)));
+  const now = Math.max(0, Math.round(Number(current) || 0));
+  if (fit) {
+    return want;
+  }
+  if (frozen && now >= MIN_HEIGHT) {
+    return Math.min(now, cap);
+  }
+  return Math.max(now, want);
+}
+
 module.exports = {
   formatCaptionText,
   computeInterviewBarBounds,
@@ -91,6 +118,7 @@ module.exports = {
   computeInterviewCardBounds,
   applyStreamingResize,
   resolveStreamingWidth,
+  chooseInterviewCardHeight,
   CARD_MIN_WIDTH,
   CARD_MAX_WIDTH,
   CARD_WIDTH_RATIO,

@@ -1,5 +1,8 @@
 node_modules/
 .env
+answer-style.txt
+__pycache__/
+*.pyc
 .venv-whisper/
 .whisper-models/
 eng.traineddata

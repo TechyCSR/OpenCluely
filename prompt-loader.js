@@ -6,8 +6,7 @@ class PromptLoader {
     this.prompts = new Map();
     this.promptsLoaded = false;
     this.skillPromptSent = new Set();
-    // Focus only on DSA
-    this.skillsRequiringProgrammingLanguage = ['dsa'];
+    this.skillsRequiringProgrammingLanguage = ['coding'];
   }
 
   /**
@@ -28,7 +27,7 @@ class PromptLoader {
       for (const file of files) {
         if (file.endsWith('.md')) {
           const skillName = path.basename(file, '.md');
-          if (skillName !== 'dsa') continue; // only keep DSA
+          if (skillName !== 'coding') continue;
           const filePath = path.join(promptsDir, file);
           const promptContent = fs.readFileSync(filePath, 'utf8');
           
@@ -88,13 +87,12 @@ class PromptLoader {
     let languageInjection = '';
     
     switch (skillName) {
-      case 'dsa':
+      case 'coding':
         languageInjection = `\n\n## IMPLEMENTATION LANGUAGE: ${languageUpper}
 STRICT REQUIREMENTS:
 - Respond ONLY in ${languageTitle}. Do not include any snippets or alternatives in other languages.
 - All code blocks must use triple backticks with the exact language tag: \`\`\`${fenceTag}\`\`\`.
-- Aim for the best possible time and space complexity; prefer optimal algorithms and data structures.
-- Provide: brief approach, then final ${languageTitle} implementation, followed by time/space complexity.
+- One vertical answer only: short summary, then the ${languageTitle} code, then 1–2 closing lines (time/space). Never two columns.
 - If the user's input is a problem statement (and does not include code), produce a complete, runnable ${languageTitle} solution without asking for clarification.
 - Avoid unnecessary verbosity; focus on correctness, clarity, and efficiency.`;
         break;
@@ -324,37 +322,11 @@ STRICT REQUIREMENTS:
     
     // Map common variations to standard names
     const skillMap = {
-      'dsa': 'dsa',
-      'data-structures': 'dsa',
-      'algorithms': 'dsa',
-      'data-structures-algorithms': 'dsa',
-      'behavioral': 'behavioral',
-      'behavioral-interview': 'behavioral',
-      'behavior': 'behavioral',
-      'sales': 'sales',
-      'selling': 'sales',
-      'business-development': 'sales',
-      'presentation': 'presentation',
-      'presentations': 'presentation',
-      'public-speaking': 'presentation',
-      'data-science': 'data-science',
-      'datascience': 'data-science',
-      'machine-learning': 'data-science',
-      'ml': 'data-science',
-      'programming': 'programming',
-      'coding': 'programming',
-      'software-development': 'programming',
-      'development': 'programming',
-      'devops': 'devops',
-      'dev-ops': 'devops',
-      'infrastructure': 'devops',
-      'system-design': 'system-design',
-      'systems-design': 'system-design',
-      'architecture': 'system-design',
-      'distributed-systems': 'system-design',
-      'negotiation': 'negotiation',
-      'negotiating': 'negotiation',
-      'conflict-resolution': 'negotiation'
+      'coding': 'coding',
+      'dsa': 'coding',
+      'data-structures': 'coding',
+      'algorithms': 'coding',
+      'data-structures-algorithms': 'coding'
     };
 
     return skillMap[normalized] || normalized;
@@ -368,7 +340,7 @@ STRICT REQUIREMENTS:
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
-    return ['dsa'];
+    return ['coding'];
   }
 
   /**

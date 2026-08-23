@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const geminiKeyInput = document.getElementById('geminiKey');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
-    const activeSkillSelect = document.getElementById('activeSkill');
+    const answerStylePromptInput = document.getElementById('answerStylePrompt');
     const iconGrid = document.getElementById('iconGrid');
 
     // Check if window.api exists
@@ -96,8 +96,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (codingLanguageSelect) {
             codingLanguageSelect.value = settings.codingLanguage || 'java';
         }
-
-        if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
+        if (answerStylePromptInput) {
+            answerStylePromptInput.value = settings.answerStylePrompt || '';
+        }
 
         // Handle icon selection
         const selectedIcon = settings.selectedIcon || settings.appIcon;
@@ -160,7 +161,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
-        if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
+        if (answerStylePromptInput) settings.answerStylePrompt = answerStylePromptInput.value;
+        if (deepgramKeyInput && String(deepgramKeyInput.value || '').trim() && speechProviderSelect) {
+            speechProviderSelect.value = 'deepgram';
+            settings.speechProvider = 'deepgram';
+        }
         
         window.api.send('save-settings', settings);
     };
@@ -215,7 +220,8 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperResponseTargetSelect,
         whisperSegmentMsInput,
         geminiKeyInput,
-        windowGapInput
+        windowGapInput,
+        answerStylePromptInput
     ];
 
     inputs.forEach(input => {
@@ -234,25 +240,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Language selection handler
     if (codingLanguageSelect) {
-        codingLanguageSelect.addEventListener('change', (e) => {
-            const lang = e.target.value;
-            // use electronAPI so main broadcast is consistent
+        const persistLang = () => {
+            const lang = codingLanguageSelect.value;
             if (window.electronAPI && window.electronAPI.saveSettings) {
                 window.electronAPI.saveSettings({ codingLanguage: lang });
             } else {
-                // fallback
                 saveSettings();
             }
-        });
-    }
-
-    // Skill selection handler
-    if (activeSkillSelect) {
-        activeSkillSelect.addEventListener('change', (e) => {
-            saveSettings();
-            // Also update the main window
-            window.api.send('update-skill', e.target.value);
-        });
+        };
+        codingLanguageSelect.addEventListener('change', persistLang);
+        codingLanguageSelect.addEventListener('blur', persistLang);
     }
 
     updateSpeechFieldStates();

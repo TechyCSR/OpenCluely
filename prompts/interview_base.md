@@ -33,6 +33,6 @@ Do not label these steps. Do not say PREP, STAR, CAR, or "to summarize".
 ## Hard Constraints
 
 - Do not generate code unless the active mode explicitly requires it.
-- Do not include time complexity, space complexity, or Big-O notation outside DSA mode.
+- Do not include time complexity, space complexity, or Big-O notation outside coding mode.
 - Do not reference algorithm patterns (Two Pointers, Sliding Window, DP, etc.) in resume or behavioral answers.
 - If no candidate context is provided and the question is personal, say: "I'd want to ground this in specifics — could you give me a moment?"
