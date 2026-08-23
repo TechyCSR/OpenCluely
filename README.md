@@ -377,6 +377,20 @@ applyStealthMeasures(window, type) {
 
 ---
 
+### 7. Domain-Specific Prompts (MCQ & DSA Solvers)
+
+#### Feature Overview
+* Integrated specialized system prompts that dynamically adapt the LLM's reasoning style based on the active question type (Multiple Choice Questions vs Data Structures & Algorithms).
+
+#### Problem Solved
+* Generic AI responses often output too much conversational filler, making it hard to quickly extract the correct answer during rapid testing or interview scenarios.
+
+#### Low-Level Implementation Specs
+* **Prompt Loader (`prompt-loader.js`)**: Injects contextual system constraints forcing the Gemini LLM to output the correct multiple-choice option (A/B/C/D) immediately in bold, followed by a concise 1-2 sentence justification.
+* **MCQ UI Mode**: Toggling the MCQ mode from the main toolbar automatically structures extracted OCR text into a strict prompt template, optimizing the LLM for high-accuracy, zero-fluff answers.
+
+---
+
 ## 📊 Technical Comparison Matrix
 
 | Feature Dimension | Legacy Implementation | Enhanced OpenCluely System |
