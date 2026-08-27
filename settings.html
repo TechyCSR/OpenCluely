@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings</title>
+    <title>OpenCluely Career Copilot Settings</title>
     <link href="./src/styles/common.css" rel="stylesheet">
     <style>
         * {
@@ -33,6 +33,21 @@
             display: flex;
             flex-direction: column;
         }
+
+        .toggle-label {
+            min-width: 150px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .toggle-label input { accent-color: #4caf50; }
+
+        body.compact-mode .settings-item { padding: 10px 0; }
+        html[data-theme="light"] .toggle-label { color: #18212f; }
 
         .settings-header {
             padding: 16px 20px;
@@ -270,6 +285,14 @@
         .settings-note code {
             color: rgba(255, 255, 255, 0.9);
         }
+
+        textarea.input-field.profile-textarea {
+            min-height: 96px;
+            max-width: 100%;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.45;
+        }
     </style>
 </head>
 <body>
@@ -277,7 +300,7 @@
         <div class="settings-header">
             <div class="header-title">
                 <i class="fas fa-cog"></i>
-                Settings
+                Career Copilot Settings <span style="opacity: .55; font-size: 11px; font-weight: 500;">V3 beta</span>
             </div>
             <div class="header-actions">
                 <button class="btn btn-quit" id="quitButton">
@@ -309,16 +332,116 @@
                             <option value="python">Python</option>
                             <option value="java">Java</option>
                             <option value="javascript">JavaScript</option>
+                            <option value="typescript">TypeScript</option>
+                            <option value="go">Go</option>
+                            <option value="rust">Rust</option>
+                            <option value="csharp">C#</option>
+                            <option value="kotlin">Kotlin</option>
+                            <option value="swift">Swift</option>
+                            <option value="php">PHP</option>
+                            <option value="ruby">Ruby</option>
+                            <option value="bash">Bash</option>
+                            <option value="powershell">PowerShell</option>
                         </select>
                     </div>
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Active Skill</div>
-                            <div class="settings-item-description">Choose your current focus area</div>
+                            <div class="settings-item-label">Career Focus</div>
+                            <div class="settings-item-description">Choose a role pack or a preparation tool. Your selection is saved locally.</div>
                         </div>
                         <select class="input-field" id="activeSkill">
                             <option value="dsa">Data Structures & Algorithms</option>
+                            <option value="amazon-dct">Amazon DCT Interview Practice</option>
+                            <option value="devops">DevOps Engineer Interview</option>
+                            <option value="sdet">SDET Interview</option>
+                            <option value="backend-engineer">Backend Engineer Interview</option>
+                            <option value="star">STAR Response Mode</option>
+                            <option value="leadership-principles">Leadership Principles Mode</option>
                         </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-briefcase"></i>
+                    Interview Workspace
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Company Focus</div>
+                            <div class="settings-item-description">Tailor interview language and likely expectations without claiming company-private knowledge.</div>
+                        </div>
+                        <select class="input-field" id="interviewCompany">
+                            <option value="general">General technical interview</option>
+                            <option value="amazon">Amazon</option>
+                            <option value="google">Google</option>
+                            <option value="microsoft">Microsoft</option>
+                            <option value="meta">Meta</option>
+                            <option value="apple">Apple</option>
+                            <option value="nvidia">NVIDIA</option>
+                            <option value="netflix">Netflix</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Response Format</div>
+                            <div class="settings-item-description">Choose how Gemini structures every technical or behavioral practice answer.</div>
+                        </div>
+                        <select class="input-field" id="responseMode">
+                            <option value="quick">Quick answer — up to 75 words</option>
+                            <option value="interview">Interview answer — up to 120 words</option>
+                            <option value="detailed">Detailed answer — study mode</option>
+                            <option value="star">STAR answer — behavioral format</option>
+                            <option value="troubleshooting">Troubleshooting — issue, approach, commands</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Appearance</div>
+                            <div class="settings-item-description">Switch between the default dark workspace and a high-contrast light workspace.</div>
+                        </div>
+                        <select class="input-field" id="uiTheme">
+                            <option value="dark">Dark mode</option>
+                            <option value="light">Light mode</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Layout Density</div>
+                            <div class="settings-item-description">Compact mode reduces overlay and chat spacing for a smaller footprint.</div>
+                        </div>
+                        <label class="toggle-label"><input type="checkbox" id="compactMode"> Compact mode</label>
+                    </div>
+                    <div class="settings-item">
+                        <div><div class="settings-item-label">Database Focus</div><div class="settings-item-description">Optional context for database questions and examples.</div></div>
+                        <select class="input-field" id="technologyDatabase">
+                            <option value="auto">Auto-detect</option><option value="mysql">MySQL</option><option value="postgresql">PostgreSQL</option><option value="mssql">MSSQL</option><option value="oracle">Oracle</option><option value="mongodb">MongoDB</option><option value="redis">Redis</option><option value="elasticsearch">Elasticsearch</option><option value="cassandra">Cassandra</option><option value="dynamodb">DynamoDB</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div><div class="settings-item-label">Cloud Focus</div><div class="settings-item-description">Optional cloud provider context.</div></div>
+                        <select class="input-field" id="technologyCloud"><option value="auto">Auto-detect</option><option value="aws">AWS</option><option value="azure">Azure</option><option value="gcp">GCP</option></select>
+                    </div>
+                    <div class="settings-item">
+                        <div><div class="settings-item-label">Container Focus</div><div class="settings-item-description">Optional container-platform context.</div></div>
+                        <select class="input-field" id="technologyContainers"><option value="auto">Auto-detect</option><option value="docker">Docker</option><option value="kubernetes">Kubernetes</option><option value="openshift">OpenShift</option></select>
+                    </div>
+                    <div class="settings-item">
+                        <div><div class="settings-item-label">Infrastructure Focus</div><div class="settings-item-description">Optional automation and delivery-tool context.</div></div>
+                        <select class="input-field" id="technologyInfrastructure"><option value="auto">Auto-detect</option><option value="terraform">Terraform</option><option value="ansible">Ansible</option><option value="jenkins">Jenkins</option><option value="github-actions">GitHub Actions</option></select>
+                    </div>
+                    <div class="settings-stack">
+                        <div class="settings-item-label">Candidate Profile <span style="opacity: .65; font-weight: normal;">(optional)</span></div>
+                        <div class="settings-item-description">Paste a concise resume summary, real projects, and measurable results. Used only for personal, HR, STAR, and behavioral practice answers.</div>
+                        <textarea class="input-field profile-textarea" id="candidateProfile" maxlength="12000" placeholder="Example: Network engineer with hands-on LAN, VLAN, AD, firewall, monitoring, and incident-response experience. Include only facts you can stand behind."></textarea>
+                    </div>
+                    <div class="settings-stack">
+                        <div class="settings-item-label">Target Job Profile <span style="opacity: .65; font-weight: normal;">(optional)</span></div>
+                        <div class="settings-item-description">Paste the role title, selected job requirements, or a short job-description summary. It helps role-fit answers without restricting general technical questions.</div>
+                        <textarea class="input-field profile-textarea" id="targetJobProfile" maxlength="12000" placeholder="Example: Amazon Data Center Technician — hardware break/fix, Linux, networking, rack-and-stack, safety, and shift work."></textarea>
+                        <div class="settings-note">Stored locally on this Mac. It is sent to Gemini only when a question requires personal or target-role context.</div>
                     </div>
                 </div>
             </div>
@@ -455,7 +578,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="settings-section">
                 <div class="settings-section-title">
                     <i class="fas fa-robot"></i>
@@ -469,6 +592,31 @@
                         </div>
                         <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
                     </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Gemini Model</div>
+                            <div class="settings-item-description">Pro gives stronger technical and behavioral interview answers.</div>
+                        </div>
+                        <select class="input-field" id="geminiModel">
+                            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (recommended)</option>
+                            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (paid API quota required)</option>
+                            <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+                            <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Diagnostics</div>
+                            <div class="settings-item-description">Open logs or copy the latest diagnostics to share for support.</div>
+                        </div>
+                        <div class="header-actions">
+                            <button class="btn" id="openLogsButton">Open Logs</button>
+                            <button class="btn" id="copyLogsButton">Copy Diagnostics</button>
+                            <button class="btn" id="performanceButton">Performance</button>
+                            <button class="btn" id="screenRecordingButton">Screen Recording</button>
+                        </div>
+                    </div>
+                    <div id="diagnosticStatus" class="settings-note" role="status" aria-live="polite"></div>
                 </div>
             </div>
             

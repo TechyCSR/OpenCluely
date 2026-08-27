@@ -25,6 +25,7 @@ class ChatWindowUI {
         try {
             this.setupElements();
             this.setupEventListeners();
+            this.loadAppearance();
             this.addMessage('Chat window initialized. Click microphone or press ⌘+R to start recording.', 'system');
             
             logger.info('Chat window UI initialized successfully');
@@ -32,6 +33,20 @@ class ChatWindowUI {
             logger.error('Failed to initialize chat window UI', { error: error.message });
             console.error('Chat window initialization failed:', error);
         }
+    }
+
+    async loadAppearance() {
+        try {
+            const settings = await window.electronAPI?.getSettings?.();
+            this.applyAppearance(settings?.uiTheme, settings?.compactMode);
+        } catch (error) {
+            logger.warn('Could not load appearance preferences', { error: error.message });
+        }
+    }
+
+    applyAppearance(theme, compact) {
+        document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+        document.body.classList.toggle('compact-mode', !!compact);
     }
 
     setupElements() {
@@ -64,6 +79,9 @@ class ChatWindowUI {
     setupEventListeners() {
         // Interaction state handlers
         if (window.electronAPI) {
+            window.electronAPI.onUiPreferencesChanged?.((_event, preferences) => {
+                this.applyAppearance(preferences?.uiTheme, preferences?.compactMode);
+            });
             window.electronAPI.onInteractionModeChanged((event, interactive) => {
                 this.isInteractive = interactive;
                 if (interactive) {
@@ -93,8 +111,6 @@ class ChatWindowUI {
             
             window.electronAPI.onSpeechStatus((event, data) => {
                 if (data && data.status) {
-                    this.addMessage(data.status, 'system');
-                    
                     // Update recording state based on status
                     if (data.status.includes('started') || data.status.includes('Recording')) {
                         this.handleRecordingStarted();
@@ -109,6 +125,12 @@ class ChatWindowUI {
                     this.addMessage(`Speech Error: ${data.error}`, 'error');
                     this.handleRecordingStopped(); // Stop recording on error
                 }
+            });
+
+            window.electronAPI.onPracticeMuteState?.((_event, data) => {
+                this.addMessage(data?.muted
+                    ? 'Microphone paused — release Space to resume.'
+                    : 'Microphone resumed.', 'system');
             });
             
             // Skill handlers
@@ -188,11 +210,11 @@ class ChatWindowUI {
             }
             
             try {
-                if (this.isRecording) {
-                    await window.electronAPI.stopSpeechRecognition();
-                } else {
-                    await window.electronAPI.startSpeechRecognition();
-                }
+                const status = this.isRecording
+                    ? await window.electronAPI.stopSpeechRecognition()
+                    : await window.electronAPI.startSpeechRecognition();
+                if (status?.isRecording) this.handleRecordingStarted();
+                else this.handleRecordingStopped();
             } catch (error) {
                 this.addMessage(`Speech recognition error: ${error.message}`, 'error');
                 logger.error('Speech recognition failed', { error: error.message });
@@ -269,15 +291,10 @@ class ChatWindowUI {
             // Hide listening animation first
             this.hideListeningAnimation();
             
-            // Show transcribed text with a slight delay for smooth transition
-            setTimeout(() => {
-                this.addMessage(text, 'transcription');
-                
-                // Show thinking indicator after transcription
-                setTimeout(() => {
-                    this.showThinkingIndicator();
-                }, 300);
-            }, 200);
+            // A final Azure result is already stable. Render it immediately;
+            // cosmetic delays make voice input feel unresponsive.
+            this.addMessage(text, 'transcription');
+            this.showThinkingIndicator();
             
             logger.debug('Transcription received in chat', { textLength: text.length });
         } else {
@@ -399,7 +416,9 @@ class ChatWindowUI {
         messageDiv.appendChild(textDiv);
         this.elements.chatMessages.appendChild(messageDiv);
         this._streamBuffers = this._streamBuffers || {};
+        this._streamRenderStarts = this._streamRenderStarts || {};
         this._streamBuffers[messageId] = '';
+        this._streamRenderStarts[messageId] = performance.now();
         this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
     }
 
@@ -419,6 +438,10 @@ class ChatWindowUI {
             // Plain text while streaming keeps it fast and avoids half-parsed
             // markdown flicker; the final render formats it properly.
             textDiv.textContent = this._streamBuffers[messageId];
+            if (this._streamRenderStarts?.[messageId]) {
+                window.electronAPI?.recordPerformanceMetric?.('renderer_first_chunk', performance.now() - this._streamRenderStarts[messageId], { messageId });
+                this._streamRenderStarts[messageId] = null;
+            }
         }
         const atBottom = true;
         if (atBottom) {
@@ -429,6 +452,7 @@ class ChatWindowUI {
     // Replace the streaming bubble with the formatted final response (markdown
     // text + extracted code snippets), matching non-streaming rendering.
     finalizeStreamingResponse(messageId, response) {
+        const renderStartedAt = performance.now();
         const messageDiv = messageId && this.elements.chatMessages &&
             this.elements.chatMessages.querySelector(`[data-stream-id="${messageId}"]`);
         if (messageDiv) {
@@ -437,7 +461,9 @@ class ChatWindowUI {
         if (this._streamBuffers && messageId) {
             delete this._streamBuffers[messageId];
         }
+        if (this._streamRenderStarts && messageId) delete this._streamRenderStarts[messageId];
         this.renderAssistantResponse(response);
+        window.electronAPI?.recordPerformanceMetric?.('renderer_finalize', performance.now() - renderStartedAt, { messageId, responseChars: response?.length || 0 });
     }
 
     // Split AI response into plain text and code snippets and append to chat

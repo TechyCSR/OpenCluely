@@ -491,9 +491,9 @@
 
   $('#starBtn').addEventListener('click', () => {
     if (window.electronAPI && window.electronAPI.openExternal) {
-      window.electronAPI.openExternal('https://github.com/TechyCSR/OpenCluely');
+      window.electronAPI.openExternal('https://github.com/RahulSinghParmar/OpenCluely');
     } else {
-      window.open('https://github.com/TechyCSR/OpenCluely', '_blank');
+      window.open('https://github.com/RahulSinghParmar/OpenCluely', '_blank');
     }
   });
   $('#skipStarBtn').addEventListener('click', () => {

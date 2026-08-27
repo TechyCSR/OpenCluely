@@ -1,14 +1,14 @@
 /* OpenCluely — humans.txt
-   https://opencluely.techycsr.dev/humans.txt
+   https://github.com/RahulSinghParmar/OpenCluely
 */
 
 # humans.txt — credits the people behind OpenCluely.
 
 # TEAM
 
-  Developer & maintainer: TechyCSR
-  Site: https://techycsr.dev
-  GitHub: https://github.com/TechyCSR
+  Developer & maintainer: RahulSinghParmar
+  Site: https://github.com/RahulSinghParmar/OpenCluely
+  GitHub: https://github.com/RahulSinghParmar
 
 # SITE
 

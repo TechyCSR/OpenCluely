@@ -2,19 +2,19 @@
 
 # OpenCluely
 
-**The invisible AI interview copilot.**
+**A local-first AI interview-practice workspace.**
 
-Real-time AI help on a stealth overlay that screen sharing cannot see. Ask by voice or screenshot, and get clear answers that stream in as you need them.
+Practice technical, behavioral, and role-specific interviews with voice, chat, screenshots, and concise streamed answers.
 
 <p>
-  <a href="https://github.com/TechyCSR/OpenCluely/releases/latest"><img src="https://img.shields.io/github/v/release/TechyCSR/OpenCluely?style=for-the-badge&label=Latest&color=111111&labelColor=000000" alt="Latest release" /></a>
-  <a href="https://github.com/TechyCSR/OpenCluely/releases"><img src="https://img.shields.io/github/downloads/TechyCSR/OpenCluely/total?style=for-the-badge&color=111111&labelColor=000000" alt="Downloads" /></a>
+  <a href="https://github.com/RahulSinghParmar/OpenCluely/releases/latest"><img src="https://img.shields.io/github/v/release/RahulSinghParmar/OpenCluely?style=for-the-badge&label=Latest&color=111111&labelColor=000000" alt="Latest release" /></a>
+  <a href="https://github.com/RahulSinghParmar/OpenCluely/releases"><img src="https://img.shields.io/github/downloads/RahulSinghParmar/OpenCluely/total?style=for-the-badge&color=111111&labelColor=000000" alt="Downloads" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-111111?style=for-the-badge&labelColor=000000" alt="MIT License" /></a>
   <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-111111?style=for-the-badge&labelColor=000000" alt="Platforms" />
 </p>
 
-<a href="https://opencluely.techycsr.dev"><b>Website</b></a> &nbsp;|&nbsp;
-<a href="#download">Download</a> &nbsp;|&nbsp;
+<a href="https://github.com/RahulSinghParmar/OpenCluely"><b>Repository</b></a> &nbsp;|&nbsp;
+<a href="#builds">Builds</a> &nbsp;|&nbsp;
 <a href="#quick-start">Quick start</a> &nbsp;|&nbsp;
 <a href="#how-it-works">How it works</a>
 
@@ -26,37 +26,43 @@ https://github.com/user-attachments/assets/896a7140-1e85-405d-bfbe-e05c9f3a816b
 
 ## What it is
 
-OpenCluely is a desktop app for technical interviews and practice. It places a small overlay on your screen that recording and conferencing tools do not capture. You can speak a question or take a screenshot, and the AI answers in real time. The answer streams into a floating window and an optional chat panel, with clean code blocks and syntax highlighting.
+OpenCluely V3 beta is a local-first Universal Career Copilot for authorised interview practice and professional development. Choose a role pack, add your verified career and target-job context, then practise with chat, voice, screenshots, concise answers, and follow-up questions. Answers stream into a floating workspace and optional chat panel, with clean code blocks and syntax highlighting.
 
-It is free and open source. Processing stays on your machine, and the only thing that leaves your device is the request you send to the AI provider.
+It is free and open source. Application state and diagnostics remain local; Gemini and Azure receive only the requests required for the features you enable. Use it for preparation and only where external assistance is permitted.
+
+### Current release: [v3.0.0-beta.3](https://github.com/RahulSinghParmar/OpenCluely/releases/tag/v3.0.0-beta.3)
+
+V3 beta unifies the role catalogue, candidate/job context, response modes, technology focus, streaming performance diagnostics, Azure/Whisper voice input, and local settings persistence. Voice responses now render incrementally in both Chat and the floating response window.
 
 ## Highlights
 
-- **Invisible overlay.** Windows stay out of Zoom, Google Meet, Microsoft Teams, Discord, and OBS captures. You see the answer, the call does not.
-- **Hidden during screen share.** When a share starts, the app can hide every window on its own.
-- **Flexible local voice.** Choose manual start/stop capture or automatic voice-activity detection without fixed-timer sentence cuts.
-- **Configurable streamed answers.** Route voice replies to chat, the floating overlay, or both.
+- **Career workspace.** Keep a locally stored candidate profile and target-job context for truthful HR, role-fit, and behavioral practice.
+- **Responsive voice practice.** Azure Speech and local Whisper support microphone transcription; final transcripts render immediately and Gemini responses stream into Chat and the floating response window.
+- **Configurable answer routing.** Send voice replies to Chat, the floating response window, or both.
 - **Direct image analysis.** Screenshots go straight to Gemini for visual reasoning, with no slow OCR step in between.
 - **Session memory.** The whole conversation is remembered, so follow-ups, edge cases, and optimizations keep their context.
-- **Language aware.** Tailored answers for C++, C, Python, Java, and JavaScript.
-- **Stealthy by design.** Runs under ordinary system names, ships with no telemetry, and keeps your session local.
-- **Cross platform.** Pre-built installers for Windows and Linux (.deb and AppImage). macOS runs from source in one command.
+- **Interview profiles.**, DevOps, SDET, Backend Engineer, STAR, Leadership Principles, and 30+ additional skill profiles.
+- **Response modes.** Quick, interview-ready, detailed, STAR, and troubleshooting formats.
+- **Language aware.** Python, Java, JavaScript, TypeScript, Go, Rust, C, C++, C#, Kotlin, Swift, PHP, Ruby, Bash, and PowerShell.
+- **Local diagnostics.** View latency metrics, open logs, or copy redacted diagnostics from Settings.
+- **Cross platform packages.** macOS DMG/ZIP, Windows NSIS installer, and Linux Debian/AppImage artifacts are produced from the same Electron Builder configuration.
 
-## Download
+## Builds
 
-Pre-built installers are published with every release. These links always point at the newest version.
+Download the V3 beta assets from the [v3.0.0-beta.3 release](https://github.com/RahulSinghParmar/OpenCluely/releases/tag/v3.0.0-beta.3). If an artifact is unavailable for a platform, run the source build with `npm start` instead.
 
 | Platform | File | Notes |
 |---|---|---|
-| Windows | [Setup .exe](https://github.com/TechyCSR/OpenCluely/releases/latest) | NSIS installer. Adds a Start Menu shortcut. |
-| Linux (Debian or Ubuntu) | [.deb](https://github.com/TechyCSR/OpenCluely/releases/latest) | Pulls system deps automatically (Python, ffmpeg, GTK). |
-| Linux (universal) | [.AppImage](https://github.com/TechyCSR/OpenCluely/releases/latest) | No install. Run `chmod +x` then launch. |
+| Windows | [Setup .exe](https://github.com/RahulSinghParmar/OpenCluely/releases/tag/v3.0.0-beta.3) | NSIS installer when published from a Windows-capable build host. |
+| Linux (Debian or Ubuntu) | [.deb](https://github.com/RahulSinghParmar/OpenCluely/releases/tag/v3.0.0-beta.3) | Debian package when published from a Linux-capable build host. |
+| Linux (universal) | [.AppImage](https://github.com/RahulSinghParmar/OpenCluely/releases/tag/v3.0.0-beta.3) | Portable Linux package when published from a Linux-capable build host. |
+| macOS | [.dmg / .zip](https://github.com/RahulSinghParmar/OpenCluely/releases/tag/v3.0.0-beta.3) | Intel (`x64`) and Apple Silicon (`arm64`) packages. |
 
-> **macOS:** there is no pre-built download. The app is unsigned and un-notarized, so macOS Gatekeeper blocks it as "damaged and can't be opened." Run OpenCluely from source instead — see [Quick start](#quick-start). It is a one-line `./setup.sh` once Node.js is installed.
+> **macOS:** builds are currently unsigned and un-notarized. Run from source for the most reliable experience. When DMG/ZIP assets are attached to the release, macOS may require Finder’s **Open** confirmation on first launch.
 
-Every build is produced automatically on GitHub Actions and ships with SHA-256 checksums. Each release also lists the full set of commits it includes.
+Each GitHub tag includes automatic source ZIP and TAR archives. Release assets are attached separately after local validation.
 
-The website at [opencluely.techycsr.dev](https://opencluely.techycsr.dev) detects your operating system and offers the right installer directly.
+Project updates and releases are published at [RahulSinghParmar/OpenCluely](https://github.com/RahulSinghParmar/OpenCluely).
 
 ## Quick start
 
@@ -65,7 +71,7 @@ If you would rather build from source, three steps are all it takes.
 1. Clone the repository.
 
    ```bash
-   git clone https://github.com/TechyCSR/OpenCluely.git
+   git clone https://github.com/RahulSinghParmar/OpenCluely.git
    cd OpenCluely
    ```
 
@@ -157,30 +163,43 @@ For Azure Speech, create a Speech resource in the [Azure Portal](https://portal.
 
 OpenCluely is under active development. The core is stable and improvements ship regularly.
 
+## Universal skill system
+
+Skills are now defined through a central catalog instead of a DSA-only model. Every skill supplies a system prompt, knowledge scope, response style, display format, latency preferences, and language preferences. Static Markdown prompts remain supported as overrides for specialized skills.
+
+- **Interview:** , SDET, QA Automation, DevOps, Backend, Frontend, Full Stack, Cloud, Security, Network, System Administrator, Linux, Database, Data, AI, ML, SRE, Platform.
+- **General:** HR Interview, Behavioral Interview, STAR, Leadership Principles, Resume Review, Salary Negotiation, Career Coaching.
+- **Education:** DSA, Operating Systems, Networking, Databases, System Design, OOP, Software Architecture.
+- **General AI:** Explain Concepts, Research Assistant, Meeting Assistant, Technical Documentation, Coding Assistant.
+
 ### Done
 
-- Stealth overlay with a draggable command bar and a click through toggle
-- Hidden during screen share, with automatic hiding when a share begins
+- Draggable command bar and click-through toggle for a focused local workspace
 - Screenshot capture with direct Gemini analysis, no OCR step
 - Configurable manual or VAD-driven voice capture
 - Persistent local Whisper worker with optional CUDA acceleration and idle GPU release
 - Configurable chat/overlay routing for streamed voice answers
+- Incremental Gemini rendering in both Chat and the floating response window
 - Whisper hallucination filter that drops phantom phrases on silence
 - AI response window with markdown and syntax highlighting
 - Global shortcuts for capture, visibility, interaction, chat, and settings
 - Session memory and a full chat UI
-- Language picker and a DSA skill prompt
+- Universal skill catalogue with, DevOps, SDET, Backend, STAR, Leadership Principles, HR, education, and general AI profiles
+- Company focus, response modes, theme, compact mode, and expanded programming-language settings
+- Performance metrics and redacted diagnostic-log export
+- macOS panel-based overlay and chat behavior across Spaces and full-screen applications
 - Optional Azure Speech and local Whisper, with an auto hiding mic button
+- Persisted active role, language, company focus, response mode, appearance, candidate profile, and target job profile
 - Multi-monitor and area capture support
 - Window binding and positioning
-- Settings management with disguise and stealth modes
+- Persistent local settings and role-pack selection
 
 ### Planned
 
 - Multiple model backends alongside Gemini (OpenAI, Anthropic, local)
 - Auto typing of code snippets into editors and IDEs
 - Export of conversation history to markdown or PDF
-- Deeper stealth, including process name randomization
+- Optional local candidate-profile and document knowledge management (not shipped yet)
 
 ## Troubleshooting
 
@@ -207,7 +226,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 
 <summary> Limitations </summary>
 
-- **Screen-capture invisibility does not work on Linux.** The overlay stays hidden from screen shares and recordings only on **macOS** and **Windows**. This relies on Electron's `setContentProtection`, which maps to `NSWindowSharingNone` on macOS and `WDA_EXCLUDEFROMCAPTURE` on Windows. Electron provides **no equivalent on Linux** (neither X11 nor Wayland), so on Linux the call is a silent no-op and the overlay **will be visible** to anyone you screen-share with. This is a platform limitation, not a bug — there is no window flag on Linux that excludes a window from framebuffer capture. If you need capture-invisibility, run OpenCluely on macOS or Windows. As a partial workaround on Linux, share a single application window instead of your entire screen, or place the overlay on a monitor you are not sharing.
+- **Visibility is not guaranteed.** Do not rely on any desktop overlay to be absent from screen shares, recordings, remote-management tools, proctoring, or employer monitoring. Close the application during an interview unless the employer explicitly permits its use.
 
 </details>
 
@@ -232,6 +251,116 @@ Released under the MIT License. See [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-Built by [TechyCSR](https://techycsr.dev). If OpenCluely helped you, consider giving it a star ⭐
+Maintained by [RahulSinghParmar](https://github.com/RahulSinghParmar). If OpenCluely helped you, consider giving it a star ⭐
 
 </div>
+
+## Architecture review and delivery plan
+
+OpenCluely is an Electron desktop application for authorized interview practice and preparation. It provides profile-aware chat, voice, and screen-question flows. Use it only where external assistance is permitted.
+
+### Current architecture
+
+```mermaid
+flowchart LR
+  UI["Renderer windows\nOverlay · Chat · Settings · Response"] --> P["preload.js\nallowlisted IPC"]
+  P --> M["ApplicationController\nmain.js"]
+  M --> W[WindowManager]
+  M --> S[SessionManager]
+  M --> SP["SpeechService\nAzure / Whisper"] --> A[Azure Speech]
+  M --> C[CaptureService]
+  M --> L[LLMService] --> G[Gemini API]
+  SP --> M
+  C --> M
+  L --> M
+```
+
+### Data flow and IPC flow
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant R as Renderer
+  participant M as Main process
+  participant X as Speech or Capture service
+  participant L as LLM service
+  participant G as Gemini
+  U->>R: Chat, microphone, hotkey, or screen question
+  R->>M: Preload IPC request / PCM chunks
+  M->>X: Capture or transcribe
+  X-->>M: Transcript or image buffer
+  M->>L: Profile, session context, request
+  L->>G: Streamed generation
+  G-->>L: Answer tokens
+  L-->>M: Formatted response
+  M-->>R: IPC response events
+```
+
+Renderer pages use `preload.js`; the main process owns settings, windows, capture, speech, Gemini requests, and broadcasts.
+
+### Architecture assessment
+
+| Area | Finding | Recommended improvement |
+|---|---|---|
+| Main process | `main.js` owns IPC, shortcuts, settings, speech orchestration, LLM work, and lifecycle logic. | Split into request, settings, shortcut, and lifecycle controllers. |
+| Services | Speech, window, and LLM services are very large modules. | Separate state machines, transport adapters, and rendering concerns. |
+| Gemini latency | Retry, fallback-model, SDK, and alternate-HTTPS paths can compound failure latency. | Use one retry/circuit-breaker policy and request cancellation. |
+| Screenshots | Full-screen PNGs are base64 encoded and uploaded. | Crop/downscale and use JPEG where text fidelity permits. |
+| Memory | Event count is bounded, but byte size is not; consolidation can be expensive. | Use a byte budget, rolling summary, and last 20–40 turns. |
+| Background work | Screen/window/always-on-top polling creates recurring wakeups. | Pause polling while hidden and prefer event-driven behavior. |
+| UI | Large HTML files contain inline styles and behavior. | Incrementally extract shared components and styles. |
+| Tests | No automated test suite is declared. | Add unit, IPC-contract, and Electron smoke tests. |
+
+### Security and Electron review
+
+Current strengths: `contextIsolation` is enabled, Node integration is disabled, the remote module is disabled, local navigation is guarded, and logging redacts common secret-shaped fields.
+
+Priority work:
+
+1. Do not return Gemini or Azure API keys to renderer windows; return only configured status or a masked suffix.
+2. Store packaged-app secrets in macOS Keychain/Electron `safeStorage`, not plaintext `.env`.
+3. Disable DevTools outside development.
+4. Validate every IPC payload and verify the sender for privileged operations.
+5. Add strict Content Security Policy headers to all local renderer pages.
+6. Enable hardened runtime, signing, and notarization before distributing a macOS app.
+7. Recover individual services after faults rather than treating all uncaught exceptions as survivable.
+
+### Gemini and Azure Speech optimization
+
+- Reuse a shared HTTPS keep-alive agent and cancel timed-out/stale Gemini requests with request IDs and `AbortController`.
+- Measure capture, transcription, prompt construction, first-token, and completion latency independently.
+- Fail over immediately on model availability/quota errors; do not retry invalid keys or malformed input.
+- Keep one normalized prompt contract for typed, spoken, and screenshot questions.
+- Benchmark Azure end-silence around 700–1,000 ms for faster interview responses.
+- Add profile-specific Azure phrase lists for terms such as VLAN, RAID, IAM, EC2, Kubernetes, Terraform, and Playwright.
+- Add explicit speech states: `idle → starting → listening → finalizing → error`.
+- Apply IPC audio chunk limits and backpressure; never enable audio logging by default.
+
+### Latency metrics
+
+Settings → **Performance** displays the most recent in-app timing summary. The app records speech transcription duration, Gemini first-token time, full LLM time, prompt size, cache hits, and speech-to-answer time. These measurements make it possible to distinguish local overhead from Azure or Gemini network latency.
+
+### Immediate roadmap
+
+1. Protect API keys and validate IPC payloads.
+2. Compress screenshots and cancel stale Gemini work.
+3. Simplify retry/fallback behavior and reuse connections.
+4. Reduce polling, improve normal quit/tray behavior, and instrument latency.
+5. Add smoke tests for startup, profile switching, settings, speech, and screenshot error states.
+
+### Long-term target
+
+```mermaid
+flowchart TB
+  R[Renderer surfaces] --> I[Typed IPC contract]
+  I --> Q[Request Coordinator]
+  Q --> P[Profile and Prompt Engine]
+  Q --> S[Speech Coordinator]
+  Q --> C[Capture Coordinator]
+  Q --> G[Gemini Gateway]
+  Q --> M[Bounded Session Store]
+  I --> K[Secure Settings Store]
+  W[Window Lifecycle Manager] --> R
+```
+
+The target is a single, validated request pipeline shared by chat, voice, and screenshots, with consistent cancellation, prompt construction, metrics, error handling, and streamed output.

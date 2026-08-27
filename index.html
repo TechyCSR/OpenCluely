@@ -76,6 +76,11 @@
         animation: pulse 2s infinite;
       }
 
+      .command-item.muted i {
+        color: #fbbf24;
+        text-shadow: 0 0 10px rgba(251, 191, 36, 0.55);
+      }
+
       .command-item.active {
         color: #4caf50;
         text-shadow: 0 1px 2px rgba(76, 175, 80, 0.3);
@@ -358,28 +363,20 @@
         <span>⌘⇧S</span>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="micButton">
+      <div class="command-item" id="micButton" title="Click to start or stop listening. While this toolbar is focused, hold Space to mute; release Space to resume.">
         <i class="fas fa-microphone"></i>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="skillIndicator">
-        <i class="fas fa-brain"></i>
-        <span>DSA</span>
-      </div>
-      <div class="command-separator"></div>
-      <div class="command-item" id="languageSelector">
-        <i class="fas fa-code"></i>
-        <select id="codingLanguage">
-          <option value="cpp">C++</option>
-          <option value="c">C</option>
-          <option value="python">Python</option>
-          <option value="java">Java</option>
-          <option value="javascript">JavaScript</option>
-        </select>
+      <div class="command-item" id="settingsIndicator" title="Settings (⌘,)">
+        <i class="fas fa-gear"></i>
       </div>
       <div class="command-separator"></div>
       <div class="command-item" id="infoButton" title="Shortcuts">
         <i class="fas fa-circle-info"></i>
+      </div>
+      <div class="command-separator"></div>
+      <div class="command-item" id="quitButton" title="Quit OpenCluely (⌘Q)">
+        <i class="fas fa-power-off"></i>
       </div>
       <div class="command-separator"></div>
       <div class="status-dot non-interactive" id="statusDot"></div>
@@ -451,7 +448,7 @@
       </table>
       <div class="shortcuts-footer">
         <span>Tip: Alt+A also toggles interaction from anywhere.</span>
-        <a href="https://techycsr.dev" target="_blank" rel="noreferrer noopener">Made by @TechyCSR</a>
+        <a href="https://github.com/RahulSinghParmar" target="_blank" rel="noreferrer noopener">Made by @RahulSinghParmar</a>
       </div>
     </div>
 

@@ -1,7 +1,7 @@
 {
   "name": "opencluely",
-  "version": "1.0.0",
-  "description": "AI Problem Solving Assistant",
+  "version": "3.0.0-beta.3",
+  "description": "Universal Career Copilot for authorised interview practice and professional development",
   "main": "main.js",
   "scripts": {
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
@@ -20,13 +20,13 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "author": {
-    "name": "TechyCSR",
-    "email": "info@techycsr.dev",
-    "url": "https://techycsr.dev"
+    "name": "RahulSinghParmar",
+    "email": "rahulsinghparmar4@protonmail.com",
+    "url": "https://github.com/RahulSinghParmar"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/TechyCSR/OpenCluely"
+    "url": "https://github.com/RahulSinghParmar/OpenCluely"
   },
   "license": "ISC",
   "dependencies": {
@@ -165,7 +165,7 @@
       "artifactName": "OpenCluely-Setup-${version}.${ext}"
     },
     "dmg": {
-      "title": "OpenCluely Interview Assistant",
+      "title": "OpenCluely Career Copilot",
       "backgroundColor": "#000000",
       "window": {
         "width": 600,

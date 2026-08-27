@@ -475,6 +475,8 @@
         let isInteractive = false;
         let scrollableElements = [];
         let initialized = false;
+        let streamingMessageId = null;
+        let streamingResponse = '';
         
         // Immediate logging to verify script execution
         console.log('[LLM-RESPONSE] Script tag executed');
@@ -532,6 +534,20 @@
                     console.log('[LLM-RESPONSE] show-loading received');
                     showLoadingState();
                 });
+
+                // Voice responses already stream from Gemini. Render plain
+                // text immediately, then let the final event replace it with
+                // formatted Markdown once generation is complete.
+                window.electronAPI.onTranscriptionLlmResponseStart?.((_event, data) => {
+                    streamingMessageId = data?.messageId || null;
+                    streamingResponse = '';
+                    showLoadingState();
+                });
+                window.electronAPI.onTranscriptionLlmResponseChunk?.((_event, data) => {
+                    if (!data?.messageId || data.messageId !== streamingMessageId) return;
+                    streamingResponse += data.delta || '';
+                    displayStreamingText(streamingResponse);
+                });
                 
                 // Listen for LLM response
                 window.electronAPI.onDisplayLlmResponse(function() {
@@ -560,6 +576,8 @@
                         
                         hideLoadingState();
                         displayResponse(actualData);
+                        streamingMessageId = null;
+                        streamingResponse = '';
                         setupScrolling();
                         setTimeout(verifyDisplayState, 500);
                         console.log('[LLM-RESPONSE] Handler completed successfully');
@@ -600,6 +618,22 @@
             } else {
                 console.error('Loading element not found!');
             }
+        }
+
+        function displayStreamingText(text) {
+            const responseElement = document.getElementById('response-content');
+            const splitLayout = document.getElementById('split-layout');
+            const fullLayout = document.getElementById('full-content');
+            const fullMarkdown = document.getElementById('full-markdown');
+            if (!responseElement || !fullLayout || !fullMarkdown) return;
+
+            hideLoadingState();
+            responseElement.classList.remove('hidden');
+            splitLayout?.classList.add('hidden');
+            fullLayout.classList.remove('hidden');
+            // Do not parse partial Markdown on each stream chunk. It is both
+            // faster and avoids flicker from incomplete lists/code fences.
+            fullMarkdown.textContent = text;
         }
 
         function renderMarkdown(text) {

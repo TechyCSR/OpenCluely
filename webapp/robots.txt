@@ -1,5 +1,5 @@
 # OpenCluely — robots.txt
-# https://opencluely.techycsr.dev/
+# https://github.com/RahulSinghParmar/OpenCluely
 #
 # All well-behaved crawlers are welcome. The site is a single-page
 # landing with no private or crawl-costly paths to restrict.
@@ -14,7 +14,7 @@ Disallow: /node_modules/
 Disallow: /*.json$
 
 # Sitemap for discovery of all canonical pages.
-Sitemap: https://opencluely.techycsr.dev/sitemap.xml
+# Sitemap is generated when the landing page is deployed under a project-owned domain.
 
 # LLM guidance
 # OpenCluely publishes /llms.txt and /llms-full.txt for AI crawlers and assistants.

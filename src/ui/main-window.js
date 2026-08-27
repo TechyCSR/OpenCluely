@@ -10,12 +10,14 @@ class MainWindowUI {
     constructor() {
         this.isInteractive = false;
         this.isHidden = false;
-        this.currentSkill = 'dsa'; // Default, will be updated from settings
+        this.currentSkill = 'amazon-dct'; // Default, will be updated from settings
         this.statusDot = null;
         this.skillIndicator = null;
         this.micButton = null;
         this.isRecording = false;
         this.speechAvailable = false; // track availability
+        this.uiTheme = 'dark';
+        this.compactMode = false;
         this._popoverHideTimeout = null;
         // Renderer-side audio capture state (used for Whisper on Windows)
         this._audioContext = null;
@@ -25,8 +27,15 @@ class MainWindowUI {
         
         // Define available skills for navigation
         this.availableSkills = [
-            'dsa'
+            'dsa',
+            'amazon-dct',
+            'devops',
+            'sdet',
+            'backend-engineer',
+            'star',
+            'leadership-principles'
         ];
+        this.skillNames = {};
         
         this.init();
     }
@@ -35,6 +44,7 @@ class MainWindowUI {
         try {
             this.setupElements();
             this.setupEventListeners();
+            await this.loadSkillCatalog();
             
             // Load current skill from settings
             await this.loadCurrentSkill();
@@ -75,6 +85,7 @@ class MainWindowUI {
                 const settings = await window.electronAPI.getSettings();
                 if (settings && settings.activeSkill) {
                     this.currentSkill = settings.activeSkill;
+                    this.applyAppearance(settings.uiTheme, settings.compactMode);
                     logger.debug('Loaded current skill from settings', {
                         component: 'MainWindowUI',
                         skill: this.currentSkill
@@ -87,6 +98,24 @@ class MainWindowUI {
                 error: error.message
             });
         }
+    }
+
+    async loadSkillCatalog() {
+        try {
+            const catalog = await window.electronAPI?.getSkillCatalog?.();
+            if (!Array.isArray(catalog) || !catalog.length) return;
+            this.availableSkills = catalog.map(skill => skill.id);
+            this.skillNames = Object.fromEntries(catalog.map(skill => [skill.id, skill.name]));
+        } catch (error) {
+            logger.warn('Failed to load skill catalog; using built-in fallback', { error: error.message });
+        }
+    }
+
+    applyAppearance(theme, compact) {
+        this.uiTheme = theme === 'light' ? 'light' : 'dark';
+        this.compactMode = !!compact;
+        document.documentElement.dataset.theme = this.uiTheme;
+        document.body.classList.toggle('compact-mode', this.compactMode);
     }
 
     async loadCurrentInteractionState() {
@@ -271,13 +300,14 @@ class MainWindowUI {
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
     this.infoButton = document.getElementById('infoButton');
+    this.quitButton = document.getElementById('quitButton');
     this.shortcutsPopover = document.getElementById('shortcutsPopover');
 
         // NEW: Screenshot button is the first .command-item without id
         const commandItems = document.querySelectorAll('.command-item');
         this.screenshotButton = commandItems && commandItems[0];
 
-    if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
+    if (!this.statusDot || !this.micButton || !this.screenshotButton) {
             throw new Error('Required UI elements not found');
         }
 
@@ -288,37 +318,36 @@ class MainWindowUI {
             }
         });
 
-        // Skill indicator click handler toggles DSA skill
-        this.skillIndicator.addEventListener('click', () => {
-            if (!this.isInteractive) return;
-            const newSkill = 'dsa';
-            if (window.electronAPI && window.electronAPI.updateActiveSkill) {
-                window.electronAPI.updateActiveSkill(newSkill).then(() => {
-                    this.handleSkillActivated(newSkill);
-                });
-            } else {
-                this.handleSkillActivated(newSkill);
-            }
+        this.quitButton?.addEventListener('click', () => {
+            if (window.electronAPI?.quit) window.electronAPI.quit();
         });
 
-        // Check for required elements (settingsIndicator is optional)
+        // Profiles, languages, and display preferences are deliberately kept in
+        // the Settings window so this overlay remains a compact control bar.
         if (this.settingsIndicator) {
             this.settingsIndicator.addEventListener('click', () => {
                 if (this.isInteractive) {
-                    this.showSettingsMenu();
+                    window.electronAPI?.showSettings?.();
                 }
             });
         }
 
         // Add click handler for microphone
+        this.micButton.addEventListener('pointerdown', () => {
+            // A direct click gives this non-editable toolbar keyboard focus,
+            // which is required for the local hold-Space mute control.
+            window.focus();
+        });
         this.micButton.addEventListener('click', async () => {
             if (this.isInteractive && this.speechAvailable) {
                 try {
-                    if (this.isRecording) {
-                        await window.electronAPI.stopSpeechRecognition();
-                    } else {
-                        await window.electronAPI.startSpeechRecognition();
-                    }
+                    const status = this.isRecording
+                        ? await window.electronAPI.stopSpeechRecognition()
+                        : await window.electronAPI.startSpeechRecognition();
+                    // The main process broadcasts recording-started/stopped.
+                    // Calling the handlers here as well opened two concurrent
+                    // renderer microphone streams for a single click.
+                    if (!status?.isRecording) this.handleRecordingStopped();
                 } catch (error) {
                     logger.error('Speech recognition toggle failed', {
                         component: 'MainWindowUI',
@@ -335,43 +364,15 @@ class MainWindowUI {
             }
         });
 
-        // Language dropdown
-        this.languageSelect = document.getElementById('codingLanguage');
-        if (this.languageSelect) {
-            // Set default to C++ if no value is set
-            this.languageSelect.value = 'cpp';
-            
-            // Initialize with current setting
-            if (window.electronAPI && window.electronAPI.getSettings) {
-                window.electronAPI.getSettings().then(settings => {
-                    if (settings && settings.codingLanguage) {
-                        this.languageSelect.value = settings.codingLanguage;
-                    } else {
-                        // Save C++ as default if no language is set
-                        this.languageSelect.value = 'cpp';
-                        window.electronAPI.saveSettings({ codingLanguage: 'cpp' });
-                    }
-                }).catch(() => {
-                    // Fallback to C++ on error
-                    this.languageSelect.value = 'cpp';
-                });
+        window.electronAPI?.onPracticeMuteState?.((_event, data) => {
+            const muted = !!data?.muted;
+            this.micButton?.classList.toggle('muted', muted);
+            if (this.micButton) {
+                this.micButton.title = muted
+                    ? 'Microphone paused — release Space to resume.'
+                    : 'Listening — hold Space to pause the microphone.';
             }
-
-            this.languageSelect.addEventListener('change', (e) => {
-                const lang = e.target.value;
-                if (window.electronAPI && window.electronAPI.saveSettings) {
-                    window.electronAPI.saveSettings({ codingLanguage: lang });
-                }
-                // Resize for any width change
-                setTimeout(() => {
-                    const commandTab = document.querySelector('.command-tab');
-                    if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
-                        const rect = commandTab.getBoundingClientRect();
-                        window.electronAPI.resizeWindow(Math.ceil(rect.width), Math.ceil(rect.height));
-                    }
-                }, 50);
-            });
-        }
+        });
 
         // Info button / shortcuts popover
         if (this.infoButton && this.shortcutsPopover) {
@@ -446,16 +447,9 @@ class MainWindowUI {
 
             // Listen for coding language changes from other windows
             window.electronAPI.onCodingLanguageChanged((event, data) => {
-                if (data && data.language && this.languageSelect) {
-                    // avoid clobbering if same value
-                    if (this.languageSelect.value !== data.language) {
-                        this.languageSelect.value = data.language;
-                    }
-                    logger.debug('Language updated from other window', {
-                        component: 'MainWindowUI',
-                        language: data.language
-                    });
-                }
+                if (data?.language) logger.debug('Language preference updated in Settings', {
+                    component: 'MainWindowUI', language: data.language
+                });
             });
 
             // Listen for main window shown event to refresh speech availability
@@ -508,6 +502,12 @@ class MainWindowUI {
         } else {
             logger.error('window.api not available - event listeners not set up!');
         }
+
+        if (window.electronAPI?.onUiPreferencesChanged) {
+            window.electronAPI.onUiPreferencesChanged((_event, preferences) => {
+                this.applyAppearance(preferences?.uiTheme, preferences?.compactMode);
+            });
+        }
         
         // Keyboard shortcuts
         this.setupKeyboardShortcuts();
@@ -518,8 +518,14 @@ class MainWindowUI {
 
     handleLLMResponse(data) {
         const skill = data.skill || data.metadata?.skill || 'General';
-        const skillNames = {
+        const fallbackSkillNames = {
             'dsa': 'DSA',
+            'amazon-dct': 'Amazon DCT',
+            'devops': 'DevOps',
+            'sdet': 'SDET',
+            'backend-engineer': 'Backend',
+            'star': 'STAR',
+            'leadership-principles': 'Leadership',
             'behavioral': 'Behavioral', 
             'sales': 'Sales',
             'presentation': 'Presentation',
@@ -530,7 +536,7 @@ class MainWindowUI {
             'negotiation': 'Negotiation'
         };
         
-        const displaySkill = skillNames[skill] || skill.toUpperCase();
+        const displaySkill = this.skillNames[skill] || fallbackSkillNames[skill] || skill.toUpperCase();
         
         logger.info('LLM response received', {
             component: 'MainWindowUI',
@@ -642,6 +648,11 @@ class MainWindowUI {
     }
 
     handleRecordingStarted() {
+        logger.info('RENDERER recording-started received', {
+            component: 'MainWindowUI',
+            platform: navigator.platform,
+            isRecording: this.isRecording
+        });
         this.isRecording = true;
         if (this.micButton) {
             this.micButton.classList.add('recording');
@@ -680,47 +691,101 @@ class MainWindowUI {
         try {
             this._stopRendererAudioCapture();
 
+            logger.info('RENDERER requesting microphone permission', {
+                component: 'MainWindowUI',
+                mediaDevicesAvailable: !!navigator.mediaDevices,
+                getUserMediaAvailable: !!(
+                    navigator.mediaDevices &&
+                    navigator.mediaDevices.getUserMedia
+                )
+            });
+
+            const macPermission = await window.electronAPI?.ensureMicrophoneAccess?.();
+            if (macPermission && !macPermission.granted) {
+                throw new Error(`Microphone permission is ${macPermission.status}. Enable OpenCluely in System Settings → Privacy & Security → Microphone, then restart the app.`);
+            }
+            
+            // Use the current macOS default microphone in its native format.
+            // Forcing 16 kHz here can delay or silence capture on Intel Macs;
+            // `_to16kPcm` converts the stream safely for Azure below.
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
+                    // Keep macOS's native sample rate, then resample locally
+                    // for Azure. The processing hints improve voice isolation
+                    // without forcing the Intel-Mac 16 kHz capture mode that
+                    // has proven unreliable on some devices.
                     echoCancellation: true,
                     noiseSuppression: true,
-                    autoGainControl: true,
-                    sampleRate: { ideal: 16000 }
+                    autoGainControl: true
                 }
             });
             this._mediaStream = stream;
-
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: 16000
+            logger.info('RENDERER microphone permission granted', {
+                component: 'MainWindowUI',
+                trackCount: stream.getAudioTracks().length,
+                tracks: stream.getAudioTracks().map(track => ({
+                    label: track.label,
+                    enabled: track.enabled,
+                    readyState: track.readyState,
+                    settings: typeof track.getSettings === 'function' ? track.getSettings() : {}
+                }))
             });
+
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             this._audioContext = audioContext;
+            await audioContext.resume();
 
             const source = audioContext.createMediaStreamSource(stream);
             const bufferSize = 4096;
             const scriptNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
             this._scriptNode = scriptNode;
-
+            
+            let audioChunkCount = 0;
             scriptNode.onaudioprocess = (event) => {
                 if (!this.isRecording || !window.electronAPI || !window.electronAPI.sendAudioChunk) {
                     return;
                 }
+                
                 const inputData = event.inputBuffer.getChannelData(0);
-                const pcm16 = new Int16Array(inputData.length);
-                for (let i = 0; i < inputData.length; i++) {
-                    const s = Math.max(-1, Math.min(1, inputData[i]));
-                    pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                
+                const pcm16 = this._to16kPcm(inputData, audioContext.sampleRate);
+                
+                audioChunkCount++;
+                
+                if (audioChunkCount === 1 || audioChunkCount % 100 === 0) {
+                    logger.info('RENDERER sending microphone PCM', {
+                        component: 'MainWindowUI',
+                        chunkCount: audioChunkCount,
+                        samples: pcm16.length,
+                        bytes: pcm16.byteLength
+                    });
                 }
+                
                 window.electronAPI.sendAudioChunk(pcm16.buffer);
             };
 
             source.connect(scriptNode);
-            scriptNode.connect(audioContext.destination);
+            // ScriptProcessor nodes must be connected to remain active in
+            // Chromium, but routing the live microphone to the speakers can
+            // create feedback and contaminate recognition. Keep the processor
+            // alive through a muted gain node instead.
+            const silentGain = audioContext.createGain();
+            silentGain.gain.value = 0;
+            this._silentGain = silentGain;
+            scriptNode.connect(silentGain);
+            silentGain.connect(audioContext.destination);
 
-            logger.info('Renderer audio capture started', { component: 'MainWindowUI' });
+            logger.info('Renderer audio capture started', {
+                component: 'MainWindowUI',
+                inputSampleRate: audioContext.sampleRate,
+                outputSampleRate: 16000
+            });
         } catch (error) {
             logger.error('Failed to start renderer audio capture', {
                 component: 'MainWindowUI',
-                error: error.message
+                error: error.message,
+                name: error.name,
+                stack: error.stack
             });
             // Notify main process so it can stop the recording state
             try {
@@ -729,12 +794,33 @@ class MainWindowUI {
         }
     }
 
+    _to16kPcm(inputData, inputSampleRate) {
+        const targetSampleRate = 16000;
+        const ratio = inputSampleRate / targetSampleRate;
+        const outputLength = Math.max(1, Math.round(inputData.length / ratio));
+        const output = new Int16Array(outputLength);
+
+        for (let index = 0; index < outputLength; index++) {
+            const start = Math.floor(index * ratio);
+            const end = Math.min(inputData.length, Math.max(start + 1, Math.floor((index + 1) * ratio)));
+            let sum = 0;
+            for (let sample = start; sample < end; sample++) sum += inputData[sample];
+            const normalized = Math.max(-1, Math.min(1, sum / (end - start)));
+            output[index] = normalized < 0 ? normalized * 0x8000 : normalized * 0x7FFF;
+        }
+        return output;
+    }
+
     _stopRendererAudioCapture() {
         try {
             if (this._scriptNode) {
                 this._scriptNode.disconnect();
                 this._scriptNode.onaudioprocess = null;
                 this._scriptNode = null;
+            }
+            if (this._silentGain) {
+                this._silentGain.disconnect();
+                this._silentGain = null;
             }
             if (this._mediaStream) {
                 this._mediaStream.getTracks().forEach((track) => track.stop());
@@ -757,8 +843,14 @@ class MainWindowUI {
     }
 
     updateSkillIndicator() {
-        const skillNames = {
+        const fallbackSkillNames = {
             'dsa': 'DSA',
+            'amazon-dct': 'Amazon DCT',
+            'devops': 'DevOps',
+            'sdet': 'SDET',
+            'backend-engineer': 'Backend',
+            'star': 'STAR',
+            'leadership-principles': 'Leadership',
             'behavioral': 'Behavioral', 
             'sales': 'Sales',
             'presentation': 'Presentation',
@@ -775,12 +867,9 @@ class MainWindowUI {
             skillIndicatorExists: !!this.skillIndicator
         });
         
-        if (!this.skillIndicator) {
-            logger.error('Skill indicator element not found!');
-            return;
-        }
+        if (!this.skillIndicator) return;
         
-        const skillName = skillNames[this.currentSkill] || this.currentSkill.toUpperCase();
+        const skillName = this.skillNames[this.currentSkill] || fallbackSkillNames[this.currentSkill] || this.currentSkill.toUpperCase();
         const skillSpan = this.skillIndicator.querySelector('span');
         
         logger.info('Looking for skill span element', {
@@ -870,8 +959,14 @@ class MainWindowUI {
     }
 
     showSkillChangeNotification(skill, direction) {
-        const skillNames = {
+        const fallbackSkillNames = {
             'dsa': 'DSA',
+            'amazon-dct': 'Amazon DCT',
+            'devops': 'DevOps',
+            'sdet': 'SDET',
+            'backend-engineer': 'Backend',
+            'star': 'STAR',
+            'leadership-principles': 'Leadership',
             'behavioral': 'Behavioral', 
             'sales': 'Sales',
             'presentation': 'Presentation',
@@ -882,7 +977,7 @@ class MainWindowUI {
             'negotiation': 'Negotiation'
         };
         
-        const displayName = skillNames[skill] || skill.toUpperCase();
+        const displayName = this.skillNames[skill] || fallbackSkillNames[skill] || skill.toUpperCase();
         const arrow = direction > 0 ? '↓' : '↑';
         
         // Create temporary notification

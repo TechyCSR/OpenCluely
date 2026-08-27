@@ -1,9 +1,13 @@
 const path = require('path');
 const os = require('os');
+const packageMetadata = require('../../package.json');
 
 class ConfigManager {
   constructor() {
-    this.env = process.env.NODE_ENV || 'development';
+    // `NODE_ENV` is not reliably set by packaged Electron applications.
+    // Electron sets `process.defaultApp` only for `electron .`, so it gives us
+    // a safe production default without making local development cumbersome.
+    this.env = process.env.NODE_ENV || (process.defaultApp ? 'development' : 'production');
     this.appDataDir = path.join(os.homedir(), '.OpenCluely');
     this.loadConfiguration();
   }
@@ -12,7 +16,7 @@ class ConfigManager {
     this.config = {
       app: {
         name: 'OpenCluely',
-        version: '1.0.0',
+        version: packageMetadata.version,
         processTitle: 'OpenCluely',
         dataDir: this.appDataDir,
         isDevelopment: this.env === 'development',
@@ -40,16 +44,16 @@ class ConfigManager {
 
       llm: {
         gemini: {
-          model: 'gemini-3.1-flash-lite',
-          fallbackModels: ['gemini-2.5-flash-lite', 'gemini-3.5-flash'],
+          // A user-selected GEMINI_MODEL takes precedence. Flash-Lite is the
+          // reliable default for API keys without paid Pro quota; Pro remains
+          // selectable in Settings for accounts with billing enabled.
+          model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
+          fallbackModels: ['gemini-3.1-flash-lite', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
           maxRetries: 3,
           timeout: 30000,
           fallbackEnabled: true,
           enableFallbackMethod: true,
           generation: {
-            temperature: 0.7,
-            topK: 32,
-            topP: 0.9,
             maxOutputTokens: 4096,
             thinkingConfig: { thinkingBudget: 0 }
           }

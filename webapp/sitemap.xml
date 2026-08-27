@@ -4,16 +4,16 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
         xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
   <url>
-    <loc>https://opencluely.techycsr.dev/</loc>
+    <loc>https://github.com/RahulSinghParmar/OpenCluely</loc>
     <lastmod>2026-07-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>https://opencluely.techycsr.dev/og-image.png</image:loc>
+      <image:loc>https://github.com/RahulSinghParmar/OpenCluely/blob/main/webapp/og-image.png</image:loc>
       <image:title>OpenCluely — Invisible AI Interview Copilot</image:title>
       <image:caption>The free, open-source AI interview copilot that stays invisible to Zoom, Meet, Teams, Discord, and OBS screen sharing.</image:caption>
     </image:image>
-    <xhtml:link rel="alternate" hreflang="en" href="https://opencluely.techycsr.dev/" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://opencluely.techycsr.dev/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://github.com/RahulSinghParmar/OpenCluely" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://github.com/RahulSinghParmar/OpenCluely" />
   </url>
 </urlset>

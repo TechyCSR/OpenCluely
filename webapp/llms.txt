@@ -24,10 +24,10 @@ a strict BYOK model so the user keeps control of their API key and their data.
 
 - **Product name:** OpenCluely (also "OpenCluely AI Interview Copilot")
 - **Tagline:** The invisible AI interview copilot - and the free open-source Cluely alternative
-- **Repository:** https://github.com/TechyCSR/OpenCluely
+- **Repository:** https://github.com/RahulSinghParmar/OpenCluely
 - **License:** MIT - https://opensource.org/licenses/MIT
-- **Website:** https://opencluely.techycsr.dev/
-- **Author:** TechyCSR (https://techycsr.dev, https://github.com/TechyCSR)
+- **Website:** https://github.com/RahulSinghParmar/OpenCluely
+- **Author:** RahulSinghParmar (https://github.com/RahulSinghParmar)
 - **Platforms:** Windows (NSIS .exe installer), Linux (.deb, .AppImage), macOS (run from source via ./setup.sh)
 - **Tech stack:** Electron, Google Gemini API (Flash-Lite and Flash), OpenAI Whisper (local) and Azure Speech, PrismJS, WDA_EXCLUDEFROMCAPTURE / SetWindowDisplayAffinity (Windows), NSWindowSharingNone (macOS)
 - **Pricing:** Free, open source, MIT licensed. Only the user's own Gemini API usage costs (which has a generous free tier). No subscription, no account, no proxy.
@@ -56,7 +56,7 @@ a strict BYOK model so the user keeps control of their API key and their data.
 ## Quick start
 
 ```sh
-git clone https://github.com/TechyCSR/OpenCluely.git
+git clone https://github.com/RahulSinghParmar/OpenCluely.git
 cd OpenCluely
 ./setup.sh
 ```
@@ -93,10 +93,7 @@ or add Azure Speech credentials in Settings.
 
 ## Related links
 
-- GitHub releases: https://github.com/TechyCSR/OpenCluely/releases/latest
-- Releases feed (Atom): https://github.com/TechyCSR/OpenCluely/releases.atom
-- Issue tracker: https://github.com/TechyCSR/OpenCluely/issues
-- Developer site: https://techycsr.dev
-- llms-full.txt: https://opencluely.techycsr.dev/llms-full.txt
-- sitemap: https://opencluely.techycsr.dev/sitemap.xml
-- robots: https://opencluely.techycsr.dev/robots.txt
+- GitHub releases: https://github.com/RahulSinghParmar/OpenCluely/releases/latest
+- Releases feed (Atom): https://github.com/RahulSinghParmar/OpenCluely/releases.atom
+- Issue tracker: https://github.com/RahulSinghParmar/OpenCluely/issues
+- Developer: https://github.com/RahulSinghParmar

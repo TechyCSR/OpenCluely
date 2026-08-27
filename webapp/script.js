@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  var REPO = 'TechyCSR/OpenCluely';
+  var REPO = 'RahulSinghParmar/OpenCluely';
   var el = function (id) { return document.getElementById(id); };
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -109,7 +109,7 @@
   /* ---------- GitHub total downloads (live, mirrors README badge) ---------- */
   var dlEl = el('dl-count-nav');
   var dlElMobile = el('dl-count-mobile');
-  fetch('https://img.shields.io/github/downloads/TechyCSR/OpenCluely/total.json')
+  fetch('https://img.shields.io/github/downloads/RahulSinghParmar/OpenCluely/total.json')
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (d) {
       if (d && typeof d.value === 'string' && d.value.length) {

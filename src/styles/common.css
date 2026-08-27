@@ -13,6 +13,32 @@ body {
     cursor: default;
 }
 
+/* Workspace preferences are applied by every renderer through Settings. */
+html[data-theme="light"] .settings-container,
+html[data-theme="light"] .chat-container,
+html[data-theme="light"] .app-container,
+html[data-theme="light"] .command-tab {
+    background: rgba(245, 247, 250, 0.96) !important;
+    border-color: rgba(15, 23, 42, 0.16) !important;
+    color: #18212f !important;
+}
+html[data-theme="light"] .settings-container *,
+html[data-theme="light"] .chat-container .header-title,
+html[data-theme="light"] .chat-container .message-content,
+html[data-theme="light"] .command-tab,
+html[data-theme="light"] .command-tab span {
+    color: #18212f !important;
+}
+html[data-theme="light"] .chat-header,
+html[data-theme="light"] .app-header {
+    background: rgba(226, 232, 240, 0.78) !important;
+}
+body.compact-mode .chat-header { padding: 8px 12px !important; }
+body.compact-mode .chat-messages { padding: 10px !important; }
+body.compact-mode .message { margin-bottom: 8px !important; }
+body.compact-mode .command-tab { height: 24px !important; gap: 8px !important; }
+body.compact-mode .command-item { padding: 3px 6px !important; }
+
 /* Common container styles */
 .app-container {
     width: 100%;

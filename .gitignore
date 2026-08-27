@@ -7,3 +7,4 @@ dist/
 bin/
 .DS_Store
 *.log
+knowledge/*.local.md

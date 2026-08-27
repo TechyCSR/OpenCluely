@@ -1005,7 +1005,6 @@
         }
 
         hideListeningAnimation();
-        addMessage('Stopped Listening', 'system');
       }
 
       function handleTranscription(text) {
@@ -1013,15 +1012,10 @@
           // Hide listening animation first
           hideListeningAnimation();
 
-          // Show transcribed text with slight delay for smooth transition
-          setTimeout(() => {
-            addMessage(text.trim(), 'transcription');
-            
-            // Show thinking indicator after transcription
-            setTimeout(() => {
-              showThinkingIndicator();
-            }, 300);
-          }, 200);
+          // A final Azure result is already stable. Render it immediately;
+          // cosmetic delays make voice input feel unresponsive.
+          addMessage(text.trim(), 'transcription');
+          showThinkingIndicator();
         } else {
           console.warn('Invalid or empty transcription text - ignoring:', text);
         }
@@ -1170,14 +1164,18 @@
         // Listen for speech status
         whysperAPI.onSpeechStatus((event, data) => {
           if (data && data.status) {
-            addMessage(data.status, 'system');
-
             if (data.status.includes('started') || data.status.includes('Recording')) {
               handleRecordingStarted();
             } else if (data.status.includes('stopped') || data.status.includes('ended')) {
               handleRecordingStopped();
             }
           }
+        });
+
+        whysperAPI.onPracticeMuteState?.((event, data) => {
+          addMessage(data?.muted
+            ? 'Microphone paused — release Space to resume.'
+            : 'Microphone resumed.', 'system');
         });
 
         // Listen for speech errors

@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - os: ubuntu-latest
             script: linux
@@ -32,6 +32,11 @@ jobs:
             script: win
             artifact_glob: |
               dist/*.exe
+          - os: macos-latest
+            script: mac
+            artifact_glob: |
+              dist/*.dmg
+              dist/*-mac.zip
 
     steps:
       - name: Checkout
@@ -83,7 +88,11 @@ jobs:
         shell: pwsh
         run: git config --system core.longpaths true
 
-      - name: Build
+      # Building x64 and arm64 DMGs in one electron-builder invocation races
+      # hdiutil on GitHub's Apple Silicon runners. Run each architecture in a
+      # separate invocation so each disk image is detached before the next.
+      - name: Build macOS architectures sequentially
+        if: matrix.os == 'macos-latest'
         shell: bash
         env:
           # Intentionally do NOT set CSC_LINK / WIN_CSC_LINK etc.
@@ -92,6 +101,15 @@ jobs:
           # "Env WIN_CSC_LINK is not correct" errors. Code signing is
           # opt-in: add the secrets to the repo and wire them in here
           # only when you have real certificates.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npx electron-builder --mac dmg zip --x64 --publish never
+          npx electron-builder --mac dmg zip --arm64 --publish never
+
+      - name: Build
+        if: matrix.os != 'macos-latest'
+        shell: bash
+        env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run build:${{ matrix.script }} -- --publish never
 
@@ -179,15 +197,13 @@ jobs:
 
           | Platform | File | Notes |
           |---|---|---|
-          | **Windows** | `OpenCluely-Setup-*.exe` | NSIS installer — installs app + adds to Start Menu |
-          | **Linux** | `*.deb` | Debian/Ubuntu — auto-pulls system deps (Python, ffmpeg, GTK) |
-          | **Linux** | `*.AppImage` | Universal — no install, just `chmod +x` and run |
+          | **macOS (Intel)** | `OpenCluely-*.dmg` or `*-mac.zip` | Unsigned build; use Finder's **Open** confirmation on first launch. |
+          | **macOS (Apple Silicon)** | `OpenCluely-*-arm64.dmg` or `*-arm64-mac.zip` | Unsigned build; use Finder's **Open** confirmation on first launch. |
+          | **Windows** | `OpenCluely-Setup-*.exe` | NSIS installer — installs app + adds to Start Menu. |
+          | **Linux** | `*.deb` | Debian/Ubuntu package. |
+          | **Linux** | `*.AppImage` | Universal package — run `chmod +x` then launch. |
 
-          > **macOS:** no pre-built build is shipped. The app is unsigned/un-notarized, so macOS Gatekeeper blocks it as "damaged". Run OpenCluely from source instead:
-          > ```bash
-          > git clone https://github.com/TechyCSR/OpenCluely && cd OpenCluely && ./setup.sh
-          > ```
-          > Requires Node.js 18+. See the [README](https://github.com/TechyCSR/OpenCluely#quick-start) for details.
+          This beta is for authorised interview preparation and professional development. Do not use it where external assistance is not permitted.
 
           ## First Run
 
@@ -236,6 +252,10 @@ jobs:
           # The order below is the order files appear in the release page.
           find artifacts -type f -name 'OpenCluely-Setup-*.exe' \
             -exec cp -v {} release/ \;
+          find artifacts -type f -name 'OpenCluely-*.dmg' \
+            -exec cp -v {} release/ \;
+          find artifacts -type f -name 'OpenCluely-*-mac.zip' \
+            -exec cp -v {} release/ \;
           find artifacts -type f -name 'opencluely_*_amd64.deb' \
             -exec cp -v {} release/ \;
           find artifacts -type f -name '*.AppImage' \
@@ -255,7 +275,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: OpenCluely ${{ github.ref_name }}
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body_path: RELEASE_BODY.md
           files: |
             release/*

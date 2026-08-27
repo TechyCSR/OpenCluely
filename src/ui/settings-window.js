@@ -17,10 +17,48 @@ document.addEventListener('DOMContentLoaded', () => {
     const whisperResponseTargetSelect = document.getElementById('whisperResponseTarget');
     const whisperSegmentMsInput = document.getElementById('whisperSegmentMs');
     const geminiKeyInput = document.getElementById('geminiKey');
+    const geminiModelSelect = document.getElementById('geminiModel');
+    const openLogsButton = document.getElementById('openLogsButton');
+    const copyLogsButton = document.getElementById('copyLogsButton');
+    const performanceButton = document.getElementById('performanceButton');
+    const screenRecordingButton = document.getElementById('screenRecordingButton');
+    const diagnosticStatus = document.getElementById('diagnosticStatus');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
+    const interviewCompanySelect = document.getElementById('interviewCompany');
+    const responseModeSelect = document.getElementById('responseMode');
+    const uiThemeSelect = document.getElementById('uiTheme');
+    const compactModeInput = document.getElementById('compactMode');
+    const technologyDatabaseSelect = document.getElementById('technologyDatabase');
+    const technologyCloudSelect = document.getElementById('technologyCloud');
+    const technologyContainersSelect = document.getElementById('technologyContainers');
+    const technologyInfrastructureSelect = document.getElementById('technologyInfrastructure');
+    const candidateProfileInput = document.getElementById('candidateProfile');
+    const targetJobProfileInput = document.getElementById('targetJobProfile');
     const iconGrid = document.getElementById('iconGrid');
+
+    const populateSkillSelect = (catalog = []) => {
+        if (!activeSkillSelect || !Array.isArray(catalog) || !catalog.length) return;
+        const selected = activeSkillSelect.value;
+        activeSkillSelect.innerHTML = '';
+        const groups = catalog.reduce((result, skill) => {
+            (result[skill.category] ||= []).push(skill);
+            return result;
+        }, {});
+        Object.entries(groups).forEach(([category, skillList]) => {
+            const group = document.createElement('optgroup');
+            group.label = category;
+            skillList.forEach(skill => {
+                const option = document.createElement('option');
+                option.value = skill.id;
+                option.textContent = skill.name;
+                group.appendChild(option);
+            });
+            activeSkillSelect.appendChild(group);
+        });
+        if (selected) activeSkillSelect.value = selected;
+    };
 
     // Check if window.api exists
     if (!window.api) {
@@ -50,28 +88,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (quitButton) {
         quitButton.addEventListener('click', () => {
             try {
-                // Try multiple ways to quit the app
-                if (window.api && window.api.send) {
-                    window.api.send('quit-app');
-                }
-                
-                // Also try the electron API if available
+                quitButton.disabled = true;
+                quitButton.textContent = 'Quitting…';
                 if (window.electronAPI && window.electronAPI.quit) {
                     window.electronAPI.quit();
+                } else if (window.api && window.api.send) {
+                    window.api.send('quit-app');
                 }
-                
-                // Fallback: close the window
-                setTimeout(() => {
-                    window.close();
-                }, 500);
-                
             } catch (error) {
                 console.error('Error quitting app:', error);
-                window.close();
+                quitButton.disabled = false;
+                quitButton.textContent = 'Quit';
             }
         });
     }
 
+    const showDiagnosticStatus = (message, isError = false) => {
+        if (!diagnosticStatus) return;
+        diagnosticStatus.textContent = message;
+        diagnosticStatus.style.color = isError ? '#ff7b7b' : '#8ee6a2';
+    };
     // Function to load settings into UI
     const loadSettingsIntoUI = (settings) => {
         if (settings.speechProvider && speechProviderSelect) speechProviderSelect.value = settings.speechProvider;
@@ -88,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperResponseTargetSelect) whisperResponseTargetSelect.value = settings.whisperResponseTarget || 'both';
         if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
         if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
+        if (geminiModelSelect) geminiModelSelect.value = settings.geminiModel || 'gemini-3.1-flash-lite';
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
 
         // Set C++ as default if no coding language is specified
@@ -96,6 +133,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
+        if (interviewCompanySelect) interviewCompanySelect.value = settings.interviewCompany || 'general';
+        if (responseModeSelect) responseModeSelect.value = settings.responseMode || 'interview';
+        if (uiThemeSelect) uiThemeSelect.value = settings.uiTheme || 'dark';
+        if (compactModeInput) compactModeInput.checked = !!settings.compactMode;
+        const technologyContext = settings.technologyContext || {};
+        if (technologyDatabaseSelect) technologyDatabaseSelect.value = technologyContext.database || 'auto';
+        if (technologyCloudSelect) technologyCloudSelect.value = technologyContext.cloud || 'auto';
+        if (technologyContainersSelect) technologyContainersSelect.value = technologyContext.containers || 'auto';
+        if (technologyInfrastructureSelect) technologyInfrastructureSelect.value = technologyContext.infrastructure || 'auto';
+        if (candidateProfileInput) candidateProfileInput.value = settings.candidateProfile || '';
+        if (targetJobProfileInput) targetJobProfileInput.value = settings.targetJobProfile || '';
+        applyAppearance(settings.uiTheme || 'dark', !!settings.compactMode);
 
         // Handle icon selection
         const selectedIcon = settings.selectedIcon || settings.appIcon;
@@ -147,9 +196,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperResponseTargetSelect) settings.whisperResponseTarget = whisperResponseTargetSelect.value;
         if (whisperSegmentMsInput) settings.whisperSegmentMs = whisperSegmentMsInput.value;
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
+        if (geminiModelSelect) settings.geminiModel = geminiModelSelect.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
+        if (interviewCompanySelect) settings.interviewCompany = interviewCompanySelect.value;
+        if (responseModeSelect) settings.responseMode = responseModeSelect.value;
+        if (uiThemeSelect) settings.uiTheme = uiThemeSelect.value;
+        if (compactModeInput) settings.compactMode = compactModeInput.checked;
+        if (candidateProfileInput) settings.candidateProfile = candidateProfileInput.value;
+        if (targetJobProfileInput) settings.targetJobProfile = targetJobProfileInput.value;
+        settings.technologyContext = {
+            database: technologyDatabaseSelect?.value || 'auto', cloud: technologyCloudSelect?.value || 'auto',
+            containers: technologyContainersSelect?.value || 'auto', infrastructure: technologyInfrastructureSelect?.value || 'auto'
+        };
         
         window.api.send('save-settings', settings);
     };
@@ -196,7 +256,18 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperResponseTargetSelect,
         whisperSegmentMsInput,
         geminiKeyInput,
-        windowGapInput
+        geminiModelSelect,
+        windowGapInput,
+        interviewCompanySelect,
+        responseModeSelect,
+        uiThemeSelect,
+        compactModeInput,
+        technologyDatabaseSelect,
+        technologyCloudSelect,
+        technologyContainersSelect,
+        technologyInfrastructureSelect,
+        candidateProfileInput,
+        targetJobProfileInput
     ];
 
     inputs.forEach(input => {
@@ -204,6 +275,17 @@ document.addEventListener('DOMContentLoaded', () => {
             input.addEventListener('change', saveSettings);
             input.addEventListener('blur', saveSettings);
         }
+    });
+
+    const applyAppearance = (theme, compact) => {
+        document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+        document.body.classList.toggle('compact-mode', !!compact);
+    };
+
+    [uiThemeSelect, compactModeInput].forEach(input => {
+        if (input) input.addEventListener('change', () => {
+            applyAppearance(uiThemeSelect?.value, compactModeInput?.checked);
+        });
     });
 
     if (speechProviderSelect) {
@@ -233,6 +315,60 @@ document.addEventListener('DOMContentLoaded', () => {
             saveSettings();
             // Also update the main window
             window.api.send('update-skill', e.target.value);
+        });
+    }
+
+    if (openLogsButton) {
+        openLogsButton.addEventListener('click', async () => {
+            try {
+                const result = await window.electronAPI.openLogFolder();
+                showDiagnosticStatus(result.success ? `Opened logs folder: ${result.logDirectory}` : `Could not open logs: ${result.error}`, !result.success);
+            } catch (error) {
+                showDiagnosticStatus(`Could not open logs: ${error.message}`, true);
+            }
+        });
+    }
+
+    if (copyLogsButton) {
+        copyLogsButton.addEventListener('click', async () => {
+            try {
+                const result = await window.electronAPI.copyDiagnosticLogs();
+                showDiagnosticStatus(result.success ? `Copied ${result.copiedCharacters} diagnostic characters (secrets redacted).` : `Could not copy diagnostics: ${result.error}`, !result.success);
+            } catch (error) {
+                showDiagnosticStatus(`Could not copy diagnostics: ${error.message}`, true);
+            }
+        });
+    }
+
+    if (performanceButton) {
+        performanceButton.addEventListener('click', async () => {
+            try {
+                const metrics = await window.electronAPI.getPerformanceMetrics();
+                // Recording duration is user-controlled (how long the mic was
+                // left on), not application latency, so keep it out of the
+                // benchmark readout.
+                const lines = Object.entries(metrics.summary || {})
+                    .filter(([name]) => name !== 'speech_capture_session')
+                    .map(([name, stat]) =>
+                    `${name}: avg ${stat.averageMs} ms, min ${stat.minMs} ms, max ${stat.maxMs} ms (${stat.count})`
+                    );
+                showDiagnosticStatus(lines.length ? lines.join(' • ') : 'No performance samples yet. Ask a question by voice or chat first.');
+            } catch (error) {
+                showDiagnosticStatus(`Could not read performance metrics: ${error.message}`, true);
+            }
+        });
+    }
+
+    if (screenRecordingButton) {
+        screenRecordingButton.addEventListener('click', async () => {
+            try {
+                const result = await window.electronAPI.openScreenRecordingPreferences();
+                showDiagnosticStatus(result.success
+                    ? 'Opened Screen Recording preferences. Enable Electron, then fully quit and relaunch the app.'
+                    : `Could not open Screen Recording preferences: ${result.error}`, !result.success);
+            } catch (error) {
+                showDiagnosticStatus(`Could not open Screen Recording preferences: ${error.message}`, true);
+            }
         });
     }
 
@@ -323,7 +459,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeIconGrid();
 
     // Request settings on load
-    setTimeout(() => {
+    setTimeout(async () => {
+        try { populateSkillSelect(await window.electronAPI.getSkillCatalog()); } catch (_) { /* retain static fallback */ }
         requestCurrentSettings();
     }, 200);
 

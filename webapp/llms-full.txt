@@ -7,11 +7,11 @@
 - Alternate names: OpenCluely AI Interview Copilot, OpenCluely Stealth Overlay, OpenCluely Cluely Alternative
 - Short description: Free, open-source AI interview copilot with a stealth overlay invisible to screen recording. MIT-licensed Cluely alternative.
 - Long description: OpenCluely is a cross-platform Electron desktop application that overlays a small floating window on the user's screen during technical interviews. The overlay is excluded from screen capture by Zoom, Google Meet, Microsoft Teams, Discord, and OBS. The app accepts voice or screenshot input, sends it to Google Gemini for reasoning, and streams the answer back into the overlay word by word. It is a free MIT-licensed alternative to Cluely, Natively, Interview Coder, FinalRound AI, LockedIn AI, OffscreenAI, CodingVeil, Steal AI, and Ezzi. Architecture is model-agnostic by design; additional backends (OpenAI, Anthropic, local models) are planned.
-- URL: https://opencluely.techycsr.dev/
-- Repository: https://github.com/TechyCSR/OpenCluely
-- Author: TechyCSR
-- Author URL: https://techycsr.dev
-- Maintainer: TechyCSR
+- URL: https://github.com/RahulSinghParmar/OpenCluely
+- Repository: https://github.com/RahulSinghParmar/OpenCluely
+- Author: RahulSinghParmar
+- Author URL: https://github.com/RahulSinghParmar
+- Maintainer: RahulSinghParmar
 - License: MIT (https://opensource.org/licenses/MIT)
 - Created: 2025
 - Current version: 1.0.0
@@ -85,17 +85,10 @@
 
 ## Related URLs
 
-- Homepage: https://opencluely.techycsr.dev/
-- GitHub: https://github.com/TechyCSR/OpenCluely
-- Releases: https://github.com/TechyCSR/OpenCluely/releases/latest
-- Releases feed (Atom): https://github.com/TechyCSR/OpenCluely/releases.atom
-- Issue tracker: https://github.com/TechyCSR/OpenCluely/issues
-- Developer: https://techycsr.dev
+- Homepage: https://github.com/RahulSinghParmar/OpenCluely
+- GitHub: https://github.com/RahulSinghParmar/OpenCluely
+- Releases: https://github.com/RahulSinghParmar/OpenCluely/releases/latest
+- Releases feed (Atom): https://github.com/RahulSinghParmar/OpenCluely/releases.atom
+- Issue tracker: https://github.com/RahulSinghParmar/OpenCluely/issues
+- Developer: https://github.com/RahulSinghParmar
 - License: https://opensource.org/licenses/MIT
-- sitemap: https://opencluely.techycsr.dev/sitemap.xml
-- robots: https://opencluely.techycsr.dev/robots.txt
-- manifest: https://opencluely.techycsr.dev/manifest.webmanifest
-- llms.txt: https://opencluely.techycsr.dev/llms.txt
-- security.txt: https://opencluely.techycsr.dev/.well-known/security.txt
-- humans.txt: https://opencluely.techycsr.dev/humans.txt
-- og-image: https://opencluely.techycsr.dev/og-image.png

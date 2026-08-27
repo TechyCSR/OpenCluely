@@ -143,6 +143,11 @@ class WindowManager {
   async showMainWindow() {
     const mainWindow = this.windows.get('main');
     if (!mainWindow) return;
+
+    // Re-anchor against the current usable macOS work area every time the
+    // overlay is shown. workArea excludes the menu bar and Dock.
+    this.currentDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    this.positionBoundWindows();
     
     // Immediate always-on-top enforcement for main window
     if (process.platform === 'darwin') {
@@ -279,7 +284,9 @@ class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         backgroundThrottling: false,
-        devTools: true, // Enable DevTools for debugging
+        // Do not expose DevTools in packaged builds. Local `electron .`
+        // development keeps them available through ConfigManager.
+        devTools: config.get('app.isDevelopment'),
       },
       show: false, // Never show during creation, use showOnCurrentDesktop instead
       title: windowConfig.title,
@@ -363,7 +370,10 @@ class WindowManager {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
           acceptFirstMouse: true,
-          disableAutoHideCursor: true
+          disableAutoHideCursor: true,
+          // NSPanel persists above normal and full-screen applications when
+          // the user moves between macOS Spaces.
+          type: 'panel'
         }),
         level: process.platform === 'darwin' ? 'floating' : undefined,
       };
@@ -407,7 +417,9 @@ class WindowManager {
         ...(process.platform === 'darwin' && {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
-          acceptFirstMouse: true
+          acceptFirstMouse: true,
+          // Chat follows the control overlay across Spaces while visible.
+          type: 'panel'
         }),
         level: process.platform === 'darwin' ? 'floating' : undefined,
       };
@@ -828,6 +840,14 @@ class WindowManager {
 
     const llmWin = this.windows.get('llmResponse');
     const isLLM = llmWin && !llmWin.isDestroyed() && win.id === llmWin.id;
+    const mainWin = this.windows.get('main');
+    const chatWin = this.windows.get('chat');
+    // The compact control overlay is the persistent application surface. Keep
+    // it in every macOS Space (and over full-screen apps) rather than changing
+    // visibility back to the Space in which it was first opened.
+    const keepVisibleAcrossWorkspaces = isLLM ||
+      (mainWin && !mainWin.isDestroyed() && win.id === mainWin.id) ||
+      (chatWin && !chatWin.isDestroyed() && win.id === chatWin.id);
 
     if (process.platform === 'darwin') {
       // macOS: prevent space switching and keep visibility stable
@@ -853,10 +873,11 @@ class WindowManager {
         win.focus();
         setMacOSAlwaysOnTop();
         setTimeout(() => { if (!win.isDestroyed()) setMacOSAlwaysOnTop(); }, 100);
-        // Keep LLM window visible across workspaces; others revert
+        // Keep the overlay and response window visible across Spaces. Other
+        // supporting windows (chat/settings) remain local to avoid clutter.
         setTimeout(() => {
           if (win.isDestroyed()) return;
-          if (!isLLM) {
+          if (!keepVisibleAcrossWorkspaces) {
             win.setVisibleOnAllWorkspaces(false);
           }
           setMacOSAlwaysOnTop();
@@ -870,7 +891,7 @@ class WindowManager {
       win.focus();
       setTimeout(() => {
         if (win.isDestroyed()) return;
-        if (!isLLM) {
+        if (!keepVisibleAcrossWorkspaces) {
           win.setVisibleOnAllWorkspaces(false);
         }
         win.setAlwaysOnTop(true);
@@ -924,9 +945,11 @@ class WindowManager {
   }
 
   setupScreenCaptureAvailabilityWatcher() {
-    // Avoid screencast portal errors on Linux/Wayland by disabling periodic detection
-    if (process.platform === 'linux') {
-      logger.info('Skipping screen capture availability watcher on Linux to avoid portal screencast errors');
+    // Repeated desktopCapturer enumeration is not a reliable signal that a
+    // screen is being shared. It also triggers a Chromium DesktopMedia thread
+    // crash on some Intel Macs. Capture is still queried on an actual screenshot.
+    if (process.platform === 'linux' || process.platform === 'darwin') {
+      logger.info('Skipping periodic screen capture availability watcher on this platform');
       return;
     }
 
@@ -1106,7 +1129,9 @@ class WindowManager {
     
     this.windows.forEach((window, type) => {
       if (!window.isDestroyed()) {
-        if (interactive) {
+        // Settings remains clickable as a recovery/control surface even while
+        // the interview overlay is intentionally click-through.
+        if (interactive || type === 'settings') {
           // Interactive mode: allow mouse events for all windows
           window.setIgnoreMouseEvents(false);
         } else {
@@ -1561,8 +1586,11 @@ class WindowManager {
       this.handleDisplayChange();
     });
 
-    screen.on('display-metrics-changed', () => {
-      logger.debug('Display metrics changed');
+    screen.on('display-metrics-changed', (_event, display, changedMetrics) => {
+      // macOS emits this when the menu bar/Dock changes the usable work area.
+      // Retain the updated display object so our coordinates follow it.
+      if (this.currentDisplay?.id === display?.id) this.currentDisplay = display;
+      logger.debug('Display metrics changed', { displayId: display?.id, changedMetrics });
       this.handleDisplayChange();
     });
 
