@@ -41,7 +41,7 @@ V3 beta unifies the role catalogue, candidate/job context, response modes, techn
 - **Configurable answer routing.** Send voice replies to Chat, the floating response window, or both.
 - **Direct image analysis.** Screenshots go straight to Gemini for visual reasoning, with no slow OCR step in between.
 - **Session memory.** The whole conversation is remembered, so follow-ups, edge cases, and optimizations keep their context.
-- **Interview profiles.** Amazon DCT, DevOps, SDET, Backend Engineer, STAR, Leadership Principles, and 30+ additional skill profiles.
+- **Interview profiles.**, DevOps, SDET, Backend Engineer, STAR, Leadership Principles, and 30+ additional skill profiles.
 - **Response modes.** Quick, interview-ready, detailed, STAR, and troubleshooting formats.
 - **Language aware.** Python, Java, JavaScript, TypeScript, Go, Rust, C, C++, C#, Kotlin, Swift, PHP, Ruby, Bash, and PowerShell.
 - **Local diagnostics.** View latency metrics, open logs, or copy redacted diagnostics from Settings.
@@ -167,7 +167,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 
 Skills are now defined through a central catalog instead of a DSA-only model. Every skill supplies a system prompt, knowledge scope, response style, display format, latency preferences, and language preferences. Static Markdown prompts remain supported as overrides for specialized skills.
 
-- **Interview:** Amazon DCT, SDET, QA Automation, DevOps, Backend, Frontend, Full Stack, Cloud, Security, Network, System Administrator, Linux, Database, Data, AI, ML, SRE, Platform.
+- **Interview:** , SDET, QA Automation, DevOps, Backend, Frontend, Full Stack, Cloud, Security, Network, System Administrator, Linux, Database, Data, AI, ML, SRE, Platform.
 - **General:** HR Interview, Behavioral Interview, STAR, Leadership Principles, Resume Review, Salary Negotiation, Career Coaching.
 - **Education:** DSA, Operating Systems, Networking, Databases, System Design, OOP, Software Architecture.
 - **General AI:** Explain Concepts, Research Assistant, Meeting Assistant, Technical Documentation, Coding Assistant.
@@ -184,7 +184,7 @@ Skills are now defined through a central catalog instead of a DSA-only model. Ev
 - AI response window with markdown and syntax highlighting
 - Global shortcuts for capture, visibility, interaction, chat, and settings
 - Session memory and a full chat UI
-- Universal skill catalogue with Amazon DCT, DevOps, SDET, Backend, STAR, Leadership Principles, HR, education, and general AI profiles
+- Universal skill catalogue with, DevOps, SDET, Backend, STAR, Leadership Principles, HR, education, and general AI profiles
 - Company focus, response modes, theme, compact mode, and expanded programming-language settings
 - Performance metrics and redacted diagnostic-log export
 - macOS panel-based overlay and chat behavior across Spaces and full-screen applications
