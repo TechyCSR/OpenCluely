@@ -238,6 +238,62 @@
         color: white;
       }
 
+      /* ponytail: custom in-window lang menu stays inside BrowserWindow so setContentProtection covers it — native <select> popup is OS window and leaks to capture */
+      #languageSelector { position: relative; }
+      #codingLanguageBtn {
+        background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 4px;
+        color: rgba(255,255,255,0.95);
+        font-size: 11px;
+        font-weight: 600;
+        outline: none;
+        padding: 4px 20px 4px 8px;
+        min-width: 90px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        -webkit-app-region: no-drag;
+        text-align: left;
+        background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'><path fill='%23ffffff' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 6px center;
+        background-size: 8px 8px;
+      }
+      #codingLanguageBtn:hover { background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%); border-color: rgba(255,255,255,0.3); }
+      .lang-menu {
+        position: absolute;
+        top: 32px;
+        left: 0;
+        min-width: 140px;
+        background: rgba(20,20,20,0.92);
+        backdrop-filter: blur(18px);
+        border: 1px solid rgba(255,255,255,0.14);
+        border-radius: 8px;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+        padding: 4px;
+        list-style: none;
+        margin: 0;
+        z-index: 1001;
+        -webkit-app-region: no-drag;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 120ms ease, visibility 120ms ease;
+      }
+      .lang-menu.is-open { pointer-events: auto; opacity: 1; visibility: visible; }
+      .lang-menu li {
+        padding: 7px 10px 7px 26px;
+        font-size: 12px;
+        font-weight: 500;
+        color: rgba(255,255,255,0.9);
+        border-radius: 6px;
+        cursor: pointer;
+        position: relative;
+      }
+      .lang-menu li:hover { background: rgba(255,255,255,0.1); }
+      .lang-menu li.active { background: rgba(76,175,80,0.22); color: #fff; }
+      .lang-menu li.active::before { content: "✓"; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: #4caf50; }
+
       @keyframes pulse {
         0% {
           opacity: 1;
@@ -369,13 +425,14 @@
       <div class="command-separator"></div>
       <div class="command-item" id="languageSelector">
         <i class="fas fa-code"></i>
-        <select id="codingLanguage">
-          <option value="cpp">C++</option>
-          <option value="c">C</option>
-          <option value="python">Python</option>
-          <option value="java">Java</option>
-          <option value="javascript">JavaScript</option>
-        </select>
+        <button id="codingLanguageBtn" type="button" aria-haspopup="listbox" aria-expanded="false">JavaScript</button>
+        <ul id="codingLanguageMenu" class="lang-menu" role="listbox">
+          <li role="option" data-value="cpp">C++</li>
+          <li role="option" data-value="c">C</li>
+          <li role="option" data-value="python">Python</li>
+          <li role="option" data-value="java">Java</li>
+          <li role="option" data-value="javascript">JavaScript</li>
+        </ul>
       </div>
       <div class="command-separator"></div>
       <div class="command-item" id="infoButton" title="Shortcuts">
