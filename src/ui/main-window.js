@@ -239,27 +239,21 @@ class MainWindowUI {
     }
 
     resizeWindowToContent() {
-        // Wait for DOM to fully render
         setTimeout(() => {
             const commandTab = document.querySelector('.command-tab');
             if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
                 const rect = commandTab.getBoundingClientRect();
                 const width = Math.ceil(rect.width);
                 let height = Math.ceil(rect.height);
-
-                // If shortcuts popover is visible, extend height to fit it
                 if (this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
                     const popRect = this.shortcutsPopover.getBoundingClientRect();
-                    // popover is positioned below the bar (top:36px), add that plus its height and a small margin
                     height = Math.max(height, Math.ceil(36 + popRect.height + 8));
                 }
-                
-                logger.debug('Resizing window to content', {
-                    width,
-                    height,
-                    component: 'MainWindowUI'
-                });
-                
+                // ponytail: lang menu is in-window so must be included in height calc — otherwise it clips
+                if (this.langMenu && this.langMenu.classList.contains('is-open')) {
+                    const mRect = this.langMenu.getBoundingClientRect();
+                    height = Math.max(height, Math.ceil(32 + mRect.height + 8));
+                }
                 window.electronAPI.resizeWindow(width, height);
             }
         }, 100);
@@ -335,42 +329,61 @@ class MainWindowUI {
             }
         });
 
-        // Language dropdown
-        this.languageSelect = document.getElementById('codingLanguage');
-        if (this.languageSelect) {
-            // Set default to C++ if no value is set
-            this.languageSelect.value = 'cpp';
-            
-            // Initialize with current setting
-            if (window.electronAPI && window.electronAPI.getSettings) {
-                window.electronAPI.getSettings().then(settings => {
-                    if (settings && settings.codingLanguage) {
-                        this.languageSelect.value = settings.codingLanguage;
-                    } else {
-                        // Save C++ as default if no language is set
-                        this.languageSelect.value = 'cpp';
-                        window.electronAPI.saveSettings({ codingLanguage: 'cpp' });
-                    }
-                }).catch(() => {
-                    // Fallback to C++ on error
-                    this.languageSelect.value = 'cpp';
-                });
+        // Language dropdown — custom in-window menu (native <select> popup is OS window → leaks to Meet capture)
+        this.langBtn = document.getElementById('codingLanguageBtn');
+        this.langMenu = document.getElementById('codingLanguageMenu');
+        this._currentLang = 'javascript';
+        this._langLabels = { cpp:'C++', c:'C', python:'Python', java:'Java', javascript:'JavaScript' };
+        const applyLang = (val) => {
+            this._currentLang = val;
+            if (this.langBtn) this.langBtn.textContent = this._langLabels[val] || val;
+            if (this.langMenu) {
+                this.langMenu.querySelectorAll('li').forEach(li => li.classList.toggle('active', li.dataset.value===val));
             }
-
-            this.languageSelect.addEventListener('change', (e) => {
-                const lang = e.target.value;
-                if (window.electronAPI && window.electronAPI.saveSettings) {
-                    window.electronAPI.saveSettings({ codingLanguage: lang });
-                }
-                // Resize for any width change
-                setTimeout(() => {
-                    const commandTab = document.querySelector('.command-tab');
-                    if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
-                        const rect = commandTab.getBoundingClientRect();
-                        window.electronAPI.resizeWindow(Math.ceil(rect.width), Math.ceil(rect.height));
-                    }
-                }, 50);
+        };
+        if (this.langBtn && this.langMenu) {
+            if (window.electronAPI && window.electronAPI.getSettings) {
+                window.electronAPI.getSettings().then(s => {
+                    if (s && s.codingLanguage) applyLang(s.codingLanguage);
+                    else { applyLang('cpp'); window.electronAPI.saveSettings({ codingLanguage:'cpp' }); }
+                }).catch(()=> applyLang('cpp'));
+            }
+            this.langBtn.addEventListener('click', (e) => {
+                if (!this.isInteractive) return;
+                e.stopPropagation();
+                if (this.shortcutsPopover) this.hideShortcutsPopover();
+                const willOpen = !this.langMenu.classList.contains('is-open');
+                this.langMenu.classList.toggle('is-open', willOpen);
+                this.langBtn.setAttribute('aria-expanded', String(willOpen));
+                this.resizeWindowToContent();
             });
+            this.langMenu.querySelectorAll('li').forEach(li => {
+                li.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const val = li.dataset.value;
+                    applyLang(val);
+                    if (window.electronAPI && window.electronAPI.saveSettings) window.electronAPI.saveSettings({ codingLanguage: val });
+                    this.langMenu.classList.remove('is-open');
+                    this.langBtn.setAttribute('aria-expanded','false');
+                    this.resizeWindowToContent();
+                });
+            });
+            document.addEventListener('click', (e) => {
+                if (!this.langMenu.classList.contains('is-open')) return;
+                if (!this.langMenu.contains(e.target) && !this.langBtn.contains(e.target)) {
+                    this.langMenu.classList.remove('is-open');
+                    this.langBtn.setAttribute('aria-expanded','false');
+                    this.resizeWindowToContent();
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key==='Escape' && this.langMenu.classList.contains('is-open')) {
+                    this.langMenu.classList.remove('is-open');
+                    this.langBtn.setAttribute('aria-expanded','false');
+                    this.resizeWindowToContent();
+                }
+            });
+            // keep in sync when other window changes language
         }
 
         // Info button / shortcuts popover
@@ -444,17 +457,14 @@ class MainWindowUI {
                 this.applyMicVisibility();
             });
 
-            // Listen for coding language changes from other windows
             window.electronAPI.onCodingLanguageChanged((event, data) => {
-                if (data && data.language && this.languageSelect) {
-                    // avoid clobbering if same value
-                    if (this.languageSelect.value !== data.language) {
-                        this.languageSelect.value = data.language;
+                if (data && data.language) {
+                    if (this._currentLang !== data.language) {
+                        this._currentLang = data.language;
+                        if (this.langBtn) this.langBtn.textContent = (this._langLabels && this._langLabels[data.language]) || data.language;
+                        if (this.langMenu) this.langMenu.querySelectorAll('li').forEach(li => li.classList.toggle('active', li.dataset.value===data.language));
                     }
-                    logger.debug('Language updated from other window', {
-                        component: 'MainWindowUI',
-                        language: data.language
-                    });
+                    logger.debug('Language updated from other window', { component:'MainWindowUI', language: data.language });
                 }
             });
 
@@ -592,9 +602,13 @@ class MainWindowUI {
         // Update all UI elements to reflect the new state
         this.updateAllElementStates();
 
-        // Auto-hide popover when leaving interactive mode
-        if (!this.isInteractive && this.shortcutsPopover && this.shortcutsPopover.style.display !== 'none') {
-            this.hideShortcutsPopover();
+        if (!this.isInteractive) {
+            if (this.shortcutsPopover) this.hideShortcutsPopover();
+            if (this.langMenu && this.langMenu.classList.contains('is-open')) {
+                this.langMenu.classList.remove('is-open');
+                if (this.langBtn) this.langBtn.setAttribute('aria-expanded','false');
+                this.resizeWindowToContent();
+            }
         }
         
         // Update skill indicator tooltip
@@ -1245,8 +1259,11 @@ class MainWindowUI {
             clearTimeout(this._popoverHideTimeout);
             this._popoverHideTimeout = null;
         }
+        if (this.langMenu && this.langMenu.classList.contains('is-open')) {
+            this.langMenu.classList.remove('is-open');
+            if (this.langBtn) this.langBtn.setAttribute('aria-expanded','false');
+        }
     this.shortcutsPopover.classList.add('is-open');
-        // Resize main window to fit popover
         setTimeout(() => this.resizeWindowToContent(), 50);
     }
 
