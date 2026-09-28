@@ -38,7 +38,7 @@ It is free and open source. Processing stays on your machine, and the only thing
 - **Configurable streamed answers.** Route voice replies to chat, the floating overlay, or both.
 - **Direct image analysis.** Screenshots go straight to Gemini for visual reasoning, with no slow OCR step in between.
 - **Session memory.** The whole conversation is remembered, so follow-ups, edge cases, and optimizations keep their context.
-- **Language aware.** Tailored answers for C++, C, Python, Java, and JavaScript.
+- **Language aware.** Tailored answers for C++, C, Python, Java, JavaScript, and Kotlin.
 - **Stealthy by design.** Runs under ordinary system names, ships with no telemetry, and keeps your session local.
 - **Cross platform.** Pre-built installers for Windows and Linux (.deb and AppImage). macOS runs from source in one command.
 
