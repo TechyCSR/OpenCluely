@@ -26,7 +26,8 @@ class MainWindowUI {
         // Define available skills for navigation
         this.availableSkills = [
             'dsa',
-            'home-depot'
+            'home-depot',
+            'dac-mmm'
         ];
         
         this.init();
@@ -519,6 +520,7 @@ class MainWindowUI {
         const skillNames = {
             'dsa': 'DSA',
             'home-depot': 'Home Depot',
+            'dac-mmm': 'DAC Group',
             'behavioral': 'Behavioral',
             'sales': 'Sales',
             'presentation': 'Presentation',
@@ -564,7 +566,6 @@ class MainWindowUI {
                         this.navigateSkill(-1); // Previous skill
                     } else if (e.key === 'ArrowDown') {
                         this.navigateSkill(1); // Next skill
-                    } else {
                     }
                     // Left/Right arrows do nothing in interactive mode
                 } else {
@@ -759,6 +760,7 @@ class MainWindowUI {
         const skillNames = {
             'dsa': 'DSA',
             'home-depot': 'Home Depot',
+            'dac-mmm': 'DAC Group',
             'behavioral': 'Behavioral',
             'sales': 'Sales',
             'presentation': 'Presentation',
@@ -873,6 +875,7 @@ class MainWindowUI {
         const skillNames = {
             'dsa': 'DSA',
             'home-depot': 'Home Depot',
+            'dac-mmm': 'DAC Group',
             'behavioral': 'Behavioral',
             'sales': 'Sales',
             'presentation': 'Presentation',

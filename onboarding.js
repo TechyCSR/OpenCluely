@@ -76,7 +76,9 @@
     });
   }
 
-  function showScreen(name) {
+  // `let` (not `function`) because this gets wrapped/reassigned below to
+  // layer in skip-visibility refresh once the base wiring is set up.
+  let showScreen = function showScreen(name) {
     screens.forEach((s) => {
       s.classList.toggle('active', s.dataset.screen === name);
     });
@@ -98,7 +100,7 @@
     else if (name === 'finish') nextBtn.innerHTML = 'Finish <i class="fas fa-check"></i>';
     else if (name === 'whisper') nextBtn.innerHTML = 'Continue <i class="fas fa-arrow-right"></i>';
     else nextBtn.innerHTML = 'Continue <i class="fas fa-arrow-right"></i>';
-  }
+  };
 
   function navigate(direction) {
     const order = computeScreenOrder();
@@ -236,7 +238,9 @@
     detectStatus.querySelector('.text').textContent = text;
   }
 
-  async function runWhisperDetect() {
+  // `let` (not `function`) because this gets wrapped/reassigned below to
+  // show a manual-install button when detection comes up empty.
+  let runWhisperDetect = async function runWhisperDetect() {
     detectCmd.textContent = 'scanning…';
     setDetectStatus('testing', 'Probing');
     try {
@@ -256,7 +260,7 @@
       setDetectStatus('error', 'Probe failed');
       appendLog(`! Detection error: ${e.message || e}`);
     }
-  }
+  };
 
   async function runWhisperInstall() {
     const btn = document.getElementById('installWhisperBtn');

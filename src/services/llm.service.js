@@ -666,7 +666,7 @@ class LLMService {
 
   /** Skills whose full prompt (reference knowledge, not formatting rules)
    *  should also be included in voice/transcription responses. */
-  static SKILLS_WITH_FULL_CONTEXT_IN_VOICE = ['home-depot'];
+  static SKILLS_WITH_FULL_CONTEXT_IN_VOICE = ['home-depot', 'dac-mmm'];
 
   /**
    * Build the transcription system prompt: the generic intelligent-filter

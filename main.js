@@ -982,7 +982,9 @@ class ApplicationController {
       try {
         windowManager.broadcastToAllWindows("speech-status", { status: 'Speech recognition unavailable', available: false });
         windowManager.broadcastToAllWindows("speech-availability", { available: false });
-      } catch (e) {}
+      } catch (_e) {
+        // best-effort broadcast; ignore failures
+      }
       return;
     }
     const currentStatus = speechService.getStatus();
@@ -1062,6 +1064,7 @@ class ApplicationController {
     const availableSkills = [
       "dsa",
       "home-depot",
+      "dac-mmm",
     ];
 
     const currentIndex = availableSkills.indexOf(this.activeSkill);

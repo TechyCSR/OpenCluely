@@ -10,7 +10,7 @@ class PromptLoader {
     // Kept as an explicit allowlist (rather than loading every .md present)
     // so adding a prompt file doesn't silently expose it before it's wired
     // into the Settings UI.
-    this.enabledSkills = ['dsa', 'home-depot'];
+    this.enabledSkills = ['dsa', 'home-depot', 'dac-mmm'];
     this.skillsRequiringProgrammingLanguage = ['dsa'];
   }
 
@@ -358,7 +358,15 @@ STRICT REQUIREMENTS:
       'distributed-systems': 'system-design',
       'negotiation': 'negotiation',
       'negotiating': 'negotiation',
-      'conflict-resolution': 'negotiation'
+      'conflict-resolution': 'negotiation',
+      'dac-mmm': 'dac-mmm',
+      'dac': 'dac-mmm',
+      'dac-group': 'dac-mmm',
+      'mmm': 'dac-mmm',
+      'marketing-mix-modeling': 'dac-mmm',
+      'market-mix-model': 'dac-mmm',
+      'marketing-science': 'dac-mmm',
+      'proove': 'dac-mmm'
     };
 
     return skillMap[normalized] || normalized;
