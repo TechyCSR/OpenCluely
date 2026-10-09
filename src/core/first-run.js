@@ -25,14 +25,27 @@ class FirstRunManager {
 
   /**
    * Returns true if this looks like a fresh install — no .env, no
-   * sentinel file, or .env exists but has no Gemini key.
+   * sentinel file, or (when using the Gemini provider) .env exists but has
+   * no Gemini key. Ollama needs no API key, so choosing it as the provider
+   * satisfies onboarding on its own — we don't nag for a Gemini key the
+   * user has no intention of using.
    */
   needsOnboarding() {
-    if (!fs.existsSync(this.sentinelPath)) return true;
     if (!fs.existsSync(this.envPath)) return true;
     const content = this._readEnv();
+    // Ollama needs no API key, so a chosen Ollama provider fully satisfies
+    // onboarding on its own — checked before the sentinel/wizard-completion
+    // gate below, since a user who set LLM_PROVIDER=ollama directly (e.g.
+    // via Settings, without ever finishing the wizard) shouldn't be nagged
+    // for a Gemini key they have no intention of using.
+    if (this._usesOllama(content)) return false;
+    if (!fs.existsSync(this.sentinelPath)) return true;
     const gemini = (content.GEMINI_API_KEY || '').trim();
     return !gemini || gemini === 'your_gemini_api_key_here';
+  }
+
+  _usesOllama(env) {
+    return (env.LLM_PROVIDER || '').trim().toLowerCase() === 'ollama';
   }
 
   /**
@@ -83,7 +96,9 @@ class FirstRunManager {
     return {
       envExists: fs.existsSync(this.envPath),
       sentinelExists: fs.existsSync(this.sentinelPath),
+      llmProvider: (env.LLM_PROVIDER || 'gemini').trim().toLowerCase(),
       geminiConfigured: !!gemini && gemini !== 'your_gemini_api_key_here',
+      ollamaConfigured: this._usesOllama(env),
       azureConfigured: !!(env.AZURE_SPEECH_KEY || '').trim() && !!(env.AZURE_SPEECH_REGION || '').trim(),
       whisperConfigured: !!(env.WHISPER_COMMAND || '').trim(),
       needsOnboarding: this.needsOnboarding()

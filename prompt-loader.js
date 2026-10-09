@@ -6,7 +6,11 @@ class PromptLoader {
     this.prompts = new Map();
     this.promptsLoaded = false;
     this.skillPromptSent = new Set();
-    // Focus only on DSA
+    // Which prompts/*.md files actually get loaded and exposed as skills.
+    // Kept as an explicit allowlist (rather than loading every .md present)
+    // so adding a prompt file doesn't silently expose it before it's wired
+    // into the Settings UI.
+    this.enabledSkills = ['dsa', 'home-depot', 'dac-mmm'];
     this.skillsRequiringProgrammingLanguage = ['dsa'];
   }
 
@@ -28,7 +32,7 @@ class PromptLoader {
       for (const file of files) {
         if (file.endsWith('.md')) {
           const skillName = path.basename(file, '.md');
-          if (skillName !== 'dsa') continue; // only keep DSA
+          if (!this.enabledSkills.includes(skillName)) continue;
           const filePath = path.join(promptsDir, file);
           const promptContent = fs.readFileSync(filePath, 'utf8');
           
@@ -354,7 +358,15 @@ STRICT REQUIREMENTS:
       'distributed-systems': 'system-design',
       'negotiation': 'negotiation',
       'negotiating': 'negotiation',
-      'conflict-resolution': 'negotiation'
+      'conflict-resolution': 'negotiation',
+      'dac-mmm': 'dac-mmm',
+      'dac': 'dac-mmm',
+      'dac-group': 'dac-mmm',
+      'mmm': 'dac-mmm',
+      'marketing-mix-modeling': 'dac-mmm',
+      'market-mix-model': 'dac-mmm',
+      'marketing-science': 'dac-mmm',
+      'proove': 'dac-mmm'
     };
 
     return skillMap[normalized] || normalized;
@@ -368,7 +380,7 @@ STRICT REQUIREMENTS:
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
-    return ['dsa'];
+    return [...this.enabledSkills];
   }
 
   /**

@@ -318,6 +318,8 @@
                         </div>
                         <select class="input-field" id="activeSkill">
                             <option value="dsa">Data Structures & Algorithms</option>
+                            <option value="home-depot">Home Depot — Senior Data Scientist</option>
+                            <option value="dac-mmm">DAC Group — Marketing Science (MMM)</option>
                         </select>
                     </div>
                 </div>
@@ -459,15 +461,59 @@
             <div class="settings-section">
                 <div class="settings-section-title">
                     <i class="fas fa-robot"></i>
-                    Gemini Settings
+                    LLM Provider
                 </div>
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Google API Key</div>
-                            <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            <div class="settings-item-label">Provider</div>
+                            <div class="settings-item-description">Cloud Gemini, or a fully local Ollama server</div>
                         </div>
-                        <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        <select class="input-field" id="llmProvider">
+                            <option value="gemini">Gemini (cloud)</option>
+                            <option value="ollama">Ollama (local)</option>
+                        </select>
+                    </div>
+
+                    <!-- Gemini fields (shown only when Gemini is selected) -->
+                    <div id="geminiFields" class="settings-group">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Google API Key</div>
+                                <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            </div>
+                            <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        </div>
+                    </div>
+
+                    <!-- Ollama fields (shown only when Ollama is selected) -->
+                    <div id="ollamaFields" class="settings-group">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Ollama Host</div>
+                                <div class="settings-item-description">Address of your local (or LAN) Ollama server</div>
+                            </div>
+                            <input type="text" class="input-field" id="ollamaHost" placeholder="http://127.0.0.1:11434">
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-stack">
+                                <div>
+                                    <div class="settings-item-label">Model</div>
+                                    <div class="settings-item-description">A model already pulled on the Ollama server (<code>ollama pull &lt;name&gt;</code>)</div>
+                                </div>
+                                <select class="input-field" id="ollamaModel" style="max-width: 100%;"></select>
+                            </div>
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Connection</div>
+                                <div class="settings-item-description" id="ollamaStatusText">Not tested yet</div>
+                            </div>
+                            <button type="button" class="btn" id="testOllamaButton">Test &amp; refresh models</button>
+                        </div>
+                        <div class="settings-note">
+                            Screenshot analysis needs a vision-capable model (e.g. <code>llava</code>, <code>qwen2.5vl</code>). Text-only models like the default above work for chat and voice.
+                        </div>
                     </div>
                 </div>
             </div>

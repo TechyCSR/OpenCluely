@@ -664,6 +664,31 @@ class LLMService {
     return request;
   }
 
+  /** Skills whose full prompt (reference knowledge, not formatting rules)
+   *  should also be included in voice/transcription responses. */
+  static SKILLS_WITH_FULL_CONTEXT_IN_VOICE = ['home-depot', 'dac-mmm'];
+
+  /**
+   * Build the transcription system prompt: the generic intelligent-filter
+   * prompt, plus (for reference-knowledge skills only) the skill's full
+   * prompt content prepended as background context.
+   */
+  _composeTranscriptionSystemPrompt(activeSkill, programmingLanguage, intelligentPrompt) {
+    if (!LLMService.SKILLS_WITH_FULL_CONTEXT_IN_VOICE.includes(activeSkill)) {
+      return intelligentPrompt;
+    }
+    try {
+      const { promptLoader } = require('../../prompt-loader');
+      const fullSkillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage);
+      if (fullSkillPrompt) {
+        return `${fullSkillPrompt}\n\n---\n\n${intelligentPrompt}`;
+      }
+    } catch (e) {
+      logger.warn('Failed to load full skill prompt for transcription', { activeSkill, error: e.message });
+    }
+    return intelligentPrompt;
+  }
+
   buildIntelligentTranscriptionRequest(text, activeSkill, sessionMemory, programmingLanguage) {
     // Validate input text first
     const cleanText = text && typeof text === 'string' ? text.trim() : '';
@@ -694,7 +719,7 @@ class LLMService {
     }
 
     request.systemInstruction = {
-      parts: [{ text: intelligentPrompt }]
+      parts: [{ text: this._composeTranscriptionSystemPrompt(activeSkill, programmingLanguage, intelligentPrompt) }]
     };
 
     request.contents.push({
@@ -719,9 +744,19 @@ class LLMService {
 
     this.applyGenerationDefaults(request);
 
-  // For chat/transcription messages, DO NOT include the full skill prompt; use only the intelligent filter prompt
-  const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
-  request.systemInstruction = { parts: [{ text: intelligentPrompt }] };
+    // For most skills (e.g. DSA), we deliberately keep voice/transcription
+    // responses to just the intelligent filter prompt, not the full skill
+    // prompt — DSA's prompt is strict code-output formatting rules that
+    // don't belong in a conversational voice answer. Skills in
+    // SKILLS_WITH_FULL_CONTEXT_IN_VOICE (see _composeTranscriptionSystemPrompt)
+    // are reference/background knowledge instead, so they're included here
+    // too — otherwise a voice-triggered question during, say, a live
+    // interview would get a generic answer with none of the prepared
+    // context behind it.
+    const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
+    request.systemInstruction = {
+      parts: [{ text: this._composeTranscriptionSystemPrompt(activeSkill, programmingLanguage, intelligentPrompt) }]
+    };
 
     // Add recent conversation history (excluding system messages) with validation
     const conversationContents = conversationHistory
@@ -1401,6 +1436,47 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
       
       if (hasNetworkIssues) {
         logger.warn('Network connectivity issues detected', networkCheck);
+      }
+
+      // Prefer the same raw-HTTPS path real requests use (executeAlternativeRequest)
+      // over the @google/genai SDK client, matching the enableFallbackMethod
+      // preference used everywhere else in this file. The SDK client's own
+      // networking has been observed to fail with a bare "fetch failed" in
+      // some Electron main-process environments even when the raw HTTPS path
+      // — and thus real chat/image/voice requests — works fine, which made
+      // this diagnostic report false negatives ("can't reach Google") while
+      // the app was actually working correctly end to end.
+      const preferAlternative = !!config.get('llm.gemini.enableFallbackMethod');
+      if (preferAlternative) {
+        try {
+          const startTime = Date.now();
+          const testRequest = {
+            contents: [{ role: 'user', parts: [{ text: 'Test connection. Please respond with "OK".' }] }]
+          };
+          this.applyGenerationDefaults(testRequest, { temperature: 0, maxOutputTokens: 64 });
+          const text = await this.executeAlternativeRequest(testRequest);
+          const latency = Date.now() - startTime;
+
+          logger.info('Connection test successful (alternative HTTPS method)', {
+            response: text,
+            latency,
+            model: this.model,
+            networkCheck: hasNetworkIssues ? 'issues_detected' : 'healthy'
+          });
+
+          return {
+            success: true,
+            response: text,
+            latency,
+            model: this.model,
+            networkConnectivity: networkCheck
+          };
+        } catch (altError) {
+          logger.warn('Alternative HTTPS connection test failed, trying SDK method', {
+            error: altError.message
+          });
+          // Fall through to the SDK-based loop below.
+        }
       }
 
       const generationConfig = this.getGenerationConfig({ temperature: 0, maxOutputTokens: 64 });

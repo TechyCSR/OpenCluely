@@ -25,7 +25,9 @@ class MainWindowUI {
         
         // Define available skills for navigation
         this.availableSkills = [
-            'dsa'
+            'dsa',
+            'home-depot',
+            'dac-mmm'
         ];
         
         this.init();
@@ -288,17 +290,14 @@ class MainWindowUI {
             }
         });
 
-        // Skill indicator click handler toggles DSA skill
+        // Skill indicator click handler — cycles through available skills.
+        // Previously this hardcoded 'dsa' unconditionally on every click
+        // (a leftover from when DSA was the only skill), silently resetting
+        // away from any other selected skill. Now it advances the same way
+        // Ctrl+Up/Down does.
         this.skillIndicator.addEventListener('click', () => {
             if (!this.isInteractive) return;
-            const newSkill = 'dsa';
-            if (window.electronAPI && window.electronAPI.updateActiveSkill) {
-                window.electronAPI.updateActiveSkill(newSkill).then(() => {
-                    this.handleSkillActivated(newSkill);
-                });
-            } else {
-                this.handleSkillActivated(newSkill);
-            }
+            this.navigateSkill(1);
         });
 
         // Check for required elements (settingsIndicator is optional)
@@ -520,7 +519,9 @@ class MainWindowUI {
         const skill = data.skill || data.metadata?.skill || 'General';
         const skillNames = {
             'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
+            'home-depot': 'Home Depot',
+            'dac-mmm': 'DAC Group',
+            'behavioral': 'Behavioral',
             'sales': 'Sales',
             'presentation': 'Presentation',
             'data-science': 'Data Science',
@@ -565,7 +566,6 @@ class MainWindowUI {
                         this.navigateSkill(-1); // Previous skill
                     } else if (e.key === 'ArrowDown') {
                         this.navigateSkill(1); // Next skill
-                    } else {
                     }
                     // Left/Right arrows do nothing in interactive mode
                 } else {
@@ -759,7 +759,9 @@ class MainWindowUI {
     updateSkillIndicator() {
         const skillNames = {
             'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
+            'home-depot': 'Home Depot',
+            'dac-mmm': 'DAC Group',
+            'behavioral': 'Behavioral',
             'sales': 'Sales',
             'presentation': 'Presentation',
             'data-science': 'Data Science',
@@ -872,7 +874,9 @@ class MainWindowUI {
     showSkillChangeNotification(skill, direction) {
         const skillNames = {
             'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
+            'home-depot': 'Home Depot',
+            'dac-mmm': 'DAC Group',
+            'behavioral': 'Behavioral',
             'sales': 'Sales',
             'presentation': 'Presentation',
             'data-science': 'Data Science',

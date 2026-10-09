@@ -7,3 +7,9 @@ dist/
 bin/
 .DS_Store
 *.log
+
+# Personal interview-prep / custom skill prompts — these can contain resume
+# data, employer names, and other personal details. Never commit them,
+# even to a local branch, since this repo is a fork of a public project.
+prompts/home-depot.md
+prompts/dac-mmm.md

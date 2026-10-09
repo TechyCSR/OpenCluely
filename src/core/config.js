@@ -39,6 +39,9 @@ class ConfigManager {
       },
 
       llm: {
+        // Which backend answers requests: 'gemini' (cloud) or 'ollama' (local).
+        // Overridden at runtime by the LLM_PROVIDER env var via provider.manager.
+        provider: 'gemini',
         gemini: {
           model: 'gemini-3.1-flash-lite',
           fallbackModels: ['gemini-2.5-flash-lite', 'gemini-3.5-flash'],
@@ -53,6 +56,12 @@ class ConfigManager {
             maxOutputTokens: 4096,
             thinkingConfig: { thinkingBudget: 0 }
           }
+        },
+        ollama: {
+          // Local server — no API key needed. Both are user-configurable via
+          // Settings and persisted to .env (OLLAMA_HOST / OLLAMA_MODEL).
+          host: 'http://127.0.0.1:11434',
+          model: 'phi3.5:3.8b'
         }
       },
 

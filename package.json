@@ -4,6 +4,8 @@
   "description": "AI Problem Solving Assistant",
   "main": "main.js",
   "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "dev": "env -u ELECTRON_RUN_AS_NODE electron . --no-sandbox --disable-gpu",
     "test-speech": "node scripts/test-speech.js",
@@ -43,7 +45,9 @@
   },
   "devDependencies": {
     "electron": "^29.1.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "eslint": "^9.39.5",
+    "globals": "^17.11.0"
   },
   "build": {
     "appId": "com.opencluely.app",
