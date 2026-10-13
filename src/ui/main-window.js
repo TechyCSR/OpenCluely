@@ -1202,7 +1202,7 @@ class MainWindowUI {
             padding: 8px 16px;
             color: rgba(255, 255, 255, 0.9);
             font-size: 13px;
-            cursor: pointer;
+            cursor: default;
             display: flex;
             align-items: center;
             gap: 8px;

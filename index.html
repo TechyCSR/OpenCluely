@@ -41,6 +41,11 @@
   min-width: 60px;
       }
 
+      .command-item,
+      .command-item * {
+        cursor: default !important;
+      }
+
       .command-item {
         display: flex;
         align-items: center;
@@ -49,7 +54,6 @@
         border-radius: 6px;
         color: rgba(255, 255, 255, 0.9);
         font-size: 12px;
-        cursor: pointer;
         transition: all 0.2s ease;
         -webkit-app-region: no-drag;
   /* Allow items to shrink so the bar can collapse to one icon width */
@@ -201,7 +205,7 @@
         outline: none;
         padding: 4px 8px;
         min-width: 65px;
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s ease;
         -webkit-app-region: no-drag;
         -webkit-appearance: none;
@@ -431,7 +435,7 @@
               + <span class="kbd">Shift</span>
               + <span class="kbd">C</span>
             </td>
-            <td>Open chat</td>
+            <td>Toggle chat (open/close)</td>
           </tr>
           <tr>
             <td>

@@ -403,7 +403,12 @@ class WindowManager {
         minimizable: false,
         maximizable: false,
         closable: false,
-        hasShadow: true,
+        // Native OS drop shadows are composited by the OS window manager
+        // outside the excluded surface, so they can leak through as a
+        // ghost/glitch in screen-capture even when setContentProtection()
+        // hides the window's real content. main/llmResponse already disable
+        // this for that reason; chat needs the same treatment.
+        hasShadow: false,
         ...(process.platform === 'darwin' && {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
@@ -1058,31 +1063,47 @@ class WindowManager {
       return;
     }
 
-    this.windows.forEach((window, type) => {
-      if (type !== 'llmResponse') { // Don't show LLM response unless it has content
+    // Always bring back the main toolbar - that's the whole point of this
+    // shortcut - plus whatever else was actually visible before
+    // hideAllWindows() hid it. Windows like settings/onboarding are created
+    // hidden at startup and must stay hidden unless the user explicitly
+    // opens them, otherwise toggling visibility off/on would pull them back
+    // onto screen.
+    const typesToShow = new Set(['main']);
+    (this._hiddenWindowTypes || []).forEach((type) => typesToShow.add(type));
+
+    typesToShow.forEach((type) => {
+      const window = this.windows.get(type);
+      if (window && !window.isDestroyed()) {
         this.showOnCurrentDesktop(window);
       }
     });
-    
+    this._hiddenWindowTypes = null;
+
     this.isVisible = true;
     const activeWindow = this.windows.get(this.activeWindow);
     if (activeWindow) {
       activeWindow.focus();
     }
-    
-    logger.info('All windows shown on current desktop', { 
+
+    logger.info('All windows shown on current desktop', {
       activeWindow: this.activeWindow,
-      windowCount: this.windows.size 
+      shownTypes: Array.from(typesToShow)
     });
   }
 
   hideAllWindows() {
+    const hiddenTypes = [];
     this.windows.forEach((window, type) => {
       if (type !== 'llmResponse') {
+        if (window.isVisible()) {
+          hiddenTypes.push(type);
+        }
         window.hide();
       }
     });
-    
+    this._hiddenWindowTypes = hiddenTypes;
+
     this.isVisible = false;
     logger.info('All windows hidden');
   }

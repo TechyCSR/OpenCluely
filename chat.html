@@ -68,7 +68,7 @@
         color: rgba(255, 255, 255, 0.9);
         border-radius: 6px;
         padding: 6px 10px;
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s ease;
       }
       .icon-button:hover {
@@ -286,7 +286,7 @@
         padding: 4px 8px;
         font-size: 11px;
         border-radius: 4px;
-        cursor: pointer;
+        cursor: default;
         -webkit-app-region: no-drag;
         transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
       }
@@ -456,7 +456,7 @@
         border-radius: 6px;
         padding: 6px 10px;
         color: rgba(255, 255, 255, 0.9);
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s;
         -webkit-app-region: no-drag;
       }
@@ -485,7 +485,7 @@
         border-radius: 6px;
         padding: 6px 10px;
         color: rgba(255, 255, 255, 0.9);
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s;
         -webkit-app-region: no-drag;
       }
@@ -685,6 +685,9 @@
           <button class="icon-button" id="clearHistoryBtn" title="Clear chat history">
             <i class="fas fa-trash"></i>
           </button>
+          <button class="icon-button" id="closeWindowBtn" title="Close chat (Ctrl/Cmd+Shift+C)">
+            <i class="fas fa-xmark"></i>
+          </button>
         </div>
       </div>
 
@@ -734,6 +737,7 @@
       const listeningDuration = document.getElementById('listeningDuration');
       const interimOverlay = document.getElementById('interimOverlay');
       const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+      const closeWindowBtn = document.getElementById('closeWindowBtn');
 
       let isRecording = false;
       let isInteractive = true;
@@ -1213,6 +1217,20 @@
       // UI Event Listeners
       if (clearHistoryBtn) {
         clearHistoryBtn.addEventListener('click', () => clearChatHistory());
+      }
+
+      if (closeWindowBtn) {
+        closeWindowBtn.addEventListener('click', () => {
+          try {
+            if (whysperAPI && whysperAPI.closeWindow) {
+              whysperAPI.closeWindow();
+            } else {
+              window.close();
+            }
+          } catch (_) {
+            try { window.close(); } catch (__) {}
+          }
+        });
       }
 
       if (micButton) {
