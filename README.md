@@ -117,6 +117,7 @@ AZURE_SPEECH_REGION=your_region
 WHISPER_COMMAND=whisper
 WHISPER_MODEL_DIR=.whisper-models
 WHISPER_MODEL=small
+WHISPER_BACKEND=auto
 WHISPER_LANGUAGE=auto
 WHISPER_DEVICE=auto
 WHISPER_PYTHON=
@@ -132,7 +133,7 @@ Speech is optional. If no provider is configured, the microphone button hides it
 
 You can use local Whisper for offline transcription or Azure Speech for a cloud option.
 
-For local Whisper, `./setup.sh` handles the full setup. It creates `.venv-whisper`, installs `openai-whisper`, points `.env` at the virtual environment, creates `.whisper-models`, and runs a quick speech test. The app reads its own PCM WAV recordings directly; ffmpeg is only needed when transcribing other audio formats through the CLI fallback.
+For local Whisper, `./setup.sh` handles the full setup. It creates `.venv-whisper`, installs `openai-whisper`, points `.env` at the virtual environment, creates `.whisper-models`, and runs a quick speech test. On Apple Silicon macOS it also installs `mlx-whisper`; with `WHISPER_BACKEND=auto`, the worker uses MLX on the Metal GPU when available and falls back to OpenAI Whisper otherwise. The app reads its own PCM WAV recordings directly; ffmpeg is only needed when transcribing other audio formats through the CLI fallback.
 
 For Azure Speech, create a Speech resource in the [Azure Portal](https://portal.azure.com/), then add the key and region to `.env` with `SPEECH_PROVIDER=azure`.
 

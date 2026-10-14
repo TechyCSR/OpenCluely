@@ -242,6 +242,12 @@ setup_whisper_env() {
     echo "Common causes: insufficient disk space (needs ~3-5 GB), missing Python headers, or network issues."
   }
 
+  if [[ "$OS_NAME" == "macos" && "$(uname -m)" == "arm64" ]]; then
+    echo "Installing optional Apple Silicon MLX Whisper acceleration"
+    "$WHISPER_PIP_PATH" install mlx-whisper || echo "WARNING: MLX Whisper install failed; Whisper will use the default backend."
+    upsert_env "WHISPER_BACKEND" "auto"
+  fi
+
   mkdir -p "$WHISPER_MODEL_DIR"
 
   # Verify the Whisper CLI actually exists before claiming it's configured
@@ -275,6 +281,9 @@ setup_whisper_env() {
   upsert_env "WHISPER_COMMAND" "${WHISPER_COMMAND_PATH}"
   upsert_env "WHISPER_MODEL_DIR" "${WHISPER_MODEL_DIR}"
   upsert_env "WHISPER_MODEL" "${WHISPER_MODEL}"
+  if ! grep -q '^WHISPER_BACKEND=' .env 2>/dev/null; then
+    upsert_env "WHISPER_BACKEND" "auto"
+  fi
   upsert_env "WHISPER_LANGUAGE" "${WHISPER_LANGUAGE}"
   upsert_env "WHISPER_SEGMENT_MS" "${WHISPER_SEGMENT_MS}"
 

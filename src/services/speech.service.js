@@ -696,6 +696,7 @@ class SpeechService extends EventEmitter {
       }).then((result) => {
         logger.info('Whisper GPU warmup completed while recording', {
           model: result.model,
+          backend: result.backend,
           device: result.device,
           gpu: result.gpu
         });
@@ -1909,6 +1910,7 @@ class SpeechService extends EventEmitter {
         logger.info('Persistent Whisper transcription completed', {
           processingTime: Date.now() - startedAt,
           model: result.model,
+          backend: result.backend,
           device: result.device,
           gpu: result.gpu,
           detectedLanguage: result.language
