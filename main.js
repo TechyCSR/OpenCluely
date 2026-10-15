@@ -186,7 +186,7 @@ class ApplicationController {
   }
 
   handleSecondInstance() {
-    logger.info("Second instance launch detected; focusing existing windows");
+    logger.info("Second instance launch detected; focusing main window");
 
     const focusExistingWindows = () => {
       try {
@@ -195,7 +195,9 @@ class ApplicationController {
           if (mainWindow.isMinimized && mainWindow.isMinimized()) {
             mainWindow.restore();
           }
-          windowManager.showAllWindows();
+          // Only surface the main window; showing every window here
+          // focus-steals and flashes hidden windows (settings, chat, ...)
+          // onto the user's desktop on each relaunch attempt.
           windowManager.showOnCurrentDesktop(mainWindow);
           mainWindow.focus();
           return;
@@ -1987,4 +1989,14 @@ if (!gotSingleInstanceLock) {
 } else {
   const controller = new ApplicationController();
   app.on("second-instance", () => controller.handleSecondInstance());
+
+  // Quit gracefully on termination signals so will-quit cleanup
+  // (global shortcuts, speech service, windows) runs instead of the
+  // default abrupt exit.
+  ["SIGTERM", "SIGINT"].forEach((signal) => {
+    process.on(signal, () => {
+      logger.info(`Received ${signal}; quitting`);
+      app.quit();
+    });
+  });
 }
