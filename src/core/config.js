@@ -100,7 +100,11 @@ class ConfigManager {
       stealth: {
         hideFromDock: true,
         noAttachConsole: true,
-        disguiseProcess: true
+        disguiseProcess: true,
+        // Read transparent mode from env (set by user in Settings)
+        // 'true' = transparent (less stealthy, more visually appealing)
+        // 'false' = opaque (more stealthy, reduces layered-window detection surface)
+        transparentMode: process.env.TRANSPARENT_MODE === 'true'
       }
     };
   }

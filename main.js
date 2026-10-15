@@ -1594,6 +1594,7 @@ class ApplicationController {
       appIcon: this.appIcon || "terminal",
       selectedIcon: this.appIcon || "terminal",
       windowGap: windowManager.windowGap,
+      transparentMode: config.get('stealth.transparentMode'),
 
       speechProvider: speechService.provider || "whisper",
       azureKey: process.env.AZURE_SPEECH_KEY || "",
@@ -1640,7 +1641,7 @@ class ApplicationController {
         if (Number.isFinite(gap)) windowManager.setWindowGap(gap);
       }
 
-      // ── Persist provider / API-key fields back to .env ──
+      // Persist provider / API-key fields back to .env ──
       // The settings UI is now the source of truth for these values.
       // Writing to .env ensures they survive app restarts and are picked
       // up the next time the app boots.
@@ -1677,6 +1678,9 @@ class ApplicationController {
       }
       if (settings.geminiKey !== undefined) {
         envUpdates.GEMINI_API_KEY = settings.geminiKey;
+      }
+      if (settings.transparentMode !== undefined) {
+        envUpdates.TRANSPARENT_MODE = String(settings.transparentMode);
       }
 
       // Capture the previous whisper command BEFORE persisting — persistEnvUpdates
@@ -1737,6 +1741,15 @@ class ApplicationController {
             error: e.message
           });
         }
+      }
+
+      // If transparent mode changed, restart the app to apply window changes
+      if (settings.transparentMode !== undefined && envUpdates.TRANSPARENT_MODE !== undefined) {
+        logger.info("Transparent mode changed, restarting app to apply...");
+        setTimeout(() => {
+          app.relaunch();
+          app.exit();
+        }, 500);
       }
 
       logger.info("Settings saved successfully", {
