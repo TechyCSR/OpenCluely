@@ -28,7 +28,17 @@ class CaptureService {
    * options: { displayId?: number, area?: { x, y, width, height } }
    */
   async captureAndProcess(options = {}) {
-    if (this.isProcessing) throw new Error('Capture already in progress');
+    // If a capture is currently in flight, wait up to 1500ms for it to complete rather than failing immediately
+    if (this.isProcessing) {
+      let waitCount = 0;
+      while (this.isProcessing && waitCount < 15) {
+        await new Promise(r => setTimeout(r, 100));
+        waitCount++;
+      }
+      if (this.isProcessing) {
+        throw new Error('Capture already in progress');
+      }
+    }
     this.isProcessing = true;
     const startTime = Date.now();
     try {
@@ -66,18 +76,26 @@ class CaptureService {
 
   async captureScreenshot(options = {}) {
     const targetDisplay = this._getTargetDisplay(options.displayId);
-    const { width, height } = targetDisplay.size || { width: 1920, height: 1080 };
+    const scale = targetDisplay.scaleFactor || 1;
+    const width = Math.round((targetDisplay.size?.width || 1920) * scale);
+    const height = Math.round((targetDisplay.size?.height || 1080) * scale);
 
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width, height }
-    });
-
-    if (sources.length === 0) {
-      throw new Error('No screen sources available for capture');
+    let sources = [];
+    try {
+      sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width, height }
+      });
+    } catch (err) {
+      logger.warn('Initial desktopCapturer failed, retrying without thumbnail dimensions', { error: err.message });
+      sources = await desktopCapturer.getSources({ types: ['screen'] });
     }
 
-    // Find source matching the target display by comparing sizes as heuristic
+    if (!sources || sources.length === 0) {
+      throw new Error('No screen sources available for capture. Check macOS Screen Recording permissions.');
+    }
+
+    // Find source matching target display
     let source = sources[0];
     const match = sources.find(s => {
       const size = s.thumbnail.getSize();

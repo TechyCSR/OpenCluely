@@ -12,12 +12,12 @@ class WhisperWorkerService {
     this.pending = new Map();
     this.sequence = 0;
     this.idleTimer = null;
-    this.idleUnloadMs = 60000;
+    this.idleUnloadMs = 900000; // Keep model resident for 15 minutes during interviews to eliminate cold starts
     this.readyInfo = null;
     this.closing = false;
   }
 
-  configure({ pythonPath, scriptPath, idleUnloadMs = 60000 }) {
+  configure({ pythonPath, scriptPath, idleUnloadMs = 900000 }) {
     const changed = this.pythonPath !== pythonPath || this.scriptPath !== scriptPath;
     this.pythonPath = pythonPath;
     this.scriptPath = scriptPath;

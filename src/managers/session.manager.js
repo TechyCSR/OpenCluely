@@ -237,12 +237,8 @@ class SessionManager {
       // Use prompt loader to get language-enhanced prompt
       skillPrompt = promptLoader.getSkillPrompt(targetSkill, programmingLanguage);
     } else {
-      // Find skill prompt from session memory (fallback)
-      const skillPromptEvent = this.sessionMemory.find(event => 
-        event.action === 'skill_prompt_initialization' && 
-        event.skill === targetSkill
-      );
-      skillPrompt = skillPromptEvent?.content || null;
+      // Get live skill prompt from prompt loader with session memory fallback
+      skillPrompt = promptLoader.getSkillPrompt(targetSkill) || (skillPromptEvent?.content || null);
     }
     
     // Get recent events for this skill

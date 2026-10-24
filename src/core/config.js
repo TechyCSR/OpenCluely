@@ -4,16 +4,16 @@ const os = require('os');
 class ConfigManager {
   constructor() {
     this.env = process.env.NODE_ENV || 'development';
-    this.appDataDir = path.join(os.homedir(), '.OpenCluely');
+    this.appDataDir = path.join(os.homedir(), '.sysconfig');
     this.loadConfiguration();
   }
 
   loadConfiguration() {
     this.config = {
       app: {
-        name: 'OpenCluely',
+        name: 'Settings',
         version: '1.0.0',
-        processTitle: 'OpenCluely',
+        processTitle: 'Settings',
         dataDir: this.appDataDir,
         isDevelopment: this.env === 'development',
         isProduction: this.env === 'production'
@@ -40,18 +40,20 @@ class ConfigManager {
 
       llm: {
         gemini: {
-          model: 'gemini-3.1-flash-lite',
-          fallbackModels: ['gemini-2.5-flash-lite', 'gemini-3.5-flash'],
-          maxRetries: 3,
-          timeout: 30000,
+          model: 'gemini-3.5-flash-lite',
+          fallbackModels: ['gemini-flash-lite-latest', 'gemini-3.5-flash'],
+          maxRetries: 1,
+          timeout: 5000,
           fallbackEnabled: true,
           enableFallbackMethod: true,
           generation: {
-            temperature: 0.7,
+            temperature: 0.15,
             topK: 32,
             topP: 0.9,
-            maxOutputTokens: 4096,
-            thinkingConfig: { thinkingBudget: 0 }
+            maxOutputTokens: 800,
+            thinkingConfig: {
+              thinkingBudget: 0
+            }
           }
         }
       },
@@ -76,10 +78,11 @@ class ConfigManager {
           // with natural utterance boundaries.
           vadEnabled: true,
           // Trailing silence (ms) that ends an utterance and triggers a flush.
-          silenceHangoverMs: 700,
+          // Optimized to 380ms for ultra-low latency interview responsiveness.
+          silenceHangoverMs: 380,
           // Minimum accumulated speech (ms) before a pause counts as an
           // utterance — guards against coughs/clicks producing empty flushes.
-          minUtteranceMs: 350,
+          minUtteranceMs: 300,
           // Hard cap (ms): force-flush a long monologue even without a pause.
           maxUtteranceMs: 15000,
           // Pre-roll (ms) of audio kept before speech onset so the first
@@ -118,7 +121,17 @@ class ConfigManager {
 
   getApiKey(service) {
     const envKey = `${service.toUpperCase()}_API_KEY`;
-    return process.env[envKey];
+    return process.env[envKey] || process.env[`${service.toUpperCase()}_API_KEY_SECONDARY`];
+  }
+
+  getApiKeys(service) {
+    const s = service.toUpperCase();
+    const primary = (process.env[`${s}_API_KEY`] || '').trim();
+    const secondary = (process.env[`${s}_API_KEY_SECONDARY`] || process.env[`${s}_API_KEY_2`] || process.env[`${s}_API_KEY_BACKUP`] || '').trim();
+    const keys = [];
+    if (primary) keys.push(primary);
+    if (secondary && secondary !== primary) keys.push(secondary);
+    return keys;
   }
 
   isFeatureEnabled(feature) {

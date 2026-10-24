@@ -6,8 +6,8 @@ class PromptLoader {
     this.prompts = new Map();
     this.promptsLoaded = false;
     this.skillPromptSent = new Set();
-    // Focus only on DSA
-    this.skillsRequiringProgrammingLanguage = ['dsa'];
+    // Focus on DSA and programming/interview skills
+    this.skillsRequiringProgrammingLanguage = ['dsa', 'interview'];
   }
 
   /**
@@ -28,7 +28,8 @@ class PromptLoader {
       for (const file of files) {
         if (file.endsWith('.md')) {
           const skillName = path.basename(file, '.md');
-          if (skillName !== 'dsa') continue; // only keep DSA
+          const allowedSkills = ['dsa', 'interview'];
+          if (!allowedSkills.includes(skillName)) continue;
           const filePath = path.join(promptsDir, file);
           const promptContent = fs.readFileSync(filePath, 'utf8');
           
@@ -45,12 +46,13 @@ class PromptLoader {
   }
 
   /**
-   * Get the system prompt for a specific skill with optional programming language injection
+   * Get the system prompt for a specific skill with optional programming language and MCQ mode injection
    * @param {string} skillName - The name of the skill
    * @param {string|null} programmingLanguage - Optional programming language to inject
+   * @param {boolean} isMcqMode - Whether MCQ only mode is active
    * @returns {string|null} The system prompt content or null if not found
    */
-  getSkillPrompt(skillName, programmingLanguage = null) {
+  getSkillPrompt(skillName, programmingLanguage = null, isMcqMode = false) {
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
@@ -67,7 +69,34 @@ class PromptLoader {
       promptContent = this.injectProgrammingLanguage(promptContent, programmingLanguage, normalizedSkillName);
     }
 
+    // Inject MCQ instructions if MCQ mode is active
+    if (isMcqMode) {
+      promptContent = this.injectMcqInstructions(promptContent);
+    }
+
     return promptContent;
+  }
+
+  /**
+   * Inject MCQ-only mode instructions into system prompt
+   * @param {string} promptContent - Original prompt content
+   * @returns {string} Modified prompt with strict MCQ instructions
+   */
+  injectMcqInstructions(promptContent) {
+    const mcqInjection = `\n\n## MANDATORY MCQ MODE ACTIVE
+STRICT MCQ RULES:
+1. Scan the ENTIRE input/image for ALL Multiple Choice Questions (MCQs). There may be ONE or MULTIPLE questions.
+2. For EACH MCQ found:
+   a. Identify the question number/label and all options (A, B, C, D, etc.).
+   b. Select the single BEST correct answer for THAT question.
+   c. Format as: **Q[N] Correct Option: [Option Letter] - [Option Text/Value]**
+   d. Follow with a crisp 1-3 bullet point justification.
+3. If multiple MCQs are present, answer ALL of them in order separated by a blank line.
+4. If only one MCQ is present, start directly with: **Correct Option: [Option Letter] - [Option Text/Value]**
+5. If code or calculation is needed to justify an answer, provide a minimal snippet.
+6. Do NOT include greetings, filler, or conversational text. Direct answers only.`;
+
+    return promptContent + mcqInjection;
   }
 
   /**
@@ -89,12 +118,15 @@ class PromptLoader {
     
     switch (skillName) {
       case 'dsa':
+      case 'interview':
         languageInjection = `\n\n## IMPLEMENTATION LANGUAGE: ${languageUpper}
 STRICT REQUIREMENTS:
 - Respond ONLY in ${languageTitle}. Do not include any snippets or alternatives in other languages.
 - All code blocks must use triple backticks with the exact language tag: \`\`\`${fenceTag}\`\`\`.
-- Aim for the best possible time and space complexity; prefer optimal algorithms and data structures.
-- Provide: brief approach, then final ${languageTitle} implementation, followed by time/space complexity.
+- SIMPLEST & BASIC WAY: Implement the solution in the most simple, direct, and basic way possible while meeting the time complexity requirements. Avoid over-engineering, complex abstractions, or obscure syntax.
+- MINIMUM IMPORTS ONLY IF NEEDED: Include only the bare minimum imports strictly necessary for the code to compile and run. Never include unused imports.
+- PASS 100% OF TEST CASES: Ensure the code explicitly handles edge cases (empty inputs, single element, negative numbers, extreme boundary constraints, and 64-bit integer overflow) to guarantee passing 100% of test cases.
+- Provide: brief approach, then final comment-free ${languageTitle} implementation, followed by time/space complexity.
 - If the user's input is a problem statement (and does not include code), produce a complete, runnable ${languageTitle} solution without asking for clarification.
 - Avoid unnecessary verbosity; focus on correctness, clarity, and efficiency.`;
         break;
@@ -146,11 +178,12 @@ STRICT REQUIREMENTS:
    * @param {string} userMessage - The user's message/query
    * @param {Array} storedMemory - Current stored memory
    * @param {string|null} programmingLanguage - Optional programming language
+   * @param {boolean} isMcqMode - Optional MCQ mode flag
    * @returns {Object} Gemini API request configuration
    */
-  prepareGeminiRequest(skillName, userMessage, storedMemory, programmingLanguage = null) {
+  prepareGeminiRequest(skillName, userMessage, storedMemory, programmingLanguage = null, isMcqMode = false) {
     const normalizedSkillName = this.normalizeSkillName(skillName);
-    const skillPrompt = this.getSkillPrompt(normalizedSkillName, programmingLanguage);
+    const skillPrompt = this.getSkillPrompt(normalizedSkillName, programmingLanguage, isMcqMode);
     
     const requestConfig = {
       model: 'gemini-pro', // or your preferred Gemini model
@@ -183,7 +216,8 @@ STRICT REQUIREMENTS:
           ...requestConfig,
           isUsingModelMemory: true,
           skillUsed: normalizedSkillName,
-          programmingLanguage
+          programmingLanguage,
+          isMcqMode
         };
       } else {
         console.warn(`No system prompt found for skill: ${normalizedSkillName}`);
@@ -200,7 +234,8 @@ STRICT REQUIREMENTS:
       ...requestConfig,
       isUsingModelMemory: false,
       skillUsed: normalizedSkillName,
-      programmingLanguage
+      programmingLanguage,
+      isMcqMode
     };
   }
 
@@ -210,12 +245,13 @@ STRICT REQUIREMENTS:
    * @param {string} userMessage - The user's message/query
    * @param {Array} storedMemory - Current stored memory
    * @param {string|null} programmingLanguage - Optional programming language
+   * @param {boolean} isMcqMode - Optional MCQ mode flag
    * @returns {Object} Separated components for manual request building
    */
-  getRequestComponents(skillName, userMessage, storedMemory, programmingLanguage = null) {
+  getRequestComponents(skillName, userMessage, storedMemory, programmingLanguage = null, isMcqMode = false) {
     const normalizedSkillName = this.normalizeSkillName(skillName);
     const shouldUseModelMemory = this.shouldSendAsModelMemory(skillName, storedMemory);
-    const skillPrompt = this.getSkillPrompt(normalizedSkillName, programmingLanguage);
+    const skillPrompt = this.getSkillPrompt(normalizedSkillName, programmingLanguage, isMcqMode);
 
     return {
       skillName: normalizedSkillName,
@@ -226,6 +262,7 @@ STRICT REQUIREMENTS:
       modelMemory: shouldUseModelMemory && skillPrompt ? skillPrompt : null,
       messageContent: userMessage,
       programmingLanguage,
+      isMcqMode,
       requiresProgrammingLanguage: this.skillsRequiringProgrammingLanguage.includes(normalizedSkillName)
     };
   }
@@ -325,6 +362,11 @@ STRICT REQUIREMENTS:
     // Map common variations to standard names
     const skillMap = {
       'dsa': 'dsa',
+      'interview': 'interview',
+      'bot-interview': 'interview',
+      'ai-interview': 'interview',
+      'technical-interview': 'interview',
+      'interview-ready': 'interview',
       'data-structures': 'dsa',
       'algorithms': 'dsa',
       'data-structures-algorithms': 'dsa',
@@ -368,7 +410,7 @@ STRICT REQUIREMENTS:
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
-    return ['dsa'];
+    return ['dsa', 'interview'];
   }
 
   /**

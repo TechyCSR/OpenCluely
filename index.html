@@ -2,32 +2,40 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>OpenCluely</title>
+    <title>Settings</title>
     <link href="./dist/output.css" rel="stylesheet" />
     <link href="./src/styles/common.css" rel="stylesheet" />
     <style>
-      body {
+      *, *::before, *::after, html {
+        box-sizing: border-box;
         margin: 0;
         padding: 0;
+        user-select: none;
+        -webkit-user-select: none;
+        cursor: default !important;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         width: fit-content;
         height: fit-content;
         background: transparent;
         -webkit-app-region: no-drag;
       }
 
-  .command-tab {
-        height: 28px;
+      .command-tab {
+        height: 32px;
         background: linear-gradient(
           135deg,
-          rgba(0, 0, 0, 0.4) 0%,
-          rgba(20, 20, 20, 0.5) 100%
+          rgba(0, 0, 0, 0.45) 0%,
+          rgba(20, 20, 20, 0.6) 100%
         );
         backdrop-filter: blur(20px);
         border-radius: 8px;
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        justify-content: center;
-        gap: 16px;
+        justify-content: flex-start;
+        gap: 10px;
         padding: 0 12px;
         color: rgba(255, 255, 255, 0.9);
         font-size: 11px;
@@ -36,24 +44,31 @@
         flex-wrap: nowrap;
         overflow: visible;
         border: 1px solid rgba(255, 255, 255, 0.15);
-  width: 100%;
-  /* Allow horizontal collapse to approximately one icon's width */
-  min-width: 60px;
+        width: max-content;
+        min-width: max-content;
+        box-sizing: border-box;
+        cursor: default;
       }
 
       .command-item {
-        display: flex;
+        position: relative;
+        display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 6px 10px;
+        gap: 6px;
+        padding: 4px 8px;
         border-radius: 6px;
         color: rgba(255, 255, 255, 0.9);
         font-size: 12px;
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s ease;
         -webkit-app-region: no-drag;
-  /* Allow items to shrink so the bar can collapse to one icon width */
-  flex-shrink: 1;
+        flex-shrink: 0;
+        white-space: nowrap;
+      }
+
+      .command-item * {
+        cursor: default;
+        pointer-events: none;
       }
 
       .command-item:hover {
@@ -85,6 +100,104 @@
         background: rgba(76, 175, 80, 0.15);
         color: #4caf50;
       }
+
+      /* MCQ Mode active styling */
+      .command-item.mcq-active {
+        color: #38bdf8 !important;
+        background: rgba(56, 189, 248, 0.2);
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+      }
+
+      .command-item.mcq-active span {
+        color: #e0f2fe !important;
+        font-weight: 700 !important;
+      }
+
+      .command-item.mcq-active i {
+        color: #38bdf8 !important;
+        text-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+      }
+
+      /* Auto-Hide active styling */
+      .command-item.autohide-active {
+        color: #a855f7 !important;
+        background: rgba(168, 85, 247, 0.2);
+        box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+        border: 1px solid rgba(168, 85, 247, 0.4);
+      }
+
+      .command-item.autohide-active span {
+        color: #f3e8ff !important;
+        font-weight: 700 !important;
+      }
+
+      .command-item.autohide-active i {
+        color: #c084fc !important;
+        text-shadow: 0 0 8px rgba(192, 132, 252, 0.8);
+      }
+
+      /* AutoType button active typing animation & progress */
+      #autoTypeButton {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .autotype-progress-track {
+        display: none;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 2.5px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 0 0 6px 6px;
+        overflow: hidden;
+      }
+
+      .autotype-progress-fill {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        box-shadow: 0 0 8px rgba(251, 191, 36, 0.9);
+        transition: width 0.12s ease-out;
+      }
+
+      .command-item.typing-active {
+        color: #f59e0b !important;
+        background: rgba(245, 158, 11, 0.22) !important;
+        box-shadow: 0 0 14px rgba(245, 158, 11, 0.4) !important;
+        border: 1px solid rgba(245, 158, 11, 0.45) !important;
+      }
+
+      .command-item.typing-active .autotype-progress-track {
+        display: block;
+      }
+
+      .command-item.typing-active span {
+        color: #fef3c7 !important;
+        font-weight: 700 !important;
+        font-feature-settings: "tnum";
+        font-variant-numeric: tabular-nums;
+      }
+
+      .command-item.typing-active i {
+        color: #f59e0b !important;
+        animation: pulse 1.2s infinite;
+      }
+
+      @keyframes pulse-typing {
+        0%, 100% {
+          transform: scale(1);
+          box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+        }
+        50% {
+          transform: scale(1.05);
+          box-shadow: 0 0 16px rgba(245, 158, 11, 0.8);
+        }
+      }
+
+
 
       /* Small round info button */
       #infoButton {
@@ -201,7 +314,7 @@
         outline: none;
         padding: 4px 8px;
         min-width: 65px;
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s ease;
         -webkit-app-region: no-drag;
         -webkit-appearance: none;
@@ -238,6 +351,209 @@
         color: white;
       }
 
+      /* Custom Language Dropdown with 3-second Hover Dwell */
+      .language-selector-wrapper {
+        position: relative;
+        cursor: default;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 7px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: rgba(255, 255, 255, 0.92);
+        font-size: 11px;
+        font-weight: 600;
+        user-select: none;
+        -webkit-app-region: no-drag;
+        transition: all 0.2s ease;
+      }
+      .language-selector-wrapper:hover {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.28);
+        color: #fff;
+      }
+      .language-caret {
+        font-size: 8px;
+        opacity: 0.7;
+        transition: transform 0.2s ease;
+      }
+      .language-selector-wrapper.is-open .language-caret {
+        transform: rotate(180deg);
+      }
+      .language-dropdown-list {
+        position: absolute;
+        top: 36px;
+        left: 0;
+        background: linear-gradient(
+          135deg,
+          rgba(20, 20, 25, 0.95) 0%,
+          rgba(10, 10, 15, 0.92) 100%
+        );
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.95);
+        padding: 6px;
+        min-width: 125px;
+        z-index: 1000;
+        -webkit-app-region: no-drag;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 120ms ease, visibility 120ms ease, transform 120ms ease;
+        transform: translateY(-4px);
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .language-dropdown-list.is-open {
+        pointer-events: auto;
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+      .language-option {
+        position: relative;
+        padding: 5px 9px;
+        border-radius: 5px;
+        font-size: 11px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.85);
+        cursor: pointer !important;
+        pointer-events: auto !important;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        overflow: hidden;
+        transition: background 0.15s ease, color 0.15s ease;
+        user-select: none;
+      }
+      .language-option * {
+        pointer-events: none !important;
+      }
+      .language-option:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .language-option.active {
+        color: #60a5fa;
+        font-weight: 700;
+        background: rgba(96, 165, 250, 0.15);
+      }
+      .language-option.active::after {
+        content: '✓';
+        font-size: 10px;
+        color: #60a5fa;
+        margin-left: 6px;
+      }
+      .lang-dwell-track {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 2.5px;
+        background: rgba(255, 255, 255, 0.15);
+        display: none;
+        pointer-events: none !important;
+      }
+      .lang-dwell-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #60a5fa, #34d399);
+        box-shadow: 0 0 6px rgba(96, 165, 250, 0.8);
+        pointer-events: none !important;
+      }
+      .language-option.dwelling .lang-dwell-track {
+        display: block;
+      }
+
+      /* ── Alternate Theme: Light Mode (Blends into White Backgrounds) ── */
+      body.theme-light {
+        color: #0f172a;
+      }
+      .command-tab.theme-light {
+        background: rgba(255, 255, 255, 0.88) !important;
+        border: 1px solid rgba(0, 0, 0, 0.14) !important;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+        color: #0f172a !important;
+      }
+      .command-tab.theme-light .command-item {
+        color: rgba(15, 23, 42, 0.85) !important;
+      }
+      .command-tab.theme-light .command-item:hover {
+        background: rgba(0, 0, 0, 0.06) !important;
+        color: #000000 !important;
+      }
+      .command-tab.theme-light .command-separator {
+        background: rgba(0, 0, 0, 0.12) !important;
+      }
+      .command-tab.theme-light .opacity-control {
+        color: rgba(15, 23, 42, 0.75) !important;
+      }
+      .command-tab.theme-light .opacity-control input[type="range"] {
+        background: rgba(0, 0, 0, 0.12) !important;
+      }
+      .command-tab.theme-light .opacity-control input[type="range"]::-webkit-slider-thumb {
+        background: #ffffff !important;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
+        border: 1px solid rgba(0, 0, 0, 0.18) !important;
+      }
+      .command-tab.theme-light .language-dropdown-list {
+        background: rgba(255, 255, 255, 0.96) !important;
+        border: 1px solid rgba(0, 0, 0, 0.15) !important;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+        color: #0f172a !important;
+      }
+      .command-tab.theme-light .language-option {
+        color: rgba(15, 23, 42, 0.85) !important;
+      }
+      .command-tab.theme-light .language-option:hover {
+        background: rgba(0, 0, 0, 0.06) !important;
+        color: #000000 !important;
+      }
+      .command-tab.theme-light .language-option.active {
+        color: #2563eb !important;
+        background: rgba(37, 99, 235, 0.1) !important;
+      }
+      .command-tab.theme-light .language-option.active::after {
+        color: #2563eb !important;
+      }
+      .command-tab.theme-light .rubic-dwell-bg {
+        stroke: rgba(0, 0, 0, 0.12) !important;
+      }
+      .command-tab.theme-light .rubic-dwell-progress {
+        stroke: #0284c7 !important;
+      }
+      .command-tab.theme-light .rubic-mini-toggle {
+        color: rgba(15, 23, 42, 0.8) !important;
+        border: 1px solid rgba(0, 0, 0, 0.2) !important;
+        background: rgba(0, 0, 0, 0.04) !important;
+      }
+      .command-tab.theme-light .rubic-mini-toggle:hover {
+        background: rgba(0, 0, 0, 0.09) !important;
+        color: #000000 !important;
+      }
+      .command-tab.theme-light .rubic-mini-toggle.active {
+        color: #0284c7 !important;
+        border-color: rgba(2, 132, 199, 0.6) !important;
+        background: rgba(2, 132, 199, 0.15) !important;
+      }
+      .command-tab.theme-light .rubic-answer-box {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 1px solid rgba(2, 132, 199, 0.4) !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
+      }
+      .command-tab.theme-light .rubic-answer-box .ans-label {
+        color: rgba(15, 23, 42, 0.65) !important;
+      }
+      .command-tab.theme-light .rubic-answer-box .ans-val {
+        color: #0284c7 !important;
+      }
+
       @keyframes pulse {
         0% {
           opacity: 1;
@@ -269,7 +585,7 @@
         color: rgba(255, 255, 255, 0.95);
         box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
         padding: 12px;
-        min-width: 340px;
+        min-width: 360px;
         z-index: 1000;
         -webkit-app-region: no-drag;
         /* Hidden by default: do not intercept clicks */
@@ -284,6 +600,78 @@
         pointer-events: auto;
         opacity: 1;
         visibility: visible;
+      }
+
+      .clipboard-popover {
+        right: 45px;
+        max-height: 380px;
+        overflow-y: auto;
+        width: 360px;
+      }
+      .clipboard-session-block {
+        margin-bottom: 12px;
+      }
+      .clipboard-session-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 4px;
+      }
+      .clipboard-session-title {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 600;
+      }
+      .clipboard-copy-all-btn {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        cursor: default !important;
+        transition: background 0.2s;
+      }
+      .clipboard-copy-all-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+        color: #fff;
+      }
+      .clipboard-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 8px;
+        margin-bottom: 6px;
+        font-size: 11px;
+      }
+      .clipboard-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: rgba(255, 255, 255, 0.85);
+        max-height: 80px;
+        overflow-y: auto;
+        margin-bottom: 6px;
+        font-family: inherit;
+      }
+      .clipboard-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .clipboard-copy-btn {
+        background: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        cursor: default !important;
+        transition: all 0.2s;
+      }
+      .clipboard-copy-btn:hover {
+        background: rgba(255, 255, 255, 0.18);
+        color: #fff;
       }
 
       .shortcuts-title {
@@ -349,40 +737,544 @@
       .shortcuts-footer a:hover {
         text-decoration: underline;
       }
+      /* Opacity / Transparency slider control */
+      .opacity-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 6px;
+        border-radius: 6px;
+        -webkit-app-region: no-drag;
+        flex-shrink: 0;
+        cursor: default;
+      }
+
+      .opacity-control i {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.5);
+        cursor: default;
+        flex-shrink: 0;
+      }
+
+      .opacity-control input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 52px;
+        height: 4px;
+        border-radius: 2px;
+        background: linear-gradient(to right, rgba(255,255,255,0.1), rgba(255,255,255,0.5));
+        outline: none;
+        cursor: default;
+        -webkit-app-region: no-drag;
+      }
+
+      .opacity-control input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        cursor: default;
+        box-shadow: 0 0 3px rgba(0,0,0,0.3);
+      }
+
+      /* Bottom-right corner resize handle */
+      .bar-resize-handle {
+        width: 14px;
+        height: 100%;
+        margin-left: 2px;
+        margin-right: -6px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-end;
+        padding-bottom: 2px;
+        padding-right: 2px;
+        box-sizing: border-box;
+        opacity: 0.45;
+        transition: opacity 0.2s ease;
+        -webkit-app-region: no-drag;
+        cursor: default !important; /* STRICT: cursor symbol must NEVER change */
+        flex-shrink: 0;
+        user-select: none;
+      }
+
+      .bar-resize-handle:hover {
+        opacity: 0.95;
+      }
+
+      .bar-resize-handle::after {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-right: 2px solid rgba(255, 255, 255, 0.7);
+        border-bottom: 2px solid rgba(255, 255, 255, 0.7);
+        border-bottom-right-radius: 2px;
+        display: block;
+        cursor: default !important;
+      }
+
+      /* Hover-Dwell Drag & Drop Progress Bar */
+      .hover-drag-progress-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.08);
+        border-bottom-left-radius: 8px;
+        border-bottom-right-radius: 8px;
+        overflow: hidden;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        z-index: 200;
+      }
+
+      .hover-drag-progress-bar.is-visible {
+        opacity: 1;
+      }
+
+      .hover-drag-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #38bdf8, #818cf8, #34d399);
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.9);
+        transition: width 0.05s linear;
+      }
+
+      .hover-drag-status-badge {
+        position: absolute;
+        bottom: calc(100% + 6px);
+        right: 0;
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid rgba(56, 189, 248, 0.45);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(12px);
+        color: #38bdf8;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 5px;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        white-space: nowrap;
+        z-index: 201;
+      }
+
+      .hover-drag-status-badge.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .command-tab.is-hooked-dragging {
+        border-color: rgba(56, 189, 248, 0.7) !important;
+        box-shadow: 0 0 18px rgba(56, 189, 248, 0.4) !important;
+      }
+
+      .command-tab.is-hooked-dragging .bar-resize-handle::after {
+        border-color: #38bdf8 !important;
+        animation: pulse-handle 0.8s infinite alternate ease-in-out;
+      }
+
+      @keyframes pulse-handle {
+        from { transform: scale(1); opacity: 0.6; }
+        to { transform: scale(1.4); opacity: 1; }
+      }
+
+      /* Minimal MCQ Mode vs Expanded Mode */
+      .extended-prefix-group,
+      .extended-tools-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+        transition: opacity 0.2s ease;
+      }
+
+      .command-tab.is-minimal .extended-prefix-group,
+      .command-tab.is-minimal .extended-tools-group {
+        display: none !important;
+      }
+
+      .expand-bar-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 6px;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.7);
+        border-radius: 6px;
+        cursor: default !important;
+        margin-left: 2px;
+        flex-shrink: 0;
+        -webkit-app-region: no-drag;
+        transition: all 0.2s ease;
+      }
+
+      .expand-bar-btn * {
+        cursor: default !important;
+      }
+
+      .expand-bar-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: #38bdf8;
+      }
+
+      .expand-bar-btn.is-expanded {
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.2);
+      }
+
+      /* ── Universal Hover Dwell Ring ── */
+      .rubic-dwell-ring {
+        position: absolute;
+        inset: -2px;
+        pointer-events: none;
+        z-index: 25;
+        border-radius: 7px;
+        overflow: hidden;
+      }
+
+      .rubic-dwell-svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .rubic-dwell-bg {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.12);
+        stroke-width: 2.2;
+      }
+
+      .rubic-dwell-progress {
+        fill: none;
+        stroke: #22d3ee;
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        stroke-dasharray: 100;
+        stroke-dashoffset: 100;
+        transition: stroke-dashoffset 0.04s linear;
+      }
+
+      .rubic-dwell-fired {
+        animation: rubic-flash 0.4s ease;
+      }
+
+      @keyframes rubic-flash {
+        0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.7); }
+        50% { box-shadow: 0 0 16px 4px rgba(34, 211, 238, 0.5); }
+        100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
+      }
+
+      /* ── Rubic Mode Button ── */
+      .command-item.rubic-active {
+        color: #22d3ee !important;
+        background: rgba(34, 211, 238, 0.2);
+        box-shadow: 0 0 10px rgba(34, 211, 238, 0.35);
+        border: 1px solid rgba(34, 211, 238, 0.4);
+      }
+
+      .command-item.rubic-active span {
+        color: #cffafe !important;
+        font-weight: 700 !important;
+      }
+
+      .command-item.rubic-active i {
+        color: #22d3ee !important;
+        text-shadow: 0 0 8px rgba(34, 211, 238, 0.8);
+      }
+
+      /* ── Rubic Processing State (Yellow Glowing & Blinking) ── */
+      .command-item.rubic-processing {
+        color: #facc15 !important;
+        background: rgba(234, 179, 8, 0.22) !important;
+        border: 1px solid rgba(250, 204, 21, 0.75) !important;
+        box-shadow: 0 0 14px rgba(250, 204, 21, 0.6) !important;
+        animation: rubic-yellow-blink 0.7s infinite alternate !important;
+      }
+
+      .command-item.rubic-processing i {
+        color: #fde047 !important;
+        text-shadow: 0 0 10px rgba(250, 204, 21, 0.9);
+        animation: rubic-spin 1.2s linear infinite;
+      }
+
+      .command-item.rubic-processing span {
+        color: #fef08a !important;
+        font-weight: 800 !important;
+      }
+
+      @keyframes rubic-yellow-blink {
+        0% {
+          background: rgba(234, 179, 8, 0.15);
+          box-shadow: 0 0 6px rgba(250, 204, 21, 0.4);
+        }
+        100% {
+          background: rgba(234, 179, 8, 0.4);
+          box-shadow: 0 0 18px rgba(250, 204, 21, 0.85);
+        }
+      }
+
+      @keyframes rubic-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      /* Rubic answer flash on the button */
+      .rubic-answer-flash {
+        animation: rubic-answer-pulse 1.5s ease;
+      }
+
+      @keyframes rubic-answer-pulse {
+        0% { background: rgba(34, 211, 238, 0.2); }
+        30% { background: rgba(34, 211, 238, 0.6); }
+        100% { background: rgba(34, 211, 238, 0.2); }
+      }
+
+      /* AI Status Dot */
+      .ai-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        transition: background-color 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .ai-status-dot.connected {
+        background-color: #22c55e;
+        box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+      }
+
+      .ai-status-dot.disconnected {
+        background-color: #ef4444;
+        box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+      }
+
+      /* Stored Answer Box directly next to Rubic button */
+      .rubic-answer-box {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: rgba(34, 211, 238, 0.18);
+        border: 1px solid rgba(34, 211, 238, 0.6);
+        box-shadow: 0 0 10px rgba(34, 211, 238, 0.35);
+        cursor: default;
+        -webkit-app-region: no-drag;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+      }
+
+      .rubic-answer-box .ans-label {
+        font-size: 10px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.7);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .rubic-answer-box .ans-val {
+        font-size: 13px;
+        font-weight: 900;
+        color: #22d3ee;
+        letter-spacing: 1px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      /* Rubic sub-toggles (Always visible and clickable) */
+      .rubic-toggles {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        -webkit-app-region: no-drag;
+        flex-shrink: 0;
+      }
+
+      .rubic-mini-toggle {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 4px;
+        border-radius: 5px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.85);
+        cursor: default !important;
+        transition: all 0.2s ease;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(255, 255, 255, 0.08);
+        -webkit-app-region: no-drag;
+        box-sizing: border-box;
+      }
+
+      .rubic-mini-toggle * {
+        pointer-events: none;
+      }
+
+      .rubic-mini-toggle:hover {
+        background: rgba(255, 255, 255, 0.22);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.5);
+      }
+
+      .rubic-mini-toggle.active {
+        color: #22d3ee !important;
+        border-color: rgba(34, 211, 238, 0.7) !important;
+        background: rgba(34, 211, 238, 0.25) !important;
+        box-shadow: 0 0 8px rgba(34, 211, 238, 0.45);
+      }
+
+      .rubic-mini-toggle.active i {
+        color: #22d3ee !important;
+        text-shadow: 0 0 6px rgba(34, 211, 238, 0.8);
+      }
     </style>
   </head>
   <body>
-    <div class="command-tab">
-      <div class="command-item">
+    <div class="command-tab is-minimal">
+      <div class="command-item" id="screenshotButton" title="Take Snapshot (⌘⇧S) — Click or hover 1s">
         <i class="fas fa-camera"></i>
         <span>⌘⇧S</span>
       </div>
-      <div class="command-separator"></div>
-      <div class="command-item" id="micButton">
-        <i class="fas fa-microphone"></i>
+      <div class="command-item" id="snapshotCopyBtn" title="Copy Code — Click or hover 1s" style="display: none;">
+        <i class="fas fa-copy" id="snapshotCopyIcon"></i>
+      </div>
+      <div class="command-item" id="snapshotCloseBtn" title="Close AI Response — Click or hover 1s" style="display: none;">
+        <i class="fas fa-times" id="snapshotCloseIcon"></i>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="skillIndicator">
-        <i class="fas fa-brain"></i>
-        <span>DSA</span>
+      <!-- Prefix tools: MCQ (Hidden in minimal mode, shown in expanded mode) -->
+      <div class="extended-prefix-group" id="extendedPrefixGroup">
+        <div class="command-item" id="mcqToggle" title="Toggle MCQ Mode">
+          <i class="fas fa-list-check"></i>
+          <span>MCQ</span>
+        </div>
+        <div class="command-separator"></div>
+      </div>
+      <!-- Rubic Universal MCQ Button -->
+      <div class="command-item" id="rubicButton" style="position: relative;" title="Rubic Universal MCQ — Click or hover 1s">
+        <div class="ai-status-dot disconnected" id="aiStatusDot"></div>
+        <i class="fas fa-cube"></i>
+        <span id="rubicButtonLabel">Rubic</span>
+      </div>
+      <!-- Stored Answer Box (right next to Rubic button) -->
+      <div class="rubic-answer-box" id="rubicAnswerBox" style="display: none;">
+        <span class="ans-label">Ans:</span>
+        <span class="ans-val" id="rubicAnswerVal">-</span>
+      </div>
+      <!-- Rubic sub-toggles (Always visible and clickable) -->
+      <div class="rubic-toggles" id="rubicToggles">
+        <div class="rubic-mini-toggle active" id="rubicToggleSingle">
+          <span id="rubicSingleLabel">1</span>
+        </div>
+        <div class="rubic-mini-toggle" id="rubicToggleLED">
+          <i class="fas fa-lightbulb" style="font-size: 10px;"></i>
+        </div>
+        <div class="rubic-mini-toggle active" id="rubicToggleMenuBar">
+          <i class="fas fa-signal" style="font-size: 10px;"></i>
+        </div>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="languageSelector">
-        <i class="fas fa-code"></i>
-        <select id="codingLanguage">
-          <option value="cpp">C++</option>
-          <option value="c">C</option>
-          <option value="python">Python</option>
-          <option value="java">Java</option>
-          <option value="javascript">JavaScript</option>
-        </select>
+      <div class="command-item" id="autoTypeButton" title="Paste & Smart Auto-Type Clipboard (⌥V / Alt+V)">
+        <i class="fas fa-paste"></i>
+        <span id="autoTypeLabel">Type ⌥V</span>
+        <div class="autotype-progress-track" id="autoTypeProgressTrack">
+          <div class="autotype-progress-fill" id="autoTypeProgressFill"></div>
+        </div>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="infoButton" title="Shortcuts">
-        <i class="fas fa-circle-info"></i>
+      <div class="command-item" id="autoHideToggle">
+        <i class="fas fa-ghost"></i>
+        <span>Hide</span>
       </div>
+      <!-- Extended / Wide options (Shown only when expanded) -->
+      <div class="extended-tools-group" id="extendedToolsGroup">
+        <div class="command-item" id="micButton">
+          <i class="fas fa-microphone" id="micButtonIcon"></i>
+        </div>
+        <div class="command-separator"></div>
+        <div class="command-item" id="skillIndicator">
+          <i class="fas fa-user-tie"></i>
+          <span>Interview</span>
+        </div>
+        <div class="command-separator"></div>
+        <div class="command-item language-selector-wrapper" id="languageSelector" title="Click or hover 3s to choose programming language">
+          <i class="fas fa-code"></i>
+          <span id="currentLanguageLabel">C++</span>
+          <i class="fas fa-chevron-down language-caret"></i>
+          <!-- Hidden select keeps setting synchronization 100% compatible -->
+          <select id="codingLanguage" style="display: none;">
+            <option value="cpp">C++</option>
+            <option value="c">C</option>
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+            <option value="javascript">JavaScript</option>
+          </select>
+          <!-- Custom Hover 3-Second Selection Dropdown List -->
+          <div class="language-dropdown-list" id="languageDropdownList">
+            <div class="language-option active" data-value="cpp">
+              <span class="lang-text">C++</span>
+              <div class="lang-dwell-track"><div class="lang-dwell-fill"></div></div>
+            </div>
+            <div class="language-option" data-value="c">
+              <span class="lang-text">C</span>
+              <div class="lang-dwell-track"><div class="lang-dwell-fill"></div></div>
+            </div>
+            <div class="language-option" data-value="python">
+              <span class="lang-text">Python</span>
+              <div class="lang-dwell-track"><div class="lang-dwell-fill"></div></div>
+            </div>
+            <div class="language-option" data-value="java">
+              <span class="lang-text">Java</span>
+              <div class="lang-dwell-track"><div class="lang-dwell-fill"></div></div>
+            </div>
+            <div class="language-option" data-value="javascript">
+              <span class="lang-text">JavaScript</span>
+              <div class="lang-dwell-track"><div class="lang-dwell-fill"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="command-separator"></div>
+        <div class="command-item" id="targetModeBtn">
+          <i class="fas fa-crosshairs"></i>
+        </div>
+        <div class="command-item" id="clipboardHistoryBtn">
+          <i class="fas fa-clipboard-list"></i>
+        </div>
+        <div class="command-separator"></div>
+        <div class="command-item" id="infoButton" title="Info / Shortcuts">
+          <i class="fas fa-circle-info"></i>
+        </div>
+        <div class="command-separator"></div>
+        <div class="command-item" id="themeToggleBtn" title="Theme (Dark / Light) — Click or hover 3s">
+          <i class="fas fa-sun" id="themeToggleIcon"></i>
+        </div>
+      </div>
+      <!-- Transparency slider (Always visible: after Hide in minimal mode, after extended tools in expanded mode) -->
       <div class="command-separator"></div>
-      <div class="status-dot non-interactive" id="statusDot"></div>
+      <div class="opacity-control" id="opacityControl">
+        <i class="fas fa-eye-low-vision"></i>
+        <input type="range" id="opacitySlider" min="0" max="100" value="38" step="1" />
+      </div>
+      <!-- Expand / Collapse button (Click or Hover 3s) at bottom-right corner -->
+      <div class="command-item expand-bar-btn" id="expandBarBtn" style="position: relative;">
+        <i class="fas fa-chevron-right" id="expandBarIcon"></i>
+      </div>
+      <div class="bar-resize-handle" id="barResizeHandle" title="Hold cursor here for 3s to drag bar without clicking"></div>
+      <!-- Hover-Dwell Drag & Drop Progress Bar -->
+      <div class="hover-drag-progress-bar" id="hoverDragProgressBar">
+        <div class="hover-drag-progress-fill" id="hoverDragProgressFill"></div>
+      </div>
+      <!-- Floating Hover Drag Status Tooltip -->
+      <div class="hover-drag-status-badge" id="hoverDragStatusBadge"></div>
     </div>
 
   <!-- Shortcuts Popover (hidden by default via CSS) -->
@@ -405,6 +1297,61 @@
               + <span class="kbd">S</span>
             </td>
             <td>Capture screenshot and analyze</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">V</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">V</span>
+            </td>
+            <td>Smart Auto-Type clipboard (90-120 WPM)</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">M</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">M</span>
+            </td>
+            <td>Toggle MCQ-only Mode</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">H</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">H</span>
+            </td>
+            <td>Toggle Auto-Hide on Mouse Leave</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">X</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">X</span>
+            </td>
+            <td>Toggle Target Box</td>
+          </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">C</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">C</span>
+            </td>
+            <td>Toggle Clipboard History</td>
           </tr>
           <tr>
             <td>
@@ -447,14 +1394,41 @@
             </td>
             <td>Open settings</td>
           </tr>
+          <tr>
+            <td>
+              <span class="kbd">Alt</span>
+              + <span class="kbd">Q</span>
+              <span style="opacity:.7; margin:0 4px;">or</span>
+              <span class="kbd">⌘</span>
+              + <span class="kbd">⌥</span>
+              + <span class="kbd">Q</span>
+            </td>
+            <td><strong>Quit OpenCluely</strong></td>
+          </tr>
         </tbody>
       </table>
-      <div class="shortcuts-footer">
-        <span>Tip: Alt+A also toggles interaction from anywhere.</span>
-        <a href="https://techycsr.dev" target="_blank" rel="noreferrer noopener">Made by @TechyCSR</a>
+      <div class="shortcuts-footer" style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px;">
+        <button id="quitAppBtn" class="quit-cluely-btn" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.45); color: #fca5a5; border-radius: 4px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: default !important; display: inline-flex; align-items: center; gap: 6px;">
+          <i class="fas fa-power-off"></i> Quit Cluely (⌥Q)
+        </button>
+        <span style="font-size: 10px; opacity: 0.6;">Right-click bar to open</span>
       </div>
     </div>
 
+    <!-- Clipboard Popover (hidden by default via CSS) -->
+    <div id="clipboardPopover" class="shortcuts-popover clipboard-popover">
+      <div class="shortcuts-title" style="justify-content: space-between;">
+        <span><i class="fas fa-clipboard-list"></i> Clipboard History</span>
+        <i class="fas fa-times" id="closeClipboardPopoverBtn" style="cursor: default !important; opacity: 0.6;"></i>
+      </div>
+      <div id="clipboardPopoverContent">
+        <div style="text-align: center; color: rgba(255,255,255,0.5); padding: 20px 0; font-size: 11px;">
+          No items in clipboard history
+        </div>
+      </div>
+    </div>
+
+    <script src="./src/ui/hover-dwell.js"></script>
     <script src="./src/ui/main-window.js"></script>
   </body>
 </html>

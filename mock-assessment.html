@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strict Assessment Sandbox — Proctor Simulation</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --accent: #38bdf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .badge-bar { display: flex; gap: 12px; align-items: center; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .badge-secure { background: rgba(34, 197, 94, 0.15); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.3); }
+    .badge-violation { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.4); animation: shake 0.4s ease; }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-4px); }
+      40%, 80% { transform: translateX(4px); }
+    }
+
+    .btn {
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { opacity: 0.9; }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 20px;
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .question-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .q-number { font-size: 13px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .q-title { font-size: 20px; line-height: 1.5; font-weight: 600; color: #fff; }
+
+    /* Assessment options with NO A/B/C/D labels — exactly matches the user scenario */
+    .options-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .option-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      padding: 16px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 15px;
+      color: #e2e8f0;
+      transition: all 0.2s;
+    }
+    .option-card:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: var(--accent);
+    }
+    .option-card.selected {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric-box {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .metric-val { font-size: 24px; font-weight: 700; color: #fff; }
+    .metric-val.bad { color: var(--danger); }
+    .metric-lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    .event-log {
+      height: 280px;
+      overflow-y: auto;
+      background: #090d16;
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .log-item { margin-bottom: 4px; }
+    .log-time { color: var(--muted); margin-right: 6px; }
+    .log-warn { color: var(--danger); font-weight: 700; }
+    .log-info { color: var(--accent); }
+    .log-ok { color: var(--success); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1 style="font-size: 16px; font-weight: 700;">Online Assessment Simulation — Anti-Cheat Test Bench</h1>
+      <p style="font-size: 12px; color: var(--muted);">Monitors Fullscreen, Window Blur, Tab Visibility, and Cursor Departure</p>
+    </div>
+    <div class="badge-bar">
+      <div id="statusBadge" class="badge badge-secure">
+        <span>●</span> <span id="statusText">PROCTOR ACTIVE — SECURE</span>
+      </div>
+      <button id="fullscreenBtn" class="btn">Enter Fullscreen</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="question-panel">
+      <div class="q-number">Question 1 of 5 (Unlabeled MCQ)</div>
+      <div class="q-title" id="questionText">
+        Which of the following data structures provides O(1) average time complexity for both insertions and lookups?
+      </div>
+
+      <!-- Notice: NO A/B/C/D markings to verify OpenCluely top-to-bottom mapping -->
+      <div class="options-group" id="optionsGroup">
+        <div class="option-card" onclick="selectOption(this)">
+          Binary Search Tree
+        </div>
+        <div class="option-card" onclick="selectOption(this)">
+          Hash Table
+        </div>
+        <div class="option-card" onclick="selectOption(this)">
+          Balanced AVL Tree
+        </div>
+        <div class="option-card" onclick="selectOption(this)">
+          Doubly Linked List
+        </div>
+      </div>
+
+      <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 20px; border-top: 1px solid var(--border);">
+        <span style="font-size: 13px; color: var(--muted);">Correct Answer: <strong>Hash Table (Option B / 2nd)</strong></span>
+        <button class="btn" style="background: rgba(255,255,255,0.1); color: #fff;" onclick="nextQuestion()">Next Sample Question</button>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="panel">
+        <div class="panel-title">Proctor Violation Counters</div>
+        <div class="metric-grid">
+          <div class="metric-box">
+            <div id="blurCount" class="metric-val">0</div>
+            <div class="metric-lbl">Window Blurs</div>
+          </div>
+          <div class="metric-box">
+            <div id="tabCount" class="metric-val">0</div>
+            <div class="metric-lbl">Tab Switches</div>
+          </div>
+          <div class="metric-box">
+            <div id="mouseLeaveCount" class="metric-val">0</div>
+            <div class="metric-lbl">Mouse Departures</div>
+          </div>
+          <div class="metric-box">
+            <div id="fullscreenExitCount" class="metric-val">0</div>
+            <div class="metric-lbl">Fullscreen Exits</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="flex: 1; display: flex; flex-direction: column;">
+        <div class="panel-title">
+          <span>Live Proctor Event Log</span>
+          <a href="#" style="font-size: 10px; color: var(--accent); text-decoration: none;" onclick="clearLogs()">Clear</a>
+        </div>
+        <div class="event-log" id="eventLog"></div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    let blurs = 0;
+    let tabSwitches = 0;
+    let mouseLeaves = 0;
+    let fullscreenExits = 0;
+
+    const eventLog = document.getElementById('eventLog');
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+
+    function log(msg, type = 'info') {
+      const d = new Date();
+      const time = d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
+      const div = document.createElement('div');
+      div.className = 'log-item';
+      let typeClass = 'log-info';
+      if (type === 'warn') typeClass = 'log-warn';
+      if (type === 'ok') typeClass = 'log-ok';
+      div.innerHTML = `<span class="log-time">[${time}]</span> <span class="${typeClass}">${msg}</span>`;
+      eventLog.prepend(div);
+    }
+
+    function triggerViolation(title, detail) {
+      statusBadge.className = 'badge badge-violation';
+      statusText.textContent = `VIOLATION: ${title.toUpperCase()}`;
+      log(`⚠️ PROCTOR ALERT: ${title} (${detail})`, 'warn');
+      setTimeout(() => {
+        statusBadge.className = 'badge badge-secure';
+        statusText.textContent = 'PROCTOR ACTIVE — SECURE';
+      }, 3000);
+    }
+
+    // 1. Strict Window Blur detection
+    window.addEventListener('blur', () => {
+      blurs++;
+      document.getElementById('blurCount').textContent = blurs;
+      document.getElementById('blurCount').classList.add('bad');
+      triggerViolation('Window Lost Focus', 'User clicked external window or pressed Alt+Tab');
+    });
+
+    window.addEventListener('focus', () => {
+      log('Window regained focus', 'ok');
+    });
+
+    // 2. Strict Page Visibility API detection
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        tabSwitches++;
+        document.getElementById('tabCount').textContent = tabSwitches;
+        document.getElementById('tabCount').classList.add('bad');
+        triggerViolation('Page Hidden', 'Switched tab or minimized browser');
+      } else {
+        log('Page visibility restored', 'ok');
+      }
+    });
+
+    // 3. Mouse Departure detection
+    document.documentElement.addEventListener('mouseleave', () => {
+      mouseLeaves++;
+      document.getElementById('mouseLeaveCount').textContent = mouseLeaves;
+      document.getElementById('mouseLeaveCount').classList.add('bad');
+      log('Mouse left document viewport', 'info');
+    });
+
+    // 4. Fullscreen enforcement
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) {
+        fullscreenExits++;
+        document.getElementById('fullscreenExitCount').textContent = fullscreenExits;
+        document.getElementById('fullscreenExitCount').classList.add('bad');
+        triggerViolation('Exited Fullscreen', 'Browser exited strict fullscreen mode');
+      } else {
+        log('Entered fullscreen mode', 'ok');
+      }
+    });
+
+    document.getElementById('fullscreenBtn').addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+
+    function selectOption(el) {
+      document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      log(`Candidate selected option: "${el.textContent.trim()}"`, 'ok');
+    }
+
+    function clearLogs() {
+      eventLog.innerHTML = '';
+      log('Event log cleared', 'info');
+    }
+
+    const sampleQuestions = [
+      {
+        q: "What is the primary function of an operating system's kernel?",
+        options: [
+          "To provide a web browsing interface",
+          "To compile source code into machine binaries",
+          "To manage system hardware, memory, and CPU processes",
+          "To encrypt files on disk during shutdown"
+        ],
+        answer: "Option C (3rd option)"
+      },
+      {
+        q: "Which protocol operates at the Transport Layer of the OSI Model and guarantees reliable delivery?",
+        options: [
+          "TCP (Transmission Control Protocol)",
+          "UDP (User Datagram Protocol)",
+          "IP (Internet Protocol)",
+          "ICMP (Internet Control Message Protocol)"
+        ],
+        answer: "Option A (1st option)"
+      }
+    ];
+
+    let currentQIdx = 0;
+    function nextQuestion() {
+      currentQIdx = (currentQIdx + 1) % sampleQuestions.length;
+      const data = sampleQuestions[currentQIdx];
+      document.getElementById('questionText').textContent = data.q;
+      const grp = document.getElementById('optionsGroup');
+      grp.innerHTML = data.options.map(o => `<div class="option-card" onclick="selectOption(this)">${o}</div>`).join('');
+      log(`Loaded new question: "${data.q.substring(0, 40)}..."`, 'info');
+    }
+
+    log('Proctor monitor initialized and listening for events.', 'ok');
+  </script>
+</body>
+</html>

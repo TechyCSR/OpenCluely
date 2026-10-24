@@ -9,6 +9,23 @@ import numpy as np
 import torch
 import whisper
 
+# Resource Governance: Cap CPU thread usage to avoid starving video conference,
+# camera encoding, or interview browser audio/video pipelines.
+try:
+    num_threads = min(4, max(2, (os.cpu_count() or 4) // 2))
+    torch.set_num_threads(num_threads)
+    if hasattr(torch, 'set_num_interop_threads'):
+        torch.set_num_interop_threads(1)
+except Exception:
+    pass
+
+# Lower process priority so interview/browser always gets priority scheduling
+try:
+    if hasattr(os, 'nice'):
+        os.nice(10)
+except Exception:
+    pass
+
 
 model = None
 model_name = None

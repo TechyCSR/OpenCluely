@@ -9,8 +9,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Speech recognition
   startSpeechRecognition: () => ipcRenderer.invoke('start-speech-recognition'),
   stopSpeechRecognition: () => ipcRenderer.invoke('stop-speech-recognition'),
+  hideChatWindow: () => ipcRenderer.send('hide-chat-window'),
+  toggleSpeechRecognition: () => ipcRenderer.send('toggle-speech-recognition'),
   sendAudioChunk: (buffer) => ipcRenderer.send('audio-chunk', { buffer }),
   getSpeechAvailability: () => ipcRenderer.invoke('get-speech-availability'),
+  getDesktopSources: () => ipcRenderer.invoke('get-desktop-sources'),
+  setAudioSourceMode: (mode) => ipcRenderer.invoke('set-audio-source-mode', mode),
+  getAudioSourceMode: () => ipcRenderer.invoke('get-audio-source-mode'),
+  toggleAudioSourceMode: () => ipcRenderer.invoke('toggle-audio-source-mode'),
+  onAudioSourceModeChanged: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('audio-source-mode-changed', handler);
+    return () => ipcRenderer.removeListener('audio-source-mode-changed', handler);
+  },
   
   // Window management
   showAllWindows: () => ipcRenderer.invoke('show-all-windows'),
@@ -21,12 +32,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   switchToSkills: () => ipcRenderer.invoke('switch-to-skills'),
   resizeWindow: (width, height) => ipcRenderer.invoke('resize-window', { width, height }),
   moveWindow: (deltaX, deltaY) => ipcRenderer.invoke('move-window', { deltaX, deltaY }),
+  startHoverDrag: (target) => ipcRenderer.invoke('start-hover-drag', target),
+  stopHoverDrag: () => ipcRenderer.invoke('stop-hover-drag'),
+  onHoverDragStatus: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('hover-drag-status', handler);
+    return () => ipcRenderer.removeListener('hover-drag-status', handler);
+  },
+  onHoverDragUnhooked: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('hover-drag-unhooked', handler);
+    return () => ipcRenderer.removeListener('hover-drag-unhooked', handler);
+  },
   getWindowStats: () => ipcRenderer.invoke('get-window-stats'),
   
   // Session memory
   getSessionHistory: () => ipcRenderer.invoke('get-session-history'),
   getLLMSessionHistory: () => ipcRenderer.invoke('get-llm-session-history'),
   clearSessionMemory: () => ipcRenderer.invoke('clear-session-memory'),
+  clearSession: () => ipcRenderer.invoke('clear-session-memory'),
   formatSessionHistory: () => ipcRenderer.invoke('format-session-history'),
   sendChatMessage: (text) => ipcRenderer.invoke('send-chat-message', text),
   getSkillPrompt: (skillName) => ipcRenderer.invoke('get-skill-prompt', skillName),
@@ -75,10 +99,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
       console.error('Error in quit:', error);
     }
   },
+  quitApp: () => {
+    try {
+      ipcRenderer.send('quit-app');
+    } catch (error) {
+      console.error('Error in quitApp:', error);
+    }
+  },
   
   // LLM window specific methods
   expandLlmWindow: (contentMetrics) => ipcRenderer.invoke('expand-llm-window', contentMetrics),
   resizeLlmWindowForContent: (contentMetrics) => ipcRenderer.invoke('resize-llm-window-for-content', contentMetrics),
+
+  // Auto-Type methods
+  typeClipboard: (options) => ipcRenderer.invoke('type-clipboard', options),
+  typeText: (text, options) => ipcRenderer.invoke('type-text', text, options),
+  stopAutoType: () => ipcRenderer.invoke('stop-autotype'),
+  getAutoTypeStatus: () => ipcRenderer.invoke('get-autotype-status'),
+
+  // MCQ Mode methods
+  toggleMcqMode: () => ipcRenderer.invoke('toggle-mcq-mode'),
+  setMcqMode: (enabled) => ipcRenderer.invoke('set-mcq-mode', enabled),
+  getMcqMode: () => ipcRenderer.invoke('get-mcq-mode'),
+
+  // Auto-Hide Mode methods
+  toggleAutoHideMode: () => ipcRenderer.invoke('toggle-autohide-mode'),
+  setAutoHideMode: (enabled) => ipcRenderer.invoke('set-autohide-mode', enabled),
+  getAutoHideMode: () => ipcRenderer.invoke('get-autohide-mode'),
+  checkAutoHide: () => ipcRenderer.invoke('check-autohide-now'),
+
+  // Rubic Mode methods (stealth MCQ assessment)
+  toggleRubicMode: () => ipcRenderer.invoke('toggle-rubic-mode'),
+  getRubicState: () => ipcRenderer.invoke('get-rubic-state'),
+  setRubicOption: (key, value) => ipcRenderer.invoke('set-rubic-option', { key, value }),
+  triggerRubicMCQ: () => ipcRenderer.invoke('trigger-rubic-mcq'),
+  getAiStatus: () => ipcRenderer.invoke('get-ai-status'),
 
   // Clipboard helper for reliable copy actions
   copyToClipboard: (text) => {
@@ -89,6 +144,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return false;
     }
   },
+  
+  getClipboardHistory: () => ipcRenderer.invoke('get-clipboard-history'),
+  copyClipboardSession: (sessionKey) => ipcRenderer.invoke('copy-clipboard-session', sessionKey),
+  showClipboard: () => ipcRenderer.invoke('show-clipboard'),
+  onToggleClipboardPopover: (callback) => ipcRenderer.on('toggle-clipboard-popover', callback),
+  setOpacity: (opacity) => ipcRenderer.send('set-opacity', opacity),
+  getOpacity: () => ipcRenderer.invoke('get-opacity'),
+  onOpacityUpdate: (callback) => ipcRenderer.on('update-opacity', callback),
+  setTheme: (theme) => ipcRenderer.send('set-theme', theme),
+  getTheme: () => ipcRenderer.invoke('get-theme'),
+  onThemeChanged: (callback) => ipcRenderer.on('theme-changed', callback),
+  showTargetBox: () => ipcRenderer.invoke('show-target-box'),
+  extractTargetBox: (mode) => ipcRenderer.invoke('extract-target-box', mode),
   
   // Display management
   listDisplays: () => ipcRenderer.invoke('list-displays'),
@@ -106,18 +174,53 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onOcrError: (callback) => ipcRenderer.on('ocr-error', callback),
   onLlmResponse: (callback) => ipcRenderer.on('llm-response', callback),
   onLlmError: (callback) => ipcRenderer.on('llm-error', callback),
+  onLlmDebugStatus: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('llm-debug-status', handler);
+    return () => ipcRenderer.removeListener('llm-debug-status', handler);
+  },
+  getSystemDiagnostics: () => ipcRenderer.invoke('get-system-diagnostics'),
+  runLiveDiagnosticProbe: () => ipcRenderer.invoke('run-live-diagnostic-probe'),
   onTranscriptionLlmResponse: (callback) => ipcRenderer.on('transcription-llm-response', callback),
   onTranscriptionLlmResponseStart: (callback) => ipcRenderer.on('transcription-llm-response-start', callback),
   onTranscriptionLlmResponseChunk: (callback) => ipcRenderer.on('transcription-llm-response-chunk', callback),
+  onTranscriptionLlmRetry: (callback) => ipcRenderer.on('transcription-llm-retry', callback),
+  onRestoreActiveAnswer: (callback) => ipcRenderer.on('restore-active-answer', callback),
   onOpenGeminiConfig: (callback) => ipcRenderer.on('open-gemini-config', callback),
   onDisplayLlmResponse: (callback) => ipcRenderer.on('display-llm-response', callback),
   onShowLoading: (callback) => ipcRenderer.on('show-loading', callback),
+  onBacktrackAnswer: (callback) => ipcRenderer.on('backtrack-answer', callback),
+  onInterimTranscription: (callback) => ipcRenderer.on('interim-transcription', callback),
+  onTranscription: (callback) => ipcRenderer.on('transcription', callback),
+  backtrackPrevious: () => ipcRenderer.invoke('backtrack-previous'),
+  backtrackNext: () => ipcRenderer.invoke('backtrack-next'),
   onSkillChanged: (callback) => ipcRenderer.on('skill-changed', callback),
   onInteractionModeChanged: (callback) => ipcRenderer.on('interaction-mode-changed', callback),
   onRecordingStarted: (callback) => ipcRenderer.on('recording-started', callback),
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
+  onMicReady: (callback) => ipcRenderer.on('mic-ready', callback),
+  onSpeechActive: (callback) => ipcRenderer.on('speech-active', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
+  onMcqModeChanged: (callback) => ipcRenderer.on('mcq-mode-changed', callback),
+  onAutoHideModeChanged: (callback) => ipcRenderer.on('autohide-mode-changed', callback),
+  onAutoHideStateChanged: (callback) => ipcRenderer.on('autohide-state-changed', callback),
+  onRubicModeChanged: (callback) => ipcRenderer.on('rubic-mode-changed', callback),
+  onRubicAnswer: (callback) => ipcRenderer.on('rubic-answer', callback),
+  onRubicStatus: (callback) => ipcRenderer.on('rubic-status', callback),
+  onAutotypeStarted: (callback) => ipcRenderer.on('autotype-started', callback),
+  onAutotypeProgress: (callback) => ipcRenderer.on('autotype-progress', callback),
+  onAutotypeCompleted: (callback) => ipcRenderer.on('autotype-completed', callback),
+  onAutotypeStopped: (callback) => ipcRenderer.on('autotype-stopped', callback),
+  onSnapshotCodeAvailable: (callback) => ipcRenderer.on('snapshot-code-available', callback),
+  reportCodeAvailable: (code) => ipcRenderer.send('report-code-available', { code }),
+  hideLLMResponse: () => ipcRenderer.invoke('hide-llm-response'),
+  isLLMResponseOpen: () => ipcRenderer.invoke('is-llm-response-open'),
+  onLLMWindowState: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('llm-window-state', handler);
+    return () => ipcRenderer.removeListener('llm-window-state', handler);
+  },
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),
