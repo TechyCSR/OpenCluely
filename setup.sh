@@ -216,6 +216,63 @@ install_node_deps() {
   fi
 }
 
+ensure_electron_runtime() {
+  local electron_install_script="node_modules/electron/install.js"
+  local electron_binary=""
+  local electron_zip=""
+
+  case "$OS_NAME" in
+    macos) electron_binary="node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" ;;
+    windows) electron_binary="node_modules/electron/dist/electron.exe" ;;
+    *) electron_binary="node_modules/electron/dist/electron" ;;
+  esac
+
+  if [[ ! -f "$electron_install_script" ]]; then
+    echo "Error: Electron was not installed with the Node dependencies."
+    echo "Remove node_modules and run ./setup.sh again."
+    exit 1
+  fi
+
+  # npm 11 can report a successful install while leaving dependency install
+  # scripts pending review. Electron's postinstall script is what downloads
+  # the platform runtime, so run that step explicitly when the binary is
+  # missing instead of allowing setup to fail later at `npm start`.
+  if [[ ! -f "$electron_binary" ]]; then
+    echo "Electron runtime is missing; downloading it now"
+    env -u ELECTRON_SKIP_BINARY_DOWNLOAD -u ELECTRON_RUN_AS_NODE node "$electron_install_script" || true
+  fi
+
+  # Electron 29's extract-zip dependency can exit early on newer Node
+  # versions after extracting only the first ZIP entry. Fall back to the
+  # system unzip command when the installer did not produce the executable.
+  if [[ ! -f "$electron_binary" ]]; then
+    require_command unzip "The Electron runtime is incomplete and the unzip command is required to repair it."
+    echo "Electron installer did not finish; extracting the runtime with unzip"
+    electron_zip="$(env -u ELECTRON_SKIP_BINARY_DOWNLOAD -u ELECTRON_RUN_AS_NODE node -e '
+      const { downloadArtifact } = require("@electron/get");
+      const { version } = require("./node_modules/electron/package.json");
+      downloadArtifact({
+        version,
+        artifactName: "electron",
+        platform: process.platform,
+        arch: process.arch,
+        checksums: require("./node_modules/electron/checksums.json")
+      }).then((zipPath) => process.stdout.write(zipPath))
+        .catch((error) => { console.error(error.stack); process.exit(1); });
+    ')"
+    unzip -q -o "$electron_zip" -d "node_modules/electron/dist"
+    printf '%s' "${electron_binary#node_modules/electron/dist/}" > node_modules/electron/path.txt
+  fi
+
+  if [[ ! -f "$electron_binary" ]]; then
+    echo "Error: Electron runtime could not be installed."
+    echo "Check your network connection, then remove node_modules/electron and run ./setup.sh again."
+    exit 1
+  fi
+
+  echo "Electron runtime ready: $electron_binary"
+}
+
 setup_whisper_env() {
   if [[ "$SETUP_WHISPER" -ne 1 ]]; then
     echo "Skipping local Whisper setup"
@@ -313,6 +370,7 @@ ensure_env_file
 ensure_gemini_key
 install_system_deps
 install_node_deps
+ensure_electron_runtime
 setup_whisper_env
 build_app
 run_app
