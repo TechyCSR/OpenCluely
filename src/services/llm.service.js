@@ -3,9 +3,12 @@ const logger = require('../core/logger').createServiceLogger('LLM');
 const config = require('../core/config');
 const { promptLoader } = require('../../prompt-loader');
 
+const https = require('https');
+
 class LLMService {
   constructor() {
     this.client = null;
+    this.httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 4, maxFreeSockets: 2, timeout: 30000, keepAliveMsecs: 60000 });
     this.model = null;
     this.isInitialized = false;
     this.requestCount = 0;
@@ -45,9 +48,9 @@ class LLMService {
   getGenerationConfig(overrides = {}) {
     const defaults = config.get('llm.gemini.generation') || {};
     const fallback = {
-      temperature: 0.7,
-      topK: 40,
-      topP: 0.95,
+      temperature: 0.4,
+      topK: 32,
+      topP: 0.9,
       maxOutputTokens: 4096,
       thinkingConfig: { thinkingBudget: 0 }
     };
@@ -299,7 +302,7 @@ class LLMService {
 
   formatImageInstruction(activeSkill, programmingLanguage) {
     const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
-    return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
+    return `Analyze this image for a ${activeSkill.toUpperCase()} problem. Extract the problem concisely, explain each key concept/term briefly and logically, provide step-by-step reasoning, optimal code implementation, and complexity analysis.${langNote}`;
   }
 
   async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
@@ -533,7 +536,7 @@ class LLMService {
     try {
       if (!text || !programmingLanguage) return text;
       const norm = String(programmingLanguage).toLowerCase();
-      const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
+      const fenceTagMap = { cpp: 'cpp', 'c++': 'cpp', c: 'c', python: 'python', py: 'python', java: 'java', javascript: 'javascript', js: 'javascript', rust: 'rust', rs: 'rust', go: 'go', golang: 'go', bash: 'bash', sh: 'bash', shell: 'bash', terminal: 'bash', 'linux-terminal': 'bash', zsh: 'bash' };
       const fenceTag = fenceTagMap[norm] || norm || 'text';
 
       // Replace all triple-backtick fences' language token with the selected tag
@@ -788,8 +791,8 @@ Always respond to the point, do not repeat the question or unnecessary informati
     // Add programming language context if provided
     if (programmingLanguage) {
       const lang = String(programmingLanguage).toLowerCase();
-      const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
-      const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
+      const languageMap = { cpp: 'C++', 'c++': 'C++', c: 'C', python: 'Python', py: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript', rust: 'Rust', rs: 'Rust', go: 'Go (Golang)', golang: 'Go (Golang)', bash: 'Linux Terminal (Bash/Shell)', sh: 'Linux Terminal (Bash/Shell)', shell: 'Linux Terminal (Bash/Shell)', terminal: 'Linux Terminal (Bash/Shell)', 'linux-terminal': 'Linux Terminal (Bash/Shell)', zsh: 'Linux Terminal (Zsh/Shell)' };
+      const fenceTagMap = { cpp: 'cpp', 'c++': 'cpp', c: 'c', python: 'python', py: 'python', java: 'java', javascript: 'javascript', js: 'javascript', rust: 'rust', rs: 'rust', go: 'go', golang: 'go', bash: 'bash', sh: 'bash', shell: 'bash', terminal: 'bash', 'linux-terminal': 'bash', zsh: 'bash' };
       const languageTitle = languageMap[lang] || (lang.charAt(0).toUpperCase() + lang.slice(1));
       const fenceTag = fenceTagMap[lang] || lang || 'text';
       prompt += `\n\nCODING CONTEXT: Respond ONLY in ${languageTitle}. All code blocks must use triple backticks with language tag \`\`\`${fenceTag}\`\`\`. Do not include other languages unless explicitly asked.`;
@@ -804,10 +807,12 @@ Always respond to the point, do not repeat the question or unnecessary informati
 - Or similar brief acknowledgments like: "I'm here, what's your ${activeSkill} question?"
 
 ### If the transcription IS relevant to ${activeSkill} or is a follow-up question:
-- Provide a comprehensive, detailed response
-- Use bullet points, examples, and explanations
-- Focus on actionable insights and complete answers
-- Do not truncate or shorten your response
+- Provide a comprehensive, logically detailed response without filler.
+- Explain each key term and concept briefly and logically (1–2 intuitive sentences per term).
+- Break down the logical reasoning step-by-step (core observation, invariants, algorithm steps).
+- Provide optimal, production-ready code with helpful inline comments explaining non-obvious logic.
+- Include a brief dry run or trace of key variable states.
+- Explicitly state Time and Space Complexity with logical justification.
 
 ### Examples of casual/irrelevant messages:
 - "Hello", "Hi there", "How are you?"
@@ -822,10 +827,10 @@ Always respond to the point, do not repeat the question or unnecessary informati
 - Problem-solving requests related to ${activeSkill}
 
 ## Response Format:
-- Keep responses detailed
-- Use bullet points for structured answers
-- Be encouraging and helpful
-- Stay focused on ${activeSkill}
+1. **Key Terms & Concepts**: Brief, logical definitions of all core terms and techniques applied.
+2. **Intuition & Logical Steps**: Clear walkthrough of why and how the approach works.
+3. **Optimal Implementation**: Complete, runnable code in the selected language.
+4. **Dry Run & Complexity**: Concrete trace and exact Time & Space Big-O analysis.
 
 If the user's input is a coding or DSA problem statement and contains no code, produce a complete, runnable solution in the selected programming language without asking for more details. Always include the final implementation in a properly tagged code block.
 
@@ -1117,7 +1122,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     const timeout = config.get('llm.gemini.timeout');
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse`;
     const postData = JSON.stringify(geminiRequest);
-    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+    const agent = this.httpsAgent || new https.Agent({ keepAlive: true, maxSockets: 4 });
 
     const options = {
       method: 'POST',
@@ -1573,7 +1578,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
 
     const postData = JSON.stringify(geminiRequest);
 
-    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+    const agent = this.httpsAgent || new https.Agent({ keepAlive: true, maxSockets: 4 });
 
     const options = {
       method: 'POST',

@@ -38,7 +38,7 @@ class WindowManager {
     
     this.windowConfigs = {
       main: {
-        width: 520,
+        width: 750,
         height: 35,
         useContentSize: true,
         file: 'index.html',
@@ -90,6 +90,20 @@ class WindowManager {
         alwaysOnTop: true,
         visibleOnAllWorkspaces: true,
         fullscreenable: false
+      },
+      snipper: {
+        file: 'snipper.html',
+        title: 'Screen Selection',
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        closable: false,
+        hasShadow: false,
+        enableLargerThanScreen: true
       }
     };
 
@@ -317,6 +331,27 @@ class WindowManager {
           disableAutoHideCursor: true
         })
       };
+  } else if (type === 'snipper') {
+      browserWindowOptions = {
+        ...baseOptions,
+        frame: false,
+        titleBarStyle: 'hidden',
+        transparent: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        closable: false,
+        hasShadow: false,
+        backgroundColor: '#00000000',
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        focusable: true,
+        level: process.platform === 'darwin' ? 'screen-saver' : undefined,
+        ...(process.platform === 'darwin' && {
+          type: 'panel',
+          acceptFirstMouse: true
+        })
+      };
   } else if (type === 'onboarding') {
       // First-run onboarding wizard — same frameless/panel style as
       // settings, but closable (X button) and slightly larger.
@@ -472,8 +507,8 @@ class WindowManager {
   // Apply simplified stealth measures
     this.applyStealthMeasures(window, type);
     
-  // Initialize interaction mode based on current state for ALL windows
-    if (this.isInteractive) {
+  // Initialize interaction mode based on current state for ALL windows (snipper must always receive mouse events)
+    if (type === 'snipper' || this.isInteractive) {
       window.setIgnoreMouseEvents(false);
     } else {
       window.setIgnoreMouseEvents(true, { forward: true });
@@ -491,6 +526,9 @@ class WindowManager {
 
         // Intercept user-initiated resizes to lock height and allow width changes only
         window.on('will-resize', (event, newBounds) => {
+          if (window._isProgrammaticResize) {
+            return;
+          }
           try {
             // Keep current content height; only apply the new width
             const [_, currentContentHeight] = window.getContentSize();
@@ -538,6 +576,19 @@ class WindowManager {
   }
 
   applyStealthMeasures(window, type) {
+    if (type === 'snipper') {
+      // Snipper window does not use aggressive blur/re-enforcement listeners
+      try {
+        if (process.platform === 'darwin') {
+          window.setAlwaysOnTop(true, 'screen-saver', 1);
+        } else {
+          window.setAlwaysOnTop(true);
+        }
+        window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+        window.setSkipTaskbar(true);
+      } catch (e) {}
+      return;
+    }
     // Enhanced always-on-top enforcement for all platforms
     if (process.platform === 'darwin') {
       // macOS: Use native window level constants for maximum effectiveness
@@ -1059,7 +1110,7 @@ class WindowManager {
     }
 
     this.windows.forEach((window, type) => {
-      if (type !== 'llmResponse') { // Don't show LLM response unless it has content
+      if (type !== 'llmResponse' && type !== 'snipper') {
         this.showOnCurrentDesktop(window);
       }
     });
@@ -1078,7 +1129,7 @@ class WindowManager {
 
   hideAllWindows() {
     this.windows.forEach((window, type) => {
-      if (type !== 'llmResponse') {
+      if (type !== 'llmResponse' && type !== 'snipper') {
         window.hide();
       }
     });
@@ -1792,12 +1843,12 @@ class WindowManager {
     }
   }
 
-  handleRecordingStarted() {
+  handleRecordingStarted(data = {}) {
     this.isRecording = true;
     this.showChatWindow();
     // Notify all windows about recording state
-    this.broadcastToAllWindows('recording-started');
-    logger.debug('Recording started, chat window shown');
+    this.broadcastToAllWindows('recording-started', data);
+    logger.debug('Recording started, chat window shown', data);
   }
 
   handleRecordingStopped() {
@@ -1818,7 +1869,44 @@ class WindowManager {
       skill,
       windowCount: this.windows.size 
     });
+  }
+
+  async startAreaSnipper() {
+    try {
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const bounds = primaryDisplay.bounds;
+
+      let snipperWindow = this.windows.get('snipper') || this._snipperWindow;
+      if (!snipperWindow || snipperWindow.isDestroyed()) {
+        snipperWindow = await this.createWindow('snipper', false);
+        this.windows.set('snipper', snipperWindow);
+        this._snipperWindow = snipperWindow;
+      }
+
+      snipperWindow.setBounds(bounds);
+      snipperWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+      snipperWindow.show();
+      snipperWindow.focus();
+      logger.info('Area snipper window shown', { bounds });
+      return snipperWindow;
+    } catch (e) {
+      logger.error('Failed to start area snipper', { error: e.message });
+      throw e;
     }
+  }
+
+  closeAreaSnipper() {
+    const snipperWindow = this.windows.get('snipper') || this._snipperWindow;
+    if (snipperWindow && !snipperWindow.isDestroyed()) {
+      try {
+        snipperWindow.hide();
+        snipperWindow.destroy();
+      } catch (e) {}
+    }
+    this.windows.delete('snipper');
+    this._snipperWindow = null;
+    logger.info('Area snipper window closed and dismissed');
+  }
 }
 
 module.exports = new WindowManager();

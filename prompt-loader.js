@@ -78,8 +78,8 @@ class PromptLoader {
    * @returns {string} Modified prompt with programming language context
    */
   injectProgrammingLanguage(promptContent, programmingLanguage, skillName) {
-    const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
-    const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
+    const languageMap = { cpp: 'C++', 'c++': 'C++', c: 'C', python: 'Python', py: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript', rust: 'Rust', rs: 'Rust', go: 'Go (Golang)', golang: 'Go (Golang)', bash: 'Linux Terminal (Bash/Shell)', sh: 'Linux Terminal (Bash/Shell)', shell: 'Linux Terminal (Bash/Shell)', terminal: 'Linux Terminal (Bash/Shell)', 'linux-terminal': 'Linux Terminal (Bash/Shell)', zsh: 'Linux Terminal (Zsh/Shell)' };
+    const fenceTagMap = { cpp: 'cpp', 'c++': 'cpp', c: 'c', python: 'python', py: 'python', java: 'java', javascript: 'javascript', js: 'javascript', rust: 'rust', rs: 'rust', go: 'go', golang: 'go', bash: 'bash', sh: 'bash', shell: 'bash', terminal: 'bash', 'linux-terminal': 'bash', zsh: 'bash' };
     const norm = (programmingLanguage || '').toLowerCase();
     const languageTitle = languageMap[norm] || (programmingLanguage.charAt(0).toUpperCase() + programmingLanguage.slice(1));
     const fenceTag = fenceTagMap[norm] || norm || 'text';

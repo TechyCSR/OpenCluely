@@ -90,6 +90,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   
+  // Snipping / Area selection
+  startAreaSelection: () => ipcRenderer.invoke('start-area-selection'),
+  completeAreaSelection: (area) => ipcRenderer.send('complete-area-selection', area),
+  cancelAreaSelection: () => ipcRenderer.send('cancel-area-selection'),
+
+  // System audio source options
+  getDesktopSources: (options) => ipcRenderer.invoke('get-desktop-sources', options),
+  startSpeechWithSource: (sourceType) => ipcRenderer.invoke('start-speech-recognition', { sourceType }),
+  
   // Display management
   listDisplays: () => ipcRenderer.invoke('list-displays'),
   captureArea: (options) => ipcRenderer.invoke('capture-area', options),
@@ -118,6 +127,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
+  onAudioSourceChanged: (callback) => ipcRenderer.on('audio-source-changed', callback),
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),

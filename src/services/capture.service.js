@@ -38,7 +38,27 @@ class CaptureService {
       let finalImage = image;
       if (options.area && this._isValidArea(options.area)) {
         try {
-          finalImage = image.crop(options.area);
+          const imgSize = image.getSize();
+          const targetDisplay = this._getTargetDisplay(options.displayId);
+          const displayBounds = targetDisplay.bounds || { x: 0, y: 0, width: imgSize.width, height: imgSize.height };
+          const scaleX = imgSize.width / (displayBounds.width || 1);
+          const scaleY = imgSize.height / (displayBounds.height || 1);
+
+          // Convert screen coordinates to image-relative coordinates
+          let relX = options.area.x >= displayBounds.x ? options.area.x - displayBounds.x : options.area.x;
+          let relY = options.area.y >= displayBounds.y ? options.area.y - displayBounds.y : options.area.y;
+
+          let cropX = Math.max(0, Math.round(relX * scaleX));
+          let cropY = Math.max(0, Math.round(relY * scaleY));
+          let cropW = Math.round(options.area.width * scaleX);
+          let cropH = Math.round(options.area.height * scaleY);
+
+          cropW = Math.min(cropW, imgSize.width - cropX);
+          cropH = Math.min(cropH, imgSize.height - cropY);
+
+          if (cropW > 0 && cropH > 0) {
+            finalImage = image.crop({ x: cropX, y: cropY, width: cropW, height: cropH });
+          }
         } catch (e) {
           logger.warn('Crop failed, returning full image', { error: e.message, area: options.area });
         }

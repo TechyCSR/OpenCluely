@@ -17,7 +17,7 @@
     "clean": "rm -rf dist/",
     "rebuild": "npm run clean && npm run build",
     "release": "npm run clean && npm run build:all",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps && node scripts/ensure-electron.js"
   },
   "author": {
     "name": "TechyCSR",
@@ -42,7 +42,7 @@
     "winston-daily-rotate-file": "^4.7.1"
   },
   "devDependencies": {
-    "electron": "^29.1.0",
+    "electron": "^29.4.6",
     "electron-builder": "^24.13.3"
   },
   "build": {
@@ -93,7 +93,8 @@
       "extendInfo": {
         "NSMicrophoneUsageDescription": "OpenCluely uses the microphone to transcribe your speech locally with Whisper.",
         "NSCameraUsageDescription": "OpenCluely does not record video; this entitlement is only present for media-capture compatibility.",
-        "NSScreenCaptureUsageDescription": "OpenCluely captures the screen to read on-screen content for AI assistance."
+        "NSScreenCaptureUsageDescription": "OpenCluely captures the screen to read on-screen content for AI assistance.",
+        "NSAudioCaptureUsageDescription": "OpenCluely captures system audio to transcribe speaker and meeting audio locally."
       }
     },
     "win": {
@@ -172,5 +173,10 @@
         "height": 400
       }
     }
+  },
+  "allowScripts": {
+    "electron@29.4.6": true,
+    "@google/genai@2.9.0": true,
+    "protobufjs@7.6.4": true
   }
 }
