@@ -386,29 +386,70 @@ class ApplicationController {
         callback(granted);
       }
     );
+
+    if (appSession.setDisplayMediaRequestHandler) {
+      appSession.setDisplayMediaRequestHandler(async (request, callback) => {
+        try {
+          const { desktopCapturer } = require("electron");
+          const sources = await desktopCapturer.getSources({ types: ["screen"] });
+          if (sources && sources.length > 0) {
+            callback({
+              video: sources[0],
+              audio: "loopback"
+            });
+            logger.info("Display media request granted with loopback audio", {
+              sourceId: sources[0].id,
+              sourceName: sources[0].name
+            });
+          } else {
+            logger.warn("No screen sources available for display media");
+            callback({});
+          }
+        } catch (err) {
+          logger.error("Failed to handle display media request", { error: err.message });
+          callback({});
+        }
+      });
+    }
   }
 
   setupGlobalShortcuts() {
+    const isMac = process.platform === "darwin";
     const shortcuts = {
-      "CommandOrControl+Shift+S": () => this.triggerScreenshotOCR(),
-      "CommandOrControl+Shift+V": () => windowManager.toggleVisibility(),
+      // Area snipping (drag & snip) - no Alt needed
+      "CommandOrControl+Shift+S": () => this.triggerAreaSnipperOCR(),
+      // Full screen capture - Cmd+Shift+F or Cmd+Shift+X (no Alt needed on Mac!)
+      "CommandOrControl+Shift+F": () => this.triggerScreenshotOCR(),
+      "CommandOrControl+Shift+X": () => this.triggerScreenshotOCR(),
+      // Window interaction toggle - Cmd+Shift+I or Cmd+Shift+A
       "CommandOrControl+Shift+I": () => windowManager.toggleInteraction(),
+      "CommandOrControl+Shift+A": () => windowManager.toggleInteraction(),
+      // Visibility toggle
+      "CommandOrControl+Shift+V": () => windowManager.toggleVisibility(),
+      // Speech toggle - Cmd+Shift+R
+      "CommandOrControl+Shift+R": () => this.toggleSpeechRecognition(),
+      // Chat focus
       "CommandOrControl+Shift+C": () => windowManager.switchToWindow("chat"),
+      // Clear memory
       "CommandOrControl+Shift+\\": () => this.clearSessionMemory(),
+      // Settings
       "CommandOrControl+,": () => windowManager.showSettings(),
-      "Alt+A": () => windowManager.toggleInteraction(),
-      "Alt+R": () => this.toggleSpeechRecognition(),
+      // Always on top
       "CommandOrControl+Shift+T": () => windowManager.forceAlwaysOnTopForAllWindows(),
-      "CommandOrControl+Shift+Alt+T": () => {
-        const results = windowManager.testAlwaysOnTopForAllWindows();
-        logger.info('Always-on-top test triggered via shortcut', results);
-      },
-      // Context-sensitive shortcuts based on interaction mode
+      // Arrow navigation
       "CommandOrControl+Up": () => this.handleUpArrow(),
       "CommandOrControl+Down": () => this.handleDownArrow(),
       "CommandOrControl+Left": () => this.handleLeftArrow(),
       "CommandOrControl+Right": () => this.handleRightArrow(),
     };
+
+    // Non-Mac backwards compatibility fallbacks
+    if (!isMac) {
+      shortcuts["Alt+A"] = () => windowManager.toggleInteraction();
+      shortcuts["Alt+R"] = () => this.toggleSpeechRecognition();
+      shortcuts["CommandOrControl+Alt+S"] = () => this.triggerScreenshotOCR();
+      shortcuts["CommandOrControl+Shift+Alt+S"] = () => this.triggerScreenshotOCR();
+    }
 
     Object.entries(shortcuts).forEach(([accelerator, handler]) => {
       const success = globalShortcut.register(accelerator, handler);
@@ -417,8 +458,8 @@ class ApplicationController {
   }
 
   setupServiceEventHandlers() {
-    speechService.on("recording-started", () => {
-      windowManager.handleRecordingStarted();
+    speechService.on("recording-started", (data) => {
+      windowManager.handleRecordingStarted(data || { sourceType: this.currentAudioSourceType || "speaker" });
     });
 
     speechService.on("recording-stopped", () => {
@@ -456,7 +497,31 @@ class ApplicationController {
   }
 
   setupIPCHandlers() {
-  ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
+  ipcMain.handle("take-screenshot", () => this.triggerAreaSnipperOCR());
+    ipcMain.handle("start-area-selection", () => this.triggerAreaSnipperOCR());
+    ipcMain.on("complete-area-selection", (_event, area) => {
+      windowManager.closeAreaSnipper();
+      if (area && area.width > 10 && area.height > 10) {
+        // Wait 200ms to ensure the transparent overlay is completely unrendered by WindowServer
+        setTimeout(() => {
+          this.triggerScreenshotOCR({ area });
+        }, 200);
+      }
+    });
+    ipcMain.on("cancel-area-selection", () => {
+      windowManager.closeAreaSnipper();
+    });
+  ipcMain.handle("get-desktop-sources", async (_event, options = {}) => {
+      try {
+        const { desktopCapturer } = require('electron');
+        const sources = await desktopCapturer.getSources(options.types ? options : { types: ['screen', 'window'] });
+        return sources.map(s => ({ id: s.id, name: s.name }));
+      } catch (e) {
+        logger.error('Failed to get desktop sources', { error: e.message });
+        return [];
+      }
+    });
+
   ipcMain.handle("list-displays", () => captureService.listDisplays());
   ipcMain.handle("capture-area", (event, options) => captureService.captureAndProcess(options));
     
@@ -476,8 +541,10 @@ class ApplicationController {
       return speechService.isAvailable ? speechService.isAvailable() : false;
     });
 
-    ipcMain.handle("start-speech-recognition", () => {
-      speechService.startRecording();
+    ipcMain.handle("start-speech-recognition", (_event, opts = {}) => {
+      this.currentAudioSourceType = (opts && opts.sourceType) || 'speaker';
+      windowManager.broadcastToAllWindows('audio-source-changed', { sourceType: this.currentAudioSourceType });
+      speechService.startRecording({ sourceType: this.currentAudioSourceType });
       return speechService.getStatus();
     });
 
@@ -566,16 +633,25 @@ class ApplicationController {
       if (mainWindow) {
         // Enforce horizontal constraints: min ~one icon, max original width
         const minW = 60;
-        const maxW = windowManager.windowConfigs?.main?.width || 520;
+        const maxW = windowManager.windowConfigs?.main?.width || 750;
         const clampedWidth = Math.max(minW, Math.min(maxW, Math.round(width || minW)));
+        const targetH = Math.max(1, Math.round(height));
         try {
+          mainWindow._isProgrammaticResize = true;
           // Match content size to the DOM so no extra transparent area remains
-          mainWindow.setContentSize(Math.max(1, clampedWidth), Math.max(1, Math.round(height)));
+          mainWindow.setContentSize(Math.max(1, clampedWidth), targetH);
         } catch (e) {
+          mainWindow._isProgrammaticResize = true;
           // Fallback in case setContentSize isn’t available on some platform
-          mainWindow.setSize(Math.max(1, clampedWidth), Math.max(1, Math.round(height)));
+          mainWindow.setSize(Math.max(1, clampedWidth), targetH);
+        } finally {
+          setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow._isProgrammaticResize = false;
+            }
+          }, 150);
         }
-        logger.debug("Main window resized (content)", { width: clampedWidth, height });
+        logger.debug("Main window resized (content)", { width: clampedWidth, height: targetH });
       }
       return { success: true };
     });
@@ -1065,7 +1141,21 @@ class ApplicationController {
     windowManager.broadcastToAllWindows("skill-updated", { skill: newSkill });
   }
 
-  async triggerScreenshotOCR() {
+  async triggerAreaSnipperOCR() {
+    if (!this.isReady) {
+      logger.warn("Area snipper requested before application ready");
+      return;
+    }
+    try {
+      await windowManager.startAreaSnipper();
+    } catch (e) {
+      logger.error("Failed to launch area snipper", { error: e.message });
+      // Fallback to full screenshot
+      this.triggerScreenshotOCR();
+    }
+  }
+
+  async triggerScreenshotOCR(options = {}) {
     if (!this.isReady) {
       logger.warn("Screenshot requested before application ready");
       return;
@@ -1076,7 +1166,7 @@ class ApplicationController {
     try {
       windowManager.showLLMLoading();
 
-  const capture = await captureService.captureAndProcess();
+  const capture = await captureService.captureAndProcess(options);
 
       if (!capture.imageBuffer || !capture.imageBuffer.length) {
         windowManager.hideLLMResponse();
@@ -1846,9 +1936,11 @@ class ApplicationController {
 
       // App name mapping for stealth mode
       const appNames = {
-        terminal: "Terminal ",
-        activity: "Activity Monitor ",
-        settings: "System Settings ",
+        terminal: process.platform === "linux" ? "Terminal" : "Terminal ",
+        activity: process.platform === "linux" ? "System Monitor" : "Activity Monitor ",
+        settings: process.platform === "linux" ? "Settings" : "System Settings ",
+        bash: "bash",
+        "gnome-terminal": "Terminal",
       };
 
       const iconPath = iconPaths[iconKey];

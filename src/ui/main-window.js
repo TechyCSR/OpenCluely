@@ -17,6 +17,7 @@ class MainWindowUI {
         this.isRecording = false;
         this.speechAvailable = false; // track availability
         this._popoverHideTimeout = null;
+        this._shortcutsPopoverPinned = false;
         // Renderer-side audio capture state (used for Whisper on Windows)
         this._audioContext = null;
         this._mediaStream = null;
@@ -244,14 +245,17 @@ class MainWindowUI {
             const commandTab = document.querySelector('.command-tab');
             if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
                 const rect = commandTab.getBoundingClientRect();
-                const width = Math.ceil(rect.width);
+                let width = Math.ceil(rect.width);
                 let height = Math.ceil(rect.height);
 
-                // If shortcuts popover is visible, extend height to fit it
+                // If shortcuts popover is visible, extend height and width to fit it
                 if (this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
                     const popRect = this.shortcutsPopover.getBoundingClientRect();
-                    // popover is positioned below the bar (top:36px), add that plus its height and a small margin
-                    height = Math.max(height, Math.ceil(36 + popRect.height + 8));
+                    const popoverH = popRect.height > 50 ? popRect.height : (this.shortcutsPopover.scrollHeight || 340);
+                    const popoverW = popRect.width > 100 ? popRect.width : (this.shortcutsPopover.scrollWidth || 360);
+                    // popover is positioned below the bar (top:36px), add that plus its height and margin
+                    height = Math.max(height, Math.ceil(36 + popoverH + 16));
+                    width = Math.max(width, Math.ceil(popoverW + 24));
                 }
                 
                 logger.debug('Resizing window to content', {
@@ -262,7 +266,7 @@ class MainWindowUI {
                 
                 window.electronAPI.resizeWindow(width, height);
             }
-        }, 100);
+        }, 60);
     }
 
     setupElements() {
@@ -376,18 +380,29 @@ class MainWindowUI {
         // Info button / shortcuts popover
         if (this.infoButton && this.shortcutsPopover) {
             this.infoButton.addEventListener('click', (e) => {
-                if (!this.isInteractive) return;
                 e.stopPropagation();
-                this.toggleShortcutsPopover();
+                if (!this.isInteractive && window.electronAPI && window.electronAPI.enableWindowInteraction) {
+                    window.electronAPI.enableWindowInteraction();
+                }
+                if (this.shortcutsPopover.classList.contains('is-open') && this._shortcutsPopoverPinned) {
+                    this.hideShortcutsPopover(true);
+                } else {
+                    this.showShortcutsPopover(true);
+                }
             });
 
-            // Hover to show
+            // Hover to preview only when not pinned
             this.infoButton.addEventListener('mouseenter', () => {
-                if (!this.isInteractive) return;
-                this.showShortcutsPopover();
+                if (!this._shortcutsPopoverPinned) {
+                    this.showShortcutsPopover(false);
+                }
             });
-            // Queue hide when leaving the button
-            this.infoButton.addEventListener('mouseleave', () => this.queueHideShortcutsPopover());
+            // Queue hide when leaving the button only when not pinned
+            this.infoButton.addEventListener('mouseleave', () => {
+                if (!this._shortcutsPopoverPinned) {
+                    this.queueHideShortcutsPopover();
+                }
+            });
 
             // Keep open when hovering popover
             this.shortcutsPopover.addEventListener('mouseenter', () => {
@@ -396,22 +411,34 @@ class MainWindowUI {
                     this._popoverHideTimeout = null;
                 }
             });
-            // Hide after a small delay when leaving popover
-            this.shortcutsPopover.addEventListener('mouseleave', () => this.queueHideShortcutsPopover());
+            // Hide after a small delay when leaving popover only when not pinned
+            this.shortcutsPopover.addEventListener('mouseleave', () => {
+                if (!this._shortcutsPopoverPinned) {
+                    this.queueHideShortcutsPopover();
+                }
+            });
+
+            const closeBtn = document.getElementById('closeShortcutsBtn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.hideShortcutsPopover(true);
+                });
+            }
 
             // Close on outside click
             document.addEventListener('click', (e) => {
                 if (!this.shortcutsPopover) return;
                 const isClickInside = this.shortcutsPopover.contains(e.target) || this.infoButton.contains(e.target);
                 if (!isClickInside && this.shortcutsPopover.classList.contains('is-open')) {
-                    this.hideShortcutsPopover();
+                    this.hideShortcutsPopover(true);
                 }
             });
 
             // Close on Escape
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
-                    this.hideShortcutsPopover();
+                    this.hideShortcutsPopover(true);
                 }
             });
         }
@@ -425,8 +452,16 @@ class MainWindowUI {
                 this.handleInteractionModeChanged(interactive);
             });
 
-            window.electronAPI.onRecordingStarted(() => {
-                this.handleRecordingStarted();
+            if (window.electronAPI.onAudioSourceChanged) {
+                window.electronAPI.onAudioSourceChanged((event, data) => {
+                    if (data && data.sourceType) {
+                        this.currentAudioSourceType = data.sourceType;
+                    }
+                });
+            }
+
+            window.electronAPI.onRecordingStarted((event, data) => {
+                this.handleRecordingStarted(data);
             });
 
             window.electronAPI.onRecordingStopped(() => {
@@ -468,7 +503,9 @@ class MainWindowUI {
             
             // Global keyboard shortcuts
             document.addEventListener('keydown', (e) => {
-                if (e.altKey && e.key === 'r' && this.isInteractive) {
+                const isToggleSpeech = (e.altKey && (e.key === 'r' || e.code === 'KeyR')) ||
+                                       ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'r' || e.key === 'R' || e.code === 'KeyR'));
+                if (isToggleSpeech && this.isInteractive) {
                     e.preventDefault();
                     if (!this.speechAvailable) return; // guard when unavailable
                     if (this.isRecording) {
@@ -593,8 +630,8 @@ class MainWindowUI {
         this.updateAllElementStates();
 
         // Auto-hide popover when leaving interactive mode
-        if (!this.isInteractive && this.shortcutsPopover && this.shortcutsPopover.style.display !== 'none') {
-            this.hideShortcutsPopover();
+        if (!this.isInteractive && this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
+            this.hideShortcutsPopover(true);
         }
         
         // Update skill indicator tooltip
@@ -641,17 +678,14 @@ class MainWindowUI {
         logger.debug('Screenshot request received', { component: 'MainWindowUI' });
     }
 
-    handleRecordingStarted() {
+    handleRecordingStarted(data) {
+        if (data && data.sourceType) {
+            this.currentAudioSourceType = data.sourceType;
+        }
         this.isRecording = true;
         if (this.micButton) {
             this.micButton.classList.add('recording');
         }
-        // On Windows and macOS, Whisper audio is captured here in the renderer
-        // (Web Audio API) rather than the main process: Windows lacks sox/rec/
-        // arecord, and macOS avoids an unbundled Homebrew `sox`. Must match the
-        // main process's useRendererCapture gate (speech.service.js). Linux uses
-        // the native recorder. navigator.userAgentData is preferred when present
-        // since navigator.platform is deprecated.
         const platform = (typeof navigator !== 'undefined' &&
           ((navigator.userAgentData && navigator.userAgentData.platform) ||
             navigator.platform || '')).toLowerCase();
@@ -659,7 +693,7 @@ class MainWindowUI {
         if (useRendererCapture) {
             this._startRendererAudioCapture();
         }
-        logger.debug('Recording started', { component: 'MainWindowUI' });
+        logger.debug('Recording started', { component: 'MainWindowUI', sourceType: this.currentAudioSourceType });
     }
 
     handleRecordingStopped() {
@@ -680,14 +714,120 @@ class MainWindowUI {
         try {
             this._stopRendererAudioCapture();
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    sampleRate: { ideal: 16000 }
+            let stream = null;
+            const sourceType = this.currentAudioSourceType || 'speaker';
+
+            if (sourceType === 'speaker') {
+                // 1. Primary method: getDisplayMedia with loopback audio support
+                if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+                    try {
+                        logger.info('Attempting getDisplayMedia for system loopback audio capture', { component: 'MainWindowUI' });
+                        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+                            video: true,
+                            audio: true
+                        });
+
+                        // Stop video tracks immediately so no display frames are processed
+                        const videoTracks = displayStream.getVideoTracks();
+                        videoTracks.forEach(track => {
+                            try { track.stop(); } catch (_) {}
+                        });
+
+                        const audioTracks = displayStream.getAudioTracks();
+                        if (audioTracks && audioTracks.length > 0) {
+                            stream = displayStream;
+                            logger.info('getDisplayMedia acquired system loopback audio track', {
+                                component: 'MainWindowUI',
+                                trackLabel: audioTracks[0].label
+                            });
+                        } else {
+                            logger.warn('getDisplayMedia returned no audio track', { component: 'MainWindowUI' });
+                            displayStream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
+                        }
+                    } catch (dispErr) {
+                        logger.warn('getDisplayMedia system audio capture failed, trying alternative sources', {
+                            component: 'MainWindowUI',
+                            error: dispErr.message
+                        });
+                    }
                 }
-            });
+
+                // 2. Secondary method: check for virtual audio loopback devices (e.g. BlackHole, Loopback, Stereo Mix)
+                if (!stream && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                    try {
+                        const devices = await navigator.mediaDevices.enumerateDevices();
+                        const loopback = devices.find(d =>
+                            d.kind === 'audioinput' &&
+                            /loopback|blackhole|soundflower|stereo mix|virtual|aggregate/i.test(d.label)
+                        );
+                        if (loopback) {
+                            logger.info('Found virtual loopback audio device for speaker capture', {
+                                component: 'MainWindowUI',
+                                label: loopback.label
+                            });
+                            stream = await navigator.mediaDevices.getUserMedia({
+                                audio: {
+                                    deviceId: { exact: loopback.deviceId },
+                                    echoCancellation: false,
+                                    noiseSuppression: false,
+                                    autoGainControl: false,
+                                    sampleRate: { ideal: 16000 }
+                                }
+                            });
+                        }
+                    } catch (devErr) {
+                        logger.warn('Failed checking virtual audio devices', {
+                            component: 'MainWindowUI',
+                            error: devErr.message
+                        });
+                    }
+                }
+
+                // 3. Fallback method for speaker capture: ambient mic with echoCancellation disabled
+                // Echo cancellation must be FALSE so the mic does not actively cancel speaker voice
+                if (!stream) {
+                    logger.info('Falling back to ambient microphone capture for speaker sound (echoCancellation off)', {
+                        component: 'MainWindowUI'
+                    });
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            audio: {
+                                echoCancellation: false,
+                                noiseSuppression: false,
+                                autoGainControl: true,
+                                sampleRate: { ideal: 16000 }
+                            }
+                        });
+                    } catch (ambientErr) {
+                        logger.warn('Ambient microphone capture failed', {
+                            component: 'MainWindowUI',
+                            error: ambientErr.message
+                        });
+                    }
+                }
+            } else {
+                // Explicit mic mode: use AEC and noise suppression for clean voice input
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            sampleRate: { ideal: 16000 }
+                        }
+                    });
+                } catch (micErr) {
+                    logger.warn('Microphone capture failed', {
+                        component: 'MainWindowUI',
+                        error: micErr.message
+                    });
+                }
+            }
+
+            if (!stream) {
+                throw new Error('No audio input stream could be acquired');
+            }
+
             this._mediaStream = stream;
 
             const audioContext = new (window.AudioContext || window.webkitAudioContext)({
@@ -713,10 +853,14 @@ class MainWindowUI {
                 window.electronAPI.sendAudioChunk(pcm16.buffer);
             };
 
+            // Connect through a zero-gain mute node to keep the pipeline running without echoing audio back out
+            const muteGain = audioContext.createGain();
+            muteGain.gain.value = 0;
             source.connect(scriptNode);
-            scriptNode.connect(audioContext.destination);
+            scriptNode.connect(muteGain);
+            muteGain.connect(audioContext.destination);
 
-            logger.info('Renderer audio capture started', { component: 'MainWindowUI' });
+            logger.info('Renderer audio capture started successfully', { component: 'MainWindowUI', sourceType });
         } catch (error) {
             logger.error('Failed to start renderer audio capture', {
                 component: 'MainWindowUI',
@@ -795,7 +939,7 @@ class MainWindowUI {
                         
             const tooltip = this.isInteractive ? 
                 `${skillName} - Use ⌘↑/↓ to navigate skills` : 
-                `${skillName} - Enable interactive mode (Alt+A) to navigate`;
+                `${skillName} - Enable interactive mode (Cmd+Shift+I) to navigate`;
             this.skillIndicator.title = tooltip;
             
             // Add visual feedback for skill change
@@ -1231,36 +1375,57 @@ class MainWindowUI {
 
     toggleShortcutsPopover() {
         if (!this.shortcutsPopover) return;
-    const isOpen = this.shortcutsPopover.classList.contains('is-open');
-    if (!isOpen) {
-            this.showShortcutsPopover();
+        const isOpen = this.shortcutsPopover.classList.contains('is-open');
+        if (!isOpen || !this._shortcutsPopoverPinned) {
+            this.showShortcutsPopover(true);
         } else {
-            this.hideShortcutsPopover();
+            this.hideShortcutsPopover(true);
         }
     }
 
-    showShortcutsPopover() {
+    showShortcutsPopover(pinned = false) {
         if (!this.shortcutsPopover) return;
         if (this._popoverHideTimeout) {
             clearTimeout(this._popoverHideTimeout);
             this._popoverHideTimeout = null;
         }
-    this.shortcutsPopover.classList.add('is-open');
+        if (pinned) {
+            this._shortcutsPopoverPinned = true;
+        }
+        this.shortcutsPopover.classList.add('is-open');
+        if (this.infoButton) {
+            this.infoButton.classList.add('active');
+        }
         // Resize main window to fit popover
+        this.resizeWindowToContent();
         setTimeout(() => this.resizeWindowToContent(), 50);
     }
 
-    hideShortcutsPopover() {
+    hideShortcutsPopover(force = false) {
         if (!this.shortcutsPopover) return;
-    this.shortcutsPopover.classList.remove('is-open');
-    // resize back to compact after transition
-    setTimeout(() => this.resizeWindowToContent(), 130);
+        if (this._shortcutsPopoverPinned && !force) {
+            return;
+        }
+        if (force) {
+            this._shortcutsPopoverPinned = false;
+        }
+        if (this._popoverHideTimeout) {
+            clearTimeout(this._popoverHideTimeout);
+            this._popoverHideTimeout = null;
+        }
+        this.shortcutsPopover.classList.remove('is-open');
+        if (this.infoButton) {
+            this.infoButton.classList.remove('active');
+        }
+        // resize back to compact after transition
+        setTimeout(() => this.resizeWindowToContent(), 130);
     }
 
     queueHideShortcutsPopover() {
         if (!this.shortcutsPopover) return;
+        if (this._shortcutsPopoverPinned) return;
         if (this._popoverHideTimeout) clearTimeout(this._popoverHideTimeout);
-        this._popoverHideTimeout = setTimeout(() => this.hideShortcutsPopover(), 180);
+        this._popoverHideTimeout = setTimeout(() => this.hideShortcutsPopover(false), 200);
     }
 }
 

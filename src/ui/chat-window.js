@@ -183,7 +183,7 @@ class ChatWindowUI {
         // Microphone button
         this.elements.micButton.addEventListener('click', async () => {
             if (!this.isInteractive) {
-                this.addMessage('Window is in non-interactive mode. Press Alt+A to enable interaction.', 'error');
+                this.addMessage('Window is in non-interactive mode. Press Cmd/Ctrl+Shift+I (or Cmd+Shift+A) to enable interaction.', 'error');
                 return;
             }
             
@@ -213,7 +213,9 @@ class ChatWindowUI {
         
         // Global keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if (e.altKey && e.key === 'r') {
+            const isToggleSpeech = (e.altKey && (e.key === 'r' || e.code === 'KeyR')) ||
+                                   ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'r' || e.key === 'R' || e.code === 'KeyR'));
+            if (isToggleSpeech) {
                 e.preventDefault();
                 this.elements.micButton.click();
             }

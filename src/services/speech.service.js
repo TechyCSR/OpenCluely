@@ -539,7 +539,8 @@ class SpeechService extends EventEmitter {
     }
   }
 
-  startRecording() {
+  startRecording(options = {}) {
+    this.sourceType = (options && options.sourceType) || this.sourceType || "speaker";
     try {
       if (!this.available) {
         const errorMsg = `Speech provider "${this.provider}" is not available`;
@@ -685,8 +686,9 @@ class SpeechService extends EventEmitter {
     this.pendingFinal = false;
     this.manualStopRequested = false;
     this._resetVadState();
-    this.emit('recording-started');
-    this.emit('status', 'Local Whisper recording started');
+    this.emit('recording-started', { sourceType: this.sourceType });
+    const modeLabel = this.sourceType === "speaker" ? "speaker / system audio" : "microphone voice";
+    this.emit('status', `Local Whisper recording started (${modeLabel})`);
 
     if (this.whisperWorker.isConfigured()) {
       this.whisperWorker.warmup({
@@ -714,7 +716,8 @@ class SpeechService extends EventEmitter {
     // app's NSMicrophoneUsageDescription. Linux keeps the native recorder path.
     this.useRendererCapture = process.platform === 'win32' || process.platform === 'darwin';
     if (this.useRendererCapture) {
-      this.emit('status', 'Waiting for microphone audio…');
+      const waitLabel = this.sourceType === "speaker" ? "speaker / system audio" : "microphone audio";
+      this.emit('status', `Waiting for ${waitLabel}…`);
       // The renderer starts sending chunks once it receives the recording-started event.
       if (!this._isManualCaptureMode()) {
         this._startSegmentWatchdog();
@@ -1136,10 +1139,17 @@ class SpeechService extends EventEmitter {
         return { success: false, message: 'Local Whisper CLI not found' };
       }
       // Actually probe the executable to confirm it works
+      const fast = this._probeWhisperModuleFast(this.whisperCommand);
+      if (fast) {
+        return {
+          success: true,
+          message: `Local Whisper module verified: ${this.whisperCommand.command}`
+        };
+      }
       const probe = spawnSync(
         this.whisperCommand.command,
         [...this.whisperCommand.baseArgs, '--help'],
-        { encoding: 'utf8', timeout: 10000 }
+        { encoding: 'utf8', timeout: 30000 }
       );
       if (probe.error || probe.status !== 0) {
         const err = probe.error ? probe.error.message : `exit code ${probe.status}`;
@@ -1441,6 +1451,16 @@ class SpeechService extends EventEmitter {
     const userDataVenv = this._getUserDataWhisperCandidate();
     if (userDataVenv) {
       candidates.push({ ...userDataVenv, source: 'app userData venv' });
+    }
+
+    // Project-local venv (development & setup.sh path)
+    const projectVenv = path.join(__dirname, '../../.venv-whisper/bin/whisper');
+    if (fs.existsSync(projectVenv)) {
+      candidates.push({ command: projectVenv, baseArgs: [], source: 'project root venv' });
+    }
+    const projectVenvPython = path.join(__dirname, '../../.venv-whisper/bin/python3');
+    if (fs.existsSync(projectVenvPython)) {
+      candidates.push({ command: projectVenvPython, baseArgs: ['-m', 'whisper'], source: 'project root venv python' });
     }
 
     // Platform-aware fallback candidates (higher priority = tried first)

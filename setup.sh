@@ -214,6 +214,9 @@ install_node_deps() {
     echo "Installing Node dependencies with npm install"
     npm install
   fi
+
+  echo "Verifying Electron binary installation..."
+  node scripts/ensure-electron.js
 }
 
 setup_whisper_env() {

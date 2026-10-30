@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Screen Selection</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.15);
+      cursor: crosshair;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    #instruction {
+      position: fixed;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.95);
+      color: #f8fafc;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      pointer-events: none;
+      z-index: 9999;
+    }
+    #selectionBox {
+      position: fixed;
+      border: 2px solid #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      box-shadow: 0 0 0 99999px rgba(0, 0, 0, 0.35);
+      display: none;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    #dimensions {
+      position: absolute;
+      bottom: -26px;
+      right: 0;
+      background: #0284c7;
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div id="instruction">Drag to select an area • Click or Esc to cancel</div>
+  <div id="selectionBox">
+    <div id="dimensions"></div>
+  </div>
+
+  <script>
+    let isDrawing = false;
+    let startClientX = 0;
+    let startClientY = 0;
+    let startScreenX = 0;
+    let startScreenY = 0;
+    let dismissed = false;
+    const box = document.getElementById('selectionBox');
+    const dims = document.getElementById('dimensions');
+
+    function sendComplete(area) {
+      if (dismissed) return;
+      dismissed = true;
+      document.body.style.display = 'none';
+      if (window.electronAPI && window.electronAPI.completeAreaSelection) {
+        window.electronAPI.completeAreaSelection(area);
+      }
+    }
+
+    function sendCancel() {
+      if (dismissed) return;
+      dismissed = true;
+      document.body.style.display = 'none';
+      if (window.electronAPI && window.electronAPI.cancelAreaSelection) {
+        window.electronAPI.cancelAreaSelection();
+      }
+    }
+
+    window.addEventListener('mousedown', (e) => {
+      // Right-click or middle-click cancels immediately
+      if (e.button !== 0) {
+        sendCancel();
+        return;
+      }
+      isDrawing = true;
+      startClientX = e.clientX;
+      startClientY = e.clientY;
+      startScreenX = e.screenX;
+      startScreenY = e.screenY;
+
+      box.style.left = startClientX + 'px';
+      box.style.top = startClientY + 'px';
+      box.style.width = '0px';
+      box.style.height = '0px';
+      box.style.display = 'block';
+      dims.textContent = '0 × 0';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDrawing) return;
+
+      const currentClientX = e.clientX;
+      const currentClientY = e.clientY;
+
+      const left = Math.min(startClientX, currentClientX);
+      const top = Math.min(startClientY, currentClientY);
+      const width = Math.abs(currentClientX - startClientX);
+      const height = Math.abs(currentClientY - startClientY);
+
+      box.style.left = left + 'px';
+      box.style.top = top + 'px';
+      box.style.width = width + 'px';
+      box.style.height = height + 'px';
+
+      dims.textContent = `${Math.round(width)} × ${Math.round(height)}`;
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!isDrawing) {
+        sendCancel();
+        return;
+      }
+      isDrawing = false;
+
+      const endScreenX = e.screenX;
+      const endScreenY = e.screenY;
+
+      const minX = Math.round(Math.min(startScreenX, endScreenX));
+      const minY = Math.round(Math.min(startScreenY, endScreenY));
+      const width = Math.round(Math.abs(endScreenX - startScreenX));
+      const height = Math.round(Math.abs(endScreenY - startScreenY));
+
+      box.style.display = 'none';
+
+      // Require meaningful selection (> 15x15 px), otherwise treat as a click to cancel
+      if (width > 15 && height > 15) {
+        sendComplete({ x: minX, y: minY, width, height });
+      } else {
+        sendCancel();
+      }
+    });
+
+    window.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      sendCancel();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.key === 'q') {
+        sendCancel();
+      }
+    });
+  </script>
+</body>
+</html>

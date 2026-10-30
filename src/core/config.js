@@ -47,7 +47,7 @@ class ConfigManager {
           fallbackEnabled: true,
           enableFallbackMethod: true,
           generation: {
-            temperature: 0.7,
+            temperature: 0.4,
             topK: 32,
             topP: 0.9,
             maxOutputTokens: 4096,

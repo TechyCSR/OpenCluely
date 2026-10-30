@@ -493,6 +493,25 @@
         background: rgba(255, 255, 255, 0.25);
         color: rgba(255, 255, 255, 1);
       }
+      .speaker-button {
+        background: rgba(255, 255, 255, 0.15);
+        border: none;
+        border-radius: 6px;
+        padding: 6px 10px;
+        color: rgba(255, 255, 255, 0.9);
+        cursor: pointer;
+        transition: all 0.2s;
+        -webkit-app-region: no-drag;
+      }
+      .speaker-button:hover {
+        background: rgba(255, 255, 255, 0.25);
+        color: rgba(255, 255, 255, 1);
+      }
+      .speaker-button.recording {
+        background: rgba(56, 189, 248, 0.8);
+        color: white;
+        box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+      }
       .mic-button.recording {
         background: rgba(255, 71, 87, 0.8);
         color: white;
@@ -701,7 +720,10 @@
             id="messageInput"
             rows="1"
           ></textarea>
-          <button class="mic-button" id="micButton">
+          <button class="speaker-button" id="speakerButton" title="Capture speaker/system sound (auto-listen)">
+            <i class="fas fa-volume-high"></i>
+          </button>
+          <button class="mic-button" id="micButton" title="Capture voice from microphone">
             <i class="fas fa-microphone"></i>
           </button>
           <button class="send-button" id="sendButton">
@@ -729,6 +751,7 @@
       const messageInput = document.getElementById('messageInput');
       const sendButton = document.getElementById('sendButton');
       const micButton = document.getElementById('micButton');
+      const speakerButton = document.getElementById('speakerButton');
       const chatContainer = document.getElementById('chatContainer');
       const listeningIndicator = document.getElementById('listeningIndicator');
       const listeningDuration = document.getElementById('listeningDuration');
@@ -740,6 +763,7 @@
       let listeningStartTime = null;
       let listeningTimer = null;
       let speechAvailable = false;
+      let currentAudioSourceType = "speaker";
 
       // Chat persistence and deduplication
       const CHAT_HISTORY_KEY = 'opencluely_chat_history_v1';
@@ -803,6 +827,9 @@
       function applyMicVisibility() {
         if (micButton) {
           micButton.style.display = speechAvailable ? '' : 'none';
+        }
+        if (speakerButton) {
+          speakerButton.style.display = speechAvailable ? '' : 'none';
         }
       }
       
@@ -981,14 +1008,21 @@
       }
 
       // Recording Event Handlers
-      function handleRecordingStarted() {
+      function handleRecordingStarted(data) {
         isRecording = true;
 
         if (recordingIndicator) {
           recordingIndicator.style.display = 'block';
         }
-        if (micButton) {
-          micButton.classList.add('recording');
+        if (data && data.sourceType) {
+          currentAudioSourceType = data.sourceType;
+        }
+        if (currentAudioSourceType === 'speaker') {
+          if (speakerButton) speakerButton.classList.add('recording');
+          if (micButton) micButton.classList.remove('recording');
+        } else {
+          if (micButton) micButton.classList.add('recording');
+          if (speakerButton) speakerButton.classList.remove('recording');
         }
 
         showListeningAnimation();
@@ -1002,6 +1036,9 @@
         }
         if (micButton) {
           micButton.classList.remove('recording');
+        }
+        if (speakerButton) {
+          speakerButton.classList.remove('recording');
         }
 
         hideListeningAnimation();
@@ -1189,9 +1226,26 @@
         });
 
         // Listen for other events
-        whysperAPI.onRecordingStarted(() => {
-          handleRecordingStarted();
+        whysperAPI.onRecordingStarted((event, data) => {
+          handleRecordingStarted(data);
         });
+
+        if (whysperAPI.onAudioSourceChanged) {
+          whysperAPI.onAudioSourceChanged((event, data) => {
+            if (data && data.sourceType) {
+              currentAudioSourceType = data.sourceType;
+              if (isRecording) {
+                if (currentAudioSourceType === 'speaker') {
+                  if (speakerButton) speakerButton.classList.add('recording');
+                  if (micButton) micButton.classList.remove('recording');
+                } else {
+                  if (micButton) micButton.classList.add('recording');
+                  if (speakerButton) speakerButton.classList.remove('recording');
+                }
+              }
+            }
+          });
+        }
 
         whysperAPI.onRecordingStopped(() => {
           handleRecordingStopped();
@@ -1215,10 +1269,10 @@
         clearHistoryBtn.addEventListener('click', () => clearChatHistory());
       }
 
-      if (micButton) {
-        micButton.addEventListener('click', async () => {
+      if (speakerButton) {
+        speakerButton.addEventListener('click', async () => {
           if (!isInteractive) {
-            addMessage('Window is in non-interactive mode. Press Alt+A to enable interaction.', 'error');
+            addMessage('Window is in non-interactive mode. Press Cmd/Ctrl+Shift+I (or Cmd+Shift+A) to enable interaction.', 'error');
             return;
           }
           if (!speechAvailable) {
@@ -1228,16 +1282,61 @@
 
           try {
             if (isRecording) {
-              if (whysperAPI) {
-                const result = await whysperAPI.stopSpeechRecognition();
+              if (currentAudioSourceType === 'speaker') {
+                if (whysperAPI) await whysperAPI.stopSpeechRecognition();
+              } else {
+                if (whysperAPI) {
+                  await whysperAPI.stopSpeechRecognition();
+                  setTimeout(async () => {
+                    addMessage('Switching to speaker / system sound capture...', 'system');
+                    await (whysperAPI.startSpeechWithSource ? whysperAPI.startSpeechWithSource('speaker') : whysperAPI.startSpeechRecognition());
+                  }, 200);
+                }
               }
             } else {
               if (whysperAPI) {
-                const result = await whysperAPI.startSpeechRecognition();
+                addMessage('Capturing speaker / system output sound...', 'system');
+                await (whysperAPI.startSpeechWithSource ? whysperAPI.startSpeechWithSource('speaker') : whysperAPI.startSpeechRecognition());
               }
             }
           } catch (error) {
-            addMessage("Error in recognizing speech", 'error');
+            addMessage('Error capturing speaker sound: ' + error.message, 'error');
+          }
+        });
+      }
+
+      if (micButton) {
+        micButton.addEventListener('click', async () => {
+          if (!isInteractive) {
+            addMessage('Window is in non-interactive mode. Press Cmd/Ctrl+Shift+I (or Cmd+Shift+A) to enable interaction.', 'error');
+            return;
+          }
+          if (!speechAvailable) {
+            addMessage('Speech recognition is not configured.', 'system');
+            return;
+          }
+
+          try {
+            if (isRecording) {
+              if (currentAudioSourceType === 'mic') {
+                if (whysperAPI) await whysperAPI.stopSpeechRecognition();
+              } else {
+                if (whysperAPI) {
+                  await whysperAPI.stopSpeechRecognition();
+                  setTimeout(async () => {
+                    addMessage('Switching to microphone voice input...', 'system');
+                    await (whysperAPI.startSpeechWithSource ? whysperAPI.startSpeechWithSource('mic') : whysperAPI.startSpeechRecognition());
+                  }, 200);
+                }
+              }
+            } else {
+              if (whysperAPI) {
+                addMessage('Capturing microphone voice input...', 'system');
+                await (whysperAPI.startSpeechWithSource ? whysperAPI.startSpeechWithSource('mic') : whysperAPI.startSpeechRecognition());
+              }
+            }
+          } catch (error) {
+            addMessage("Error capturing microphone: " + error.message, 'error');
           }
         });
       }
@@ -1304,7 +1403,9 @@
 
       // Global keyboard shortcuts
       document.addEventListener('keydown', (e) => {
-        if (e.altKey && e.key === 'r') {
+        const isToggleSpeech = (e.altKey && (e.key === 'r' || e.code === 'KeyR')) ||
+                               ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'r' || e.key === 'R' || e.code === 'KeyR'));
+        if (isToggleSpeech) {
           e.preventDefault();
           if (!isInteractive || !speechAvailable) return;
           micButton && micButton.click();
@@ -1313,7 +1414,7 @@
 
       // Initialize
       if (!chatHistory || chatHistory.length === 0) {
-        addMessage('Recording in Progress. press Alt+R to stop recording.', 'system');
+        addMessage('Recording in progress. Press Cmd/Ctrl+Shift+R to stop recording.', 'system');
       }
     </script>
   </body>
