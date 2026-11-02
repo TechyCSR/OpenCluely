@@ -169,11 +169,13 @@ async fn send_prompt(prompt: String, skill: String, language: String) -> Result<
 
 #[tauri::command]
 fn capture_screen() -> Result<String, String> {
-    let grabber = vision::ScreenGrabber::new();
-    let frame = grabber.capture_area(vision::CaptureArea::FullScreen)?;
-    let ocr = vision::FastOcr::new();
-    let text = ocr.extract_text(&frame)?;
-    Ok(format!("**Captured Screen Content:**\n```\n{text}\n```"))
+    let frame = vision::ScreenGrabber::capture_region(None)?;
+    let text_opt = vision::FastOcr::extract_text(&frame.data)?;
+    if let Some(text) = text_opt {
+        Ok(format!("**Captured Screen Content:**\n```\n{text}\n```"))
+    } else {
+        Ok("**Screen Frame Captured (Native Buffer).** Awaiting visual analysis.".to_string())
+    }
 }
 
 fn main() {

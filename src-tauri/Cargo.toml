@@ -5,6 +5,10 @@ description = "Invisible AI Problem-Solving Copilot"
 authors = ["TechyCSR <info@techycsr.dev>"]
 edition = "2021"
 
+[features]
+default = []
+audio-native = ["dep:cpal"]
+
 [dependencies]
 tauri = { version = "2.0.0", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2.0.0"
@@ -19,9 +23,7 @@ env_logger = "0.11"
 parking_lot = "0.12"
 regex = "1.10"
 chrono = { version = "0.4", features = ["serde"] }
-
-# Audio & Speech
-cpal = "0.15"
+cpal = { version = "0.15", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 keyring = "2.1"

@@ -6,7 +6,6 @@
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "devUrl": "../ui",
     "frontendDist": "../ui"
   },
   "app": {
