@@ -17,7 +17,6 @@ async-trait = "0.1"
 log = "0.4"
 env_logger = "0.11"
 parking_lot = "0.12"
-keyring = "2.1"
 regex = "1.10"
 chrono = { version = "0.4", features = ["serde"] }
 
@@ -25,20 +24,21 @@ chrono = { version = "0.4", features = ["serde"] }
 cpal = "0.15"
 
 [target.'cfg(windows)'.dependencies]
+keyring = "2.1"
 windows-sys = { version = "0.52", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dwm",
     "Win32_Media_Audio",
-    "Win32_Media_Audio_Endpoints",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_System_Threading"
 ] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+keyring = "2.1"
 cocoa = "0.26"
-objc = "0.9"
+objc = "0.2"
 core-graphics = "0.23"
 
 [build-dependencies]
