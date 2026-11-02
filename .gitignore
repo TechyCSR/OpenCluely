@@ -7,3 +7,7 @@ dist/
 bin/
 .DS_Store
 *.log
+v2.md
+target/
+*.tmp
+*.bak
