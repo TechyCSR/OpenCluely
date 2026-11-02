@@ -6,34 +6,23 @@
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "devUrl": "../src",
-    "frontendDist": "../src"
+    "devUrl": "../ui",
+    "frontendDist": "../ui"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
-        "title": "OpenCluely Command Bar",
+        "title": "OpenCluely Ghost HUD",
         "label": "main",
-        "width": 520,
-        "height": 42,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "resizable": false,
-        "focus": false
-      },
-      {
-        "title": "OpenCluely Response HUD",
-        "label": "response",
-        "width": 840,
-        "height": 480,
+        "url": "index.html",
+        "width": 720,
+        "height": 540,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "resizable": true,
-        "visible": false,
         "focus": false
       }
     ],

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenCluely v2 Ghost HUD</title>
-  <link rel="stylesheet" href="../../node_modules/prismjs/themes/prism-tomorrow.css">
+  <title>OpenCluely v2 Native HUD</title>
+  <link rel="stylesheet" href="vendor/prism-tomorrow.css">
   <style>
     :root {
       --bg-glass: rgba(15, 15, 20, 0.88);
@@ -56,17 +56,15 @@
       height: 44px;
       box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
       cursor: grab;
+      data-tauri-drag-region: true;
       -webkit-app-region: drag;
-    }
-
-    .command-bar:active {
-      cursor: grabbing;
     }
 
     .brand-section {
       display: flex;
       align-items: center;
       gap: 10px;
+      data-tauri-drag-region: true;
     }
 
     .status-dot {
@@ -431,11 +429,11 @@
 </head>
 <body>
   <!-- Drag-able Ghost Command Bar -->
-  <div class="command-bar" id="commandBar">
-    <div class="brand-section">
+  <div class="command-bar" id="commandBar" data-tauri-drag-region>
+    <div class="brand-section" data-tauri-drag-region>
       <div class="status-dot" id="statusDot"></div>
-      <span class="brand-title">OPENCLUELY</span>
-      <span class="brand-badge">v2</span>
+      <span class="brand-title">OPENCLUELY v2</span>
+      <span class="brand-badge">Native</span>
     </div>
 
     <!-- Skill Switcher -->
@@ -471,7 +469,7 @@
   <!-- Real-Time Streaming HUD Response Card -->
   <div class="response-card" id="responseCard">
     <div class="response-header">
-      <span class="response-title" id="responseTitle">AI Co-Pilot HUD</span>
+      <span class="response-title" id="responseTitle">Native Copilot HUD</span>
       <div class="response-tools">
         <button class="tool-btn" id="copyCodeBtn" title="Copy code to clipboard">Copy Code</button>
         <button class="tool-btn" id="clearBtn" title="Clear response">Clear</button>
@@ -479,7 +477,7 @@
     </div>
     <div class="response-body" id="responseBody">
       <p style="color: var(--text-muted); font-style: italic;">
-        OpenCluely v2 ready. Press <strong>Ctrl+Shift+S</strong> to snip screen, click <strong>🎙️ Mic</strong> to listen to the interviewer, or type a prompt below.
+        OpenCluely v2 Native Core ready. Press <strong>Ctrl+Shift+S</strong> to snip screen or type a prompt below.
       </p>
     </div>
   </div>
@@ -517,9 +515,8 @@
     </div>
   </div>
 
-  <!-- Third-party Markdown and Prism scripts -->
-  <script src="../../node_modules/marked/marked.min.js"></script>
-  <script src="../../node_modules/prismjs/prism.js"></script>
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/prism.js"></script>
   <script src="hud.js"></script>
 </body>
 </html>

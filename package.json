@@ -1,23 +1,11 @@
 {
   "name": "opencluely",
-  "version": "1.0.0",
-  "description": "AI Problem Solving Assistant",
-  "main": "v2/main.js",
+  "version": "2.0.0",
+  "description": "Invisible AI Problem-Solving Copilot",
   "scripts": {
-    "start": "env -u ELECTRON_RUN_AS_NODE electron v2/main.js --no-sandbox",
-    "dev": "env -u ELECTRON_RUN_AS_NODE electron v2/main.js --no-sandbox --disable-gpu",
-    "v2": "env -u ELECTRON_RUN_AS_NODE electron v2/main.js --no-sandbox",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
-    "build:all": "electron-builder --mac --win --linux",
-    "dist": "npm run build",
-    "pack": "electron-builder --dir",
-    "clean": "rm -rf dist/",
-    "rebuild": "npm run clean && npm run build",
-    "release": "npm run clean && npm run build:all",
-    "postinstall": "electron-builder install-app-deps"
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
   },
   "author": {
     "name": "TechyCSR",
@@ -29,146 +17,7 @@
     "url": "https://github.com/TechyCSR/OpenCluely"
   },
   "license": "ISC",
-  "dependencies": {
-    "@fortawesome/fontawesome-free": "^7.2.0",
-    "@google/genai": "^2.9.0",
-    "dotenv": "^16.3.1",
-    "markdown": "^0.5.0",
-    "marked": "^15.0.12",
-    "microsoft-cognitiveservices-speech-sdk": "^1.40.0",
-    "node-record-lpcm16": "^1.0.1",
-    "prismjs": "^1.30.0",
-    "winston": "^3.17.0",
-    "winston-daily-rotate-file": "^4.7.1"
-  },
   "devDependencies": {
-    "electron": "^29.1.0",
-    "electron-builder": "^24.13.3"
-  },
-  "build": {
-    "appId": "com.opencluely.app",
-    "productName": "OpenCluely",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "**/*",
-      "!dist/**/*",
-      "!*.md",
-      "!.git/**/*",
-      "!.env*",
-      "!.venv-whisper/**/*",
-      "!.whisper-models/**/*",
-      "!bin/**/*",
-      "!scripts/__pycache__/**/*",
-      "!**/*.pyc",
-      "!eng.traineddata"
-    ],
-    "asarUnpack": [
-      "assests/icons/**/*"
-    ],
-    "mac": {
-      "category": "public.app-category.utilities",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
-      "darkModeSupport": true,
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false,
-      "extendInfo": {
-        "NSMicrophoneUsageDescription": "OpenCluely uses the microphone to transcribe your speech locally with Whisper.",
-        "NSCameraUsageDescription": "OpenCluely does not record video; this entitlement is only present for media-capture compatibility.",
-        "NSScreenCaptureUsageDescription": "OpenCluely captures the screen to read on-screen content for AI assistance."
-      }
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        }
-      ],
-      "sign": null
-    },
-    "linux": {
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "assests/icons/app-icon.png",
-      "category": "Utility"
-    },
-    "deb": {
-      "depends": [
-        "libgtk-3-0",
-        "libnotify4",
-        "libnss3",
-        "libxss1",
-        "libxtst6",
-        "xauth",
-        "libasound2t64",
-        "libgbm1",
-        "python3 (>= 3.10)",
-        "python3-venv",
-        "python3-pip"
-      ],
-      "recommends": [
-        "ffmpeg"
-      ],
-      "fpm": [
-        "--after-install=scripts/post-install-deb.sh"
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "perMachine": false,
-      "include": "scripts/post-install-nsis.nsh",
-      "deleteAppDataOnUninstall": false,
-      "artifactName": "OpenCluely-Setup-${version}.${ext}"
-    },
-    "dmg": {
-      "title": "OpenCluely Interview Assistant",
-      "backgroundColor": "#000000",
-      "window": {
-        "width": 600,
-        "height": 400
-      }
-    }
+    "@tauri-apps/cli": "^2.0.0"
   }
 }
