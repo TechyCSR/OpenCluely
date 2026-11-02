@@ -1,0 +1,45 @@
+[package]
+name = "opencluely-v2"
+version = "2.0.0"
+description = "Invisible AI Problem-Solving Copilot"
+authors = ["TechyCSR <info@techycsr.dev>"]
+edition = "2021"
+
+[dependencies]
+tauri = { version = "2.0.0", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2.0.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.38", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures-util = "0.3"
+async-trait = "0.1"
+log = "0.4"
+env_logger = "0.11"
+parking_lot = "0.12"
+keyring = "2.1"
+regex = "1.10"
+chrono = { version = "0.4", features = ["serde"] }
+
+# Audio & Speech
+cpal = "0.15"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Threading"
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+objc = "0.9"
+core-graphics = "0.23"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
