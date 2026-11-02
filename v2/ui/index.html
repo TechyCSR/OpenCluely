@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenCluely v2 Ghost HUD</title>
+  <link rel="stylesheet" href="../../node_modules/prismjs/themes/prism-tomorrow.css">
+  <style>
+    :root {
+      --bg-glass: rgba(15, 15, 20, 0.88);
+      --bg-glass-card: rgba(20, 20, 28, 0.92);
+      --border-glass: rgba(255, 255, 255, 0.12);
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-glow: rgba(99, 102, 241, 0.4);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background: transparent;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      gap: 10px;
+    }
+
+    /* ── Draggable Command Bar ── */
+    .command-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border-glass);
+      border-radius: 9999px;
+      padding: 6px 14px;
+      height: 44px;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
+      cursor: grab;
+      -webkit-app-region: drag;
+    }
+
+    .command-bar:active {
+      cursor: grabbing;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .status-dot.listening {
+      background: #38bdf8;
+      box-shadow: 0 0 12px #38bdf8;
+      animation: pulse 1.2s infinite;
+    }
+
+    .status-dot.thinking {
+      background: var(--accent);
+      box-shadow: 0 0 14px var(--accent);
+      animation: pulse 0.8s infinite;
+    }
+
+    .status-dot.panic {
+      background: var(--danger);
+      box-shadow: 0 0 14px var(--danger);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.9); }
+    }
+
+    .brand-title {
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      font-size: 12px;
+      color: #ffffff;
+    }
+
+    .brand-badge {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(99, 102, 241, 0.2);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      color: #a5b4fc;
+    }
+
+    /* ── Skill Switcher ── */
+    .skills-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      -webkit-app-region: no-drag;
+    }
+
+    .skill-pill {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .skill-pill:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .skill-pill.active {
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    /* ── Language Selector ── */
+    .lang-select {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border-glass);
+      color: #e5e7eb;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      outline: none;
+      -webkit-app-region: no-drag;
+    }
+
+    /* ── Action Buttons ── */
+    .actions-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      -webkit-app-region: no-drag;
+    }
+
+    .action-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-glass);
+      color: var(--text);
+      cursor: pointer;
+      padding: 5px 9px;
+      border-radius: 8px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+
+    .action-btn:hover {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .action-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .action-btn.panic {
+      color: #fca5a5;
+    }
+    .action-btn.panic:hover {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: var(--danger);
+    }
+
+    /* ── Floating Response Card ── */
+    .response-card {
+      background: var(--bg-glass-card);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border-glass);
+      border-radius: 14px;
+      padding: 16px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+      min-height: 200px;
+    }
+
+    .response-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+
+    .response-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .response-tools {
+      display: flex;
+      gap: 6px;
+    }
+
+    .tool-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .tool-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .response-body {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.65;
+      color: #e2e8f0;
+      user-select: text;
+    }
+
+    .response-body::-webkit-scrollbar {
+      width: 6px;
+    }
+    .response-body::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+    }
+
+    /* Markdown Styling */
+    .response-body h1, .response-body h2, .response-body h3 {
+      color: #ffffff;
+      margin: 12px 0 6px 0;
+      font-weight: 600;
+    }
+    .response-body h1 { font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; }
+    .response-body h2 { font-size: 14px; }
+    .response-body h3 { font-size: 13px; color: #a5b4fc; }
+
+    .response-body p {
+      margin-bottom: 8px;
+    }
+
+    .response-body ul, .response-body ol {
+      margin-left: 20px;
+      margin-bottom: 8px;
+    }
+
+    .response-body code:not(pre code) {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: #fbcfe8;
+    }
+
+    .response-body pre {
+      background: #111116 !important;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 10px 0;
+      overflow-x: auto;
+      position: relative;
+    }
+
+    .response-body pre code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    /* ── Quick Prompt Input Bar ── */
+    .input-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 6px 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .prompt-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .prompt-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .send-btn {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .send-btn:hover {
+      background: var(--accent-hover);
+    }
+
+    /* ── Profile Drawer Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-box {
+      background: #181822;
+      border: 1px solid var(--border-glass);
+      border-radius: 14px;
+      padding: 20px;
+      width: 440px;
+      max-width: 90vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .modal-box h2 {
+      font-size: 15px;
+      color: #fff;
+    }
+
+    .modal-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .modal-input-group label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .modal-input {
+      background: #0f0f15;
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: #fff;
+      font-size: 12px;
+      outline: none;
+    }
+    .modal-textarea {
+      background: #0f0f15;
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: #fff;
+      font-size: 12px;
+      outline: none;
+      resize: vertical;
+      min-height: 80px;
+      font-family: inherit;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Drag-able Ghost Command Bar -->
+  <div class="command-bar" id="commandBar">
+    <div class="brand-section">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="brand-title">OPENCLUELY</span>
+      <span class="brand-badge">v2</span>
+    </div>
+
+    <!-- Skill Switcher -->
+    <div class="skills-group">
+      <button class="skill-pill active" data-skill="dsa">DSA</button>
+      <button class="skill-pill" data-skill="system_design">System Design</button>
+      <button class="skill-pill" data-skill="sql">SQL / Data</button>
+      <button class="skill-pill" data-skill="quiz">MCQ Speed</button>
+      <button class="skill-pill" data-skill="behavioral">STAR Behavioral</button>
+    </div>
+
+    <!-- Language Selector -->
+    <select class="lang-select" id="langSelect" title="Target Code Language">
+      <option value="cpp" selected>C++</option>
+      <option value="python">Python</option>
+      <option value="java">Java</option>
+      <option value="golang">Go</option>
+      <option value="typescript">TypeScript</option>
+      <option value="rust">Rust</option>
+    </select>
+
+    <!-- Actions -->
+    <div class="actions-group">
+      <button class="action-btn" id="micBtn" title="Listen to Interviewer Audio (Auto VAD)">🎙️ <span id="micLabel">Mic</span></button>
+      <button class="action-btn" id="snipBtn" title="Snip & Solve Screen (Ctrl+Shift+S)">📸 Snip</button>
+      <button class="action-btn" id="autoTypeBtn" title="Auto-Type Code into Editor (Alt+T)">⌨️ Type</button>
+      <button class="action-btn" id="clickthroughBtn" title="Toggle Click-Through (Alt+A)">👁️ Glass</button>
+      <button class="action-btn" id="profileBtn" title="Personalize Resume Context">👤</button>
+      <button class="action-btn panic" id="panicBtn" title="Panic Switch (Ctrl+Alt+Q)">⚡</button>
+    </div>
+  </div>
+
+  <!-- Real-Time Streaming HUD Response Card -->
+  <div class="response-card" id="responseCard">
+    <div class="response-header">
+      <span class="response-title" id="responseTitle">AI Co-Pilot HUD</span>
+      <div class="response-tools">
+        <button class="tool-btn" id="copyCodeBtn" title="Copy code to clipboard">Copy Code</button>
+        <button class="tool-btn" id="clearBtn" title="Clear response">Clear</button>
+      </div>
+    </div>
+    <div class="response-body" id="responseBody">
+      <p style="color: var(--text-muted); font-style: italic;">
+        OpenCluely v2 ready. Press <strong>Ctrl+Shift+S</strong> to snip screen, click <strong>🎙️ Mic</strong> to listen to the interviewer, or type a prompt below.
+      </p>
+    </div>
+  </div>
+
+  <!-- Interactive Prompt Input Bar -->
+  <div class="input-bar" id="inputBar">
+    <input type="text" class="prompt-input" id="promptInput" placeholder="Ask follow-up, edge case, or instruction (e.g. 'Optimize space to O(1)')...">
+    <button class="send-btn" id="sendBtn">Solve</button>
+  </div>
+
+  <!-- Personalize Profile Modal -->
+  <div class="modal-overlay" id="profileModal">
+    <div class="modal-box">
+      <h2>Candidate Context & Personalization</h2>
+      <div class="modal-input-group">
+        <label>Years of Experience</label>
+        <input type="number" class="modal-input" id="profYoe" value="3">
+      </div>
+      <div class="modal-input-group">
+        <label>Primary Languages (comma separated)</label>
+        <input type="text" class="modal-input" id="profLangs" value="C++, Python, Go">
+      </div>
+      <div class="modal-input-group">
+        <label>Target Role / Company</label>
+        <input type="text" class="modal-input" id="profRole" placeholder="Senior Software Engineer, Google">
+      </div>
+      <div class="modal-input-group">
+        <label>Resume Text / Key Achievements</label>
+        <textarea class="modal-textarea" id="profResume" placeholder="Paste your resume summary or key projects for STAR interview grounding..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="action-btn" id="closeProfileBtn">Cancel</button>
+        <button class="send-btn" id="saveProfileBtn">Save Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Third-party Markdown and Prism scripts -->
+  <script src="../../node_modules/marked/marked.min.js"></script>
+  <script src="../../node_modules/prismjs/prism.js"></script>
+  <script src="hud.js"></script>
+</body>
+</html>
