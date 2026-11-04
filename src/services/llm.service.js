@@ -483,6 +483,7 @@ class LLMService {
         metadata: this._museMetadata(activeSkill, programmingLanguage, startTime, { streamed: true })
       };
     } catch (error) {
+      if (error.streamStarted) throw error;
       logger.warn('Muse streaming text failed, falling back to non-streaming', {
         error: error.message,
         requestId: this.requestCount
@@ -584,6 +585,7 @@ class LLMService {
         })
       };
     } catch (error) {
+      if (error.streamStarted) throw error;
       logger.warn('Muse streaming image analysis failed, falling back to non-streaming', {
         error: error.message,
         requestId: this.requestCount
@@ -685,6 +687,7 @@ class LLMService {
         })
       };
     } catch (error) {
+      if (error.streamStarted) throw error;
       logger.warn('Muse streaming transcription failed, falling back to non-streaming', {
         error: error.message,
         requestId: this.requestCount

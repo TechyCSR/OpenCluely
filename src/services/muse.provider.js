@@ -215,6 +215,11 @@ class MuseProvider {
     const fallbackModels = config.get('llm.muse.fallbackModels') || [];
     const modelsToTry = [primaryModel, ...fallbackModels];
     let lastError = null;
+    let streamStarted = false;
+    const trackedOnDelta = (piece) => {
+      streamStarted = true;
+      if (typeof onDelta === 'function') onDelta(piece);
+    };
 
     for (const modelName of modelsToTry) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -225,13 +230,17 @@ class MuseProvider {
             ...this.getChatDefaults(generationOverrides),
             stream: true
           };
-          const fullText = await this._postStream(JSON.stringify(body), timeout, onDelta);
+          const fullText = await this._postStream(JSON.stringify(body), timeout, trackedOnDelta);
           if (!fullText) {
             throw new Error('Empty streamed response from Muse API');
           }
           return fullText;
         } catch (error) {
           lastError = error;
+          if (streamStarted) {
+            error.streamStarted = true;
+            throw error;
+          }
           logger.warn(`Muse streaming attempt ${attempt} failed for model ${modelName}`, {
             error: error.message,
             remainingAttempts: maxRetries - attempt,
