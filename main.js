@@ -653,7 +653,7 @@ class ApplicationController {
     });
 
     ipcMain.handle("set-gemini-api-key", (event, apiKey) => {
-      llmService.updateApiKey(apiKey);
+      llmService.updateApiKey(apiKey, "gemini");
       return llmService.getStats();
     });
 
@@ -688,6 +688,11 @@ class ApplicationController {
     });
 
     ipcMain.handle("test-gemini-connection", async () => {
+      return await llmService.testConnection();
+    });
+
+    // Provider-neutral alias: tests whichever provider is active.
+    ipcMain.handle("test-llm-connection", async () => {
       return await llmService.testConnection();
     });
 
@@ -1607,6 +1612,9 @@ class ApplicationController {
       whisperResponseTarget: process.env.WHISPER_RESPONSE_TARGET || "both",
       whisperSegmentMs: process.env.WHISPER_SEGMENT_MS || "4000",
       geminiKey: process.env.GEMINI_API_KEY || "",
+      llmProvider: process.env.LLM_PROVIDER || "gemini",
+      modelKey: process.env.MODEL_API_KEY || "",
+      museModel: process.env.MUSE_MODEL || "muse-spark-1.1",
 
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
       speechAvailable: this.speechAvailable
@@ -1678,6 +1686,15 @@ class ApplicationController {
       if (settings.geminiKey !== undefined) {
         envUpdates.GEMINI_API_KEY = settings.geminiKey;
       }
+      if (settings.llmProvider === "gemini" || settings.llmProvider === "muse") {
+        envUpdates.LLM_PROVIDER = settings.llmProvider;
+      }
+      if (settings.modelKey !== undefined) {
+        envUpdates.MODEL_API_KEY = settings.modelKey;
+      }
+      if (settings.museModel !== undefined && String(settings.museModel).trim()) {
+        envUpdates.MUSE_MODEL = String(settings.museModel).trim();
+      }
 
       // Capture the previous whisper command BEFORE persisting — persistEnvUpdates
       // mutates process.env in place, so comparing afterwards would always read
@@ -1687,17 +1704,22 @@ class ApplicationController {
 
       const persistedKeys = this.persistEnvUpdates(envUpdates);
 
-      // If the Gemini key was just saved, reinitialize the LLM service
-      // so the new client picks up the key. Without this, the test-
-      // connection button in the onboarding wizard fails with
-      // "Service not initialized" because the client was first created
-      // at app startup, before any key was set.
-      if (settings.geminiKey !== undefined && envUpdates.GEMINI_API_KEY !== undefined) {
+      // If an LLM key, the provider, or the Muse model was just saved,
+      // reinitialize the LLM service so the new client picks up the key.
+      // Without this, the test-connection button in the onboarding wizard
+      // fails with "Service not initialized" because the client was first
+      // created at app startup, before any key was set.
+      const llmChanged =
+        (settings.geminiKey !== undefined && envUpdates.GEMINI_API_KEY !== undefined) ||
+        (settings.modelKey !== undefined && envUpdates.MODEL_API_KEY !== undefined) ||
+        envUpdates.LLM_PROVIDER !== undefined ||
+        envUpdates.MUSE_MODEL !== undefined;
+      if (llmChanged) {
         try {
           llmService.initializeClient();
-          logger.info("LLM service reinitialized after Gemini key update");
+          logger.info("LLM service reinitialized after LLM settings update");
         } catch (e) {
-          logger.warn("Failed to reinitialize LLM service after Gemini key update", {
+          logger.warn("Failed to reinitialize LLM service after LLM settings update", {
             error: e.message
           });
         }

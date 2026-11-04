@@ -24,13 +24,33 @@ class FirstRunManager {
   }
 
   /**
+   * Active LLM provider declared by the .env (gemini by default).
+   */
+  getLLMProvider(env) {
+    const raw = ((env || {}).LLM_PROVIDER || 'gemini').trim().toLowerCase();
+    return raw === 'muse' ? 'muse' : 'gemini';
+  }
+
+  /**
+   * Returns true when a value looks like a real (non-placeholder) key.
+   */
+  _looksConfigured(value, placeholders) {
+    const key = (value || '').trim();
+    return !!key && !placeholders.includes(key);
+  }
+
+  /**
    * Returns true if this looks like a fresh install — no .env, no
-   * sentinel file, or .env exists but has no Gemini key.
+   * sentinel file, or .env exists but has no key for the active
+   * provider (only that provider's key is ever required).
    */
   needsOnboarding() {
     if (!fs.existsSync(this.sentinelPath)) return true;
     if (!fs.existsSync(this.envPath)) return true;
     const content = this._readEnv();
+    if (this.getLLMProvider(content) === 'muse') {
+      return !this._looksConfigured(content.MODEL_API_KEY, ['your_model_api_key_here', 'your_api_key_here']);
+    }
     const gemini = (content.GEMINI_API_KEY || '').trim();
     return !gemini || gemini === 'your_gemini_api_key_here';
   }
@@ -83,7 +103,10 @@ class FirstRunManager {
     return {
       envExists: fs.existsSync(this.envPath),
       sentinelExists: fs.existsSync(this.sentinelPath),
+      llmProvider: this.getLLMProvider(env),
       geminiConfigured: !!gemini && gemini !== 'your_gemini_api_key_here',
+      modelConfigured: this._looksConfigured(env.MODEL_API_KEY, ['your_model_api_key_here', 'your_api_key_here']),
+      museModel: (env.MUSE_MODEL || 'muse-spark-1.1').trim() || 'muse-spark-1.1',
       azureConfigured: !!(env.AZURE_SPEECH_KEY || '').trim() && !!(env.AZURE_SPEECH_REGION || '').trim(),
       whisperConfigured: !!(env.WHISPER_COMMAND || '').trim(),
       needsOnboarding: this.needsOnboarding()
@@ -139,10 +162,18 @@ class FirstRunManager {
     }
     return [
       '# OpenCluely configuration',
-      '# Add your Google Gemini API key below — the app picks it up immediately.',
-      '# Get a key from: https://aistudio.google.com/',
+      '# Pick an LLM provider: "gemini" (default) or "muse". Only the',
+      '# active provider\'s key is required.',
+      'LLM_PROVIDER=gemini',
       '',
+      '# Google Gemini API key — the app picks it up immediately.',
+      '# Get a key from: https://aistudio.google.com/',
       'GEMINI_API_KEY=your_gemini_api_key_here',
+      '',
+      '# Meta Model API key for Muse (only needed when LLM_PROVIDER=muse).',
+      '# Get a key from: https://dev.meta.ai/',
+      'MODEL_API_KEY=your_model_api_key_here',
+      'MUSE_MODEL=muse-spark-1.1',
       '',
       '# Speech provider: "whisper" (local) or "azure" (cloud).',
       '# WHISPER_COMMAND is auto-set to the project-local venv when you',

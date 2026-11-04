@@ -42,8 +42,11 @@
   // ── State ─────────────────────────────────────────────────────────
   const state = {
     step: 0,
+    llmProvider: 'gemini', // 'gemini' (default) | 'muse'
     geminiKey: '',
     geminiConfigured: false, // a key already exists in .env from a prior run
+    modelKey: '',
+    modelConfigured: false, // a MODEL_API_KEY already exists in .env
     speechProvider: null, // 'whisper' | 'azure' | 'skip'
     azureKey: '',
     azureRegion: '',
@@ -135,7 +138,11 @@
       case 'welcome':
         return true;
       case 'apikey':
-        // A key already in .env is enough — don't force a re-entry.
+        // A key for the ACTIVE provider (typed or already in .env) is
+        // enough — the inactive provider's key is never required.
+        if (state.llmProvider === 'muse') {
+          return !!state.modelKey.trim() || state.modelConfigured;
+        }
         return !!state.geminiKey.trim() || state.geminiConfigured;
       case 'speech':
         if (state.speechProvider === 'azure') {
@@ -154,10 +161,31 @@
     }
   }
 
+  function refreshLlmFields() {
+    const isMuse = state.llmProvider === 'muse';
+    const geminiField = $('#geminiField');
+    const museField = $('#museField');
+    if (geminiField) geminiField.style.display = isMuse ? 'none' : '';
+    if (museField) museField.style.display = isMuse ? '' : 'none';
+    $$('#llmChoices .choice-card').forEach((c) => {
+      c.classList.toggle('selected', c.dataset.value === state.llmProvider);
+    });
+  }
+
   // ── Wire up: API key ──────────────────────────────────────────────
   const geminiInput = $('#geminiKey');
+  const modelInput = $('#modelKey');
   const toggleVis = $('#toggleVis');
+  const toggleVisMuse = $('#toggleVisMuse');
   const keyStatus = $('#keyStatus');
+
+  $$('#llmChoices .choice-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      state.llmProvider = card.dataset.value === 'muse' ? 'muse' : 'gemini';
+      refreshLlmFields();
+      nextBtn.disabled = !canAdvance();
+    });
+  });
 
   function setKeyStatus(state_, text) {
     keyStatus.className = `status-pill ${state_}`;
@@ -187,6 +215,19 @@
     }
   });
 
+  if (modelInput) {
+    modelInput.addEventListener('input', () => {
+      state.modelKey = modelInput.value.trim();
+      if (!state.modelKey) {
+        keyStatus.style.display = 'none';
+      } else if (keyStatus.classList.contains('success')) {
+        // Keep success state — they had a valid key, may be editing
+      } else {
+        setKeyStatus('idle', 'Key entered');
+      }
+    });
+  }
+
   toggleVis.addEventListener('click', () => {
     const showing = geminiInput.type === 'text';
     geminiInput.type = showing ? 'password' : 'text';
@@ -194,6 +235,16 @@
       ? '<i class="fas fa-eye"></i>'
       : '<i class="fas fa-eye-slash"></i>';
   });
+
+  if (toggleVisMuse && modelInput) {
+    toggleVisMuse.addEventListener('click', () => {
+      const showing = modelInput.type === 'text';
+      modelInput.type = showing ? 'password' : 'text';
+      toggleVisMuse.innerHTML = showing
+        ? '<i class="fas fa-eye"></i>'
+        : '<i class="fas fa-eye-slash"></i>';
+    });
+  }
 
   // ── Wire up: Speech choices ───────────────────────────────────────
   $$('#speechChoices .choice-card').forEach((card) => {
@@ -450,10 +501,15 @@
   // ── Wire up: Finish screen ────────────────────────────────────────
   function populateSummary() {
     const rows = [];
+    const llmConfigured = state.llmProvider === 'muse'
+      ? (state.modelKey || state.modelConfigured)
+      : (state.geminiKey || state.geminiConfigured);
     rows.push({
-      label: '<i class="fas fa-key"></i> Gemini API',
-      value: (state.geminiKey || state.geminiConfigured) ? 'Configured' : 'Missing',
-      cls: (state.geminiKey || state.geminiConfigured) ? 'ok' : 'skip',
+      label: state.llmProvider === 'muse'
+        ? '<i class="fas fa-key"></i> Muse API'
+        : '<i class="fas fa-key"></i> Gemini API',
+      value: llmConfigured ? 'Configured' : 'Missing',
+      cls: llmConfigured ? 'ok' : 'skip',
     });
     if (state.speechProvider === 'whisper') {
       rows.push({
@@ -514,16 +570,23 @@
     const name = currentScreenName();
     if (!canAdvance()) {
       // Lightly nudge the user
-      if (name === 'apikey') setKeyStatus('error', 'Enter a Gemini API key');
+      if (name === 'apikey') {
+        setKeyStatus('error', state.llmProvider === 'muse'
+          ? 'Enter a Model API key'
+          : 'Enter a Gemini API key');
+      }
       return;
     }
 
-    // Persist settings on speech selection (Azure path), since we
-    // already saved geminiKey on test; do it here too if user skipped
-    // testing.
-    if (name === 'apikey' && state.geminiKey && window.electronAPI) {
+    // Persist the provider plus whichever key the user entered. Only
+    // the active provider's key is ever required; we save each entered
+    // key so switching providers later keeps what was typed.
+    if (name === 'apikey' && window.electronAPI) {
       try {
-        await window.electronAPI.saveSettings({ geminiKey: state.geminiKey });
+        const payload = { llmProvider: state.llmProvider };
+        if (state.geminiKey) payload.geminiKey = state.geminiKey;
+        if (state.modelKey) payload.modelKey = state.modelKey;
+        await window.electronAPI.saveSettings(payload);
       } catch (_) { /* surfaced elsewhere */ }
     }
     if (name === 'speech' && window.electronAPI) {
@@ -655,18 +718,27 @@
   // ── Boot ──────────────────────────────────────────────────────────
   showScreen('welcome');
 
-  // Pre-populate Gemini key from existing .env (if any) so users with
-  // a partial config don't have to retype.
+  // Pre-populate provider + key state from existing .env (if any) so
+  // users with a partial config don't have to retype.
   if (window.electronAPI && window.electronAPI.getFirstRunStatus) {
     window.electronAPI.getFirstRunStatus().then((s) => {
-      if (s && s.geminiConfigured) {
-        // We can't read the key back (settings returns empty for keys),
-        // but we can mark status as success if the env file already has one
-        // and let the user advance without retyping it.
-        state.geminiConfigured = true;
+      if (!s) return;
+      // We can't read keys back (settings returns empty for keys), but
+      // we can mark status as success if the env file already has the
+      // active provider's key and let the user advance without retyping.
+      if (s.llmProvider === 'muse') {
+        state.llmProvider = 'muse';
+        refreshLlmFields();
+      }
+      if (s.geminiConfigured) state.geminiConfigured = true;
+      if (s.modelConfigured) state.modelConfigured = true;
+      const configured = state.llmProvider === 'muse' ? state.modelConfigured : state.geminiConfigured;
+      if (configured) {
         setKeyStatus('success', 'Already configured — click Continue');
         geminiInput.placeholder = '•••••••••••••••• (already set)';
+        if (modelInput) modelInput.placeholder = '•••••••••••••••• (already set)';
       }
+      nextBtn.disabled = !canAdvance();
     }).catch(() => {});
   }
 })();

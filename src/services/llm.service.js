@@ -2,6 +2,7 @@ const { GoogleGenAI } = require('@google/genai');
 const logger = require('../core/logger').createServiceLogger('LLM');
 const config = require('../core/config');
 const { promptLoader } = require('../../prompt-loader');
+const { MuseProvider, geminiRequestToChatMessages } = require('./muse.provider');
 
 class LLMService {
   constructor() {
@@ -10,11 +11,61 @@ class LLMService {
     this.isInitialized = false;
     this.requestCount = 0;
     this.errorCount = 0;
-    
+    this.muse = new MuseProvider();
+
     this.initializeClient();
   }
 
+  getProvider() {
+    return config.getLLMProvider();
+  }
+
+  notInitializedError() {
+    const hint = this.getProvider() === 'muse'
+      ? 'Check MODEL_API_KEY configuration.'
+      : 'Check Gemini API key configuration.';
+    return new Error(`LLM service not initialized. ${hint}`);
+  }
+
   initializeClient() {
+    // Reset first: a previous init for the other provider must not leak
+    // across a provider switch.
+    this.isInitialized = false;
+    if (this.getProvider() === 'muse') {
+      return this.initializeMuseClient();
+    }
+    return this.initializeGeminiClient();
+  }
+
+  initializeMuseClient() {
+    const apiKey = config.getApiKey('MODEL');
+
+    if (!apiKey || apiKey === 'your-model-api-key-here') {
+      logger.warn('Muse API key not configured', {
+        keyExists: !!apiKey
+      });
+      return;
+    }
+
+    try {
+      // No persistent SDK client: the OpenAI-compatible chat-completions
+      // endpoint is called per request with a Bearer MODEL_API_KEY.
+      this.client = null;
+      this.model = this.muse.getModel();
+      this.isInitialized = true;
+
+      logger.info('Muse AI client initialized successfully', {
+        model: this.model,
+        baseURL: this.muse.getBaseURL()
+      });
+    } catch (error) {
+      logger.error('Failed to initialize Muse client', {
+        error: error.message
+      });
+    }
+  }
+
+  initializeGeminiClient() {
     const apiKey = config.getApiKey('GEMINI');
     
     if (!apiKey || apiKey === 'your-api-key-here') {
@@ -122,6 +173,9 @@ class LLMService {
    * @returns {Promise<{response: string, metadata: object}>}
    */
   async processImageWithSkill(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null) {
+    if (this.getProvider() === 'muse') {
+      return this.processImageWithMuse(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage);
+    }
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -226,6 +280,9 @@ class LLMService {
   }
 
   async processImageWithSkillStream(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
+    if (this.getProvider() === 'muse') {
+      return this.processImageWithMuseStream(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage, onDelta);
+    }
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -297,12 +354,357 @@ class LLMService {
     }
   }
 
+  // ── Muse provider path ──────────────────────────────────────────
+  // Same entry-point contract as the Gemini path (same return and
+  // metadata shape, generation defaults, language enforcement,
+  // fallback behavior, and request/error counters); only the transport
+  // differs (Meta Model API chat-completions via muse.provider.js).
+  // The Gemini-shaped request builders are reused and converted to
+  // chat-completions messages so skill prompts, conversation history,
+  // and language injection behave identically across providers.
+
+  _buildMuseImageRequest(imageBuffer, mimeType, activeSkill, programmingLanguage) {
+    const skillPrompt = promptLoader.getSkillPrompt(activeSkill, programmingLanguage) || '';
+    const request = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: this.formatImageInstruction(activeSkill, programmingLanguage) },
+            { inlineData: { data: imageBuffer.toString('base64'), mimeType } }
+          ]
+        }
+      ]
+    };
+    if (skillPrompt && skillPrompt.trim().length > 0) {
+      request.systemInstruction = { parts: [{ text: skillPrompt }] };
+    }
+    return request;
+  }
+
+  _museMetadata(activeSkill, programmingLanguage, startTime, extra = {}) {
+    return {
+      skill: activeSkill,
+      programmingLanguage,
+      processingTime: Date.now() - startTime,
+      requestId: this.requestCount,
+      usedFallback: false,
+      provider: 'muse',
+      model: this.muse.getModel(),
+      ...extra
+    };
+  }
+
+  async processTextWithMuse(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
+    if (!this.muse.isConfigured()) {
+      throw this.notInitializedError();
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      logger.info('Processing text with Muse', {
+        activeSkill,
+        textLength: text.length,
+        hasSessionMemory: sessionMemory.length > 0,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage);
+      const messages = geminiRequestToChatMessages(geminiRequest);
+      const response = await this.muse.complete(messages);
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(response, programmingLanguage)
+        : response;
+
+      logger.logPerformance('Muse text processing', startTime, {
+        activeSkill,
+        textLength: text.length,
+        responseLength: finalResponse.length,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: this._museMetadata(activeSkill, programmingLanguage, startTime)
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('Muse processing failed', {
+        error: error.message,
+        activeSkill,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      if (config.get('llm.muse.fallbackEnabled')) {
+        return this.generateFallbackResponse(text, activeSkill);
+      }
+
+      throw error;
+    }
+  }
+
+  async processTextWithMuseStream(text, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
+    if (!this.muse.isConfigured()) {
+      throw this.notInitializedError();
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const geminiRequest = this.buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage);
+      const messages = geminiRequestToChatMessages(geminiRequest);
+
+      const fullText = await this.muse.completeStream(messages, (delta) => {
+        if (typeof onDelta === 'function' && delta) {
+          onDelta(delta);
+        }
+      });
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(fullText, programmingLanguage)
+        : fullText;
+
+      logger.logPerformance('Muse text streaming', startTime, {
+        activeSkill,
+        textLength: text.length,
+        responseLength: finalResponse.length,
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: this._museMetadata(activeSkill, programmingLanguage, startTime, { streamed: true })
+      };
+    } catch (error) {
+      if (error.streamStarted) throw error;
+      logger.warn('Muse streaming text failed, falling back to non-streaming', {
+        error: error.message,
+        requestId: this.requestCount
+      });
+      return this.processTextWithMuse(text, activeSkill, sessionMemory, programmingLanguage);
+    }
+  }
+
+  async processImageWithMuse(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null) {
+    if (!this.muse.isConfigured()) {
+      throw this.notInitializedError();
+    }
+
+    if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
+      throw new Error('Invalid image buffer provided to processImageWithSkill');
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const geminiRequest = this._buildMuseImageRequest(imageBuffer, mimeType, activeSkill, programmingLanguage);
+      const messages = geminiRequestToChatMessages(geminiRequest);
+      const responseText = await this.muse.complete(messages);
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(responseText, programmingLanguage)
+        : responseText;
+
+      logger.logPerformance('Muse image processing', startTime, {
+        activeSkill,
+        imageSize: imageBuffer.length,
+        responseLength: finalResponse.length,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: this._museMetadata(activeSkill, programmingLanguage, startTime, {
+          isImageAnalysis: true,
+          mimeType
+        })
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('Muse image processing failed', {
+        error: error.message,
+        activeSkill,
+        requestId: this.requestCount
+      });
+
+      if (config.get('llm.muse.fallbackEnabled')) {
+        return this.generateFallbackResponse('[image]', activeSkill);
+      }
+      throw error;
+    }
+  }
+
+  async processImageWithMuseStream(imageBuffer, mimeType, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
+    if (!this.muse.isConfigured()) {
+      throw this.notInitializedError();
+    }
+
+    if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
+      throw new Error('Invalid image buffer provided to processImageWithSkillStream');
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const geminiRequest = this._buildMuseImageRequest(imageBuffer, mimeType, activeSkill, programmingLanguage);
+      const messages = geminiRequestToChatMessages(geminiRequest);
+
+      const fullText = await this.muse.completeStream(messages, (delta) => {
+        if (typeof onDelta === 'function' && delta) {
+          onDelta(delta);
+        }
+      });
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(fullText, programmingLanguage)
+        : fullText;
+
+      logger.logPerformance('Muse image streaming', startTime, {
+        activeSkill,
+        imageSize: imageBuffer.length,
+        responseLength: finalResponse.length,
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: this._museMetadata(activeSkill, programmingLanguage, startTime, {
+          streamed: true,
+          isImageAnalysis: true,
+          mimeType
+        })
+      };
+    } catch (error) {
+      if (error.streamStarted) throw error;
+      logger.warn('Muse streaming image analysis failed, falling back to non-streaming', {
+        error: error.message,
+        requestId: this.requestCount
+      });
+      return this.processImageWithMuse(imageBuffer, mimeType, activeSkill, sessionMemory, programmingLanguage);
+    }
+  }
+
+  async processTranscriptionWithMuse(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
+    if (!this.muse.isConfigured()) {
+      throw this.notInitializedError();
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      logger.info('Processing transcription with Muse', {
+        activeSkill,
+        textLength: text.length,
+        hasSessionMemory: sessionMemory.length > 0,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      const geminiRequest = this.buildIntelligentTranscriptionRequest(text, activeSkill, sessionMemory, programmingLanguage);
+      const messages = geminiRequestToChatMessages(geminiRequest);
+      const response = await this.muse.complete(messages);
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(response, programmingLanguage)
+        : response;
+
+      logger.logPerformance('Muse transcription processing', startTime, {
+        activeSkill,
+        textLength: text.length,
+        responseLength: finalResponse.length,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: this._museMetadata(activeSkill, programmingLanguage, startTime, {
+          isTranscriptionResponse: true
+        })
+      };
+    } catch (error) {
+      this.errorCount++;
+      logger.error('Muse transcription processing failed', {
+        error: error.message,
+        activeSkill,
+        programmingLanguage: programmingLanguage || 'not specified',
+        requestId: this.requestCount
+      });
+
+      if (config.get('llm.muse.fallbackEnabled')) {
+        return this.generateIntelligentFallbackResponse(text, activeSkill);
+      }
+
+      throw error;
+    }
+  }
+
+  async processTranscriptionWithMuseStream(text, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
+    if (!this.muse.isConfigured()) {
+      throw this.notInitializedError();
+    }
+
+    const startTime = Date.now();
+    this.requestCount++;
+
+    try {
+      const geminiRequest = this.buildIntelligentTranscriptionRequest(text, activeSkill, sessionMemory, programmingLanguage);
+      const messages = geminiRequestToChatMessages(geminiRequest);
+
+      const fullText = await this.muse.completeStream(messages, (delta) => {
+        if (typeof onDelta === 'function' && delta) {
+          onDelta(delta);
+        }
+      });
+
+      const finalResponse = programmingLanguage
+        ? this.enforceProgrammingLanguage(fullText, programmingLanguage)
+        : fullText;
+
+      logger.logPerformance('Muse transcription streaming', startTime, {
+        activeSkill,
+        textLength: text.length,
+        responseLength: finalResponse.length,
+        requestId: this.requestCount
+      });
+
+      return {
+        response: finalResponse,
+        metadata: this._museMetadata(activeSkill, programmingLanguage, startTime, {
+          streamed: true,
+          isTranscriptionResponse: true
+        })
+      };
+    } catch (error) {
+      if (error.streamStarted) throw error;
+      logger.warn('Muse streaming transcription failed, falling back to non-streaming', {
+        error: error.message,
+        requestId: this.requestCount
+      });
+      return this.processTranscriptionWithMuse(text, activeSkill, sessionMemory, programmingLanguage);
+    }
+  }
+
   formatImageInstruction(activeSkill, programmingLanguage) {
     const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
     return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
   }
 
   async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
+    if (this.getProvider() === 'muse') {
+      return this.processTextWithMuse(text, activeSkill, sessionMemory, programmingLanguage);
+    }
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -390,6 +792,9 @@ class LLMService {
   }
 
   async processTextWithSkillStream(text, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
+    if (this.getProvider() === 'muse') {
+      return this.processTextWithMuseStream(text, activeSkill, sessionMemory, programmingLanguage, onDelta);
+    }
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -438,6 +843,9 @@ class LLMService {
   }
 
   async processTranscriptionWithIntelligentResponse(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
+    if (this.getProvider() === 'muse') {
+      return this.processTranscriptionWithMuse(text, activeSkill, sessionMemory, programmingLanguage);
+    }
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -979,6 +1387,9 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
    * streaming failure so reliability is never worse than before.
    */
   async processTranscriptionWithIntelligentResponseStream(text, activeSkill, sessionMemory = [], programmingLanguage = null, onDelta = null) {
+    if (this.getProvider() === 'muse') {
+      return this.processTranscriptionWithMuseStream(text, activeSkill, sessionMemory, programmingLanguage, onDelta);
+    }
     if (!this.isInitialized) {
       throw new Error('LLM service not initialized. Check Gemini API key configuration.');
     }
@@ -1278,7 +1689,9 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   async checkNetworkConnectivity() {
     const connectivityTests = [
       { host: 'google.com', port: 443, name: 'Google (HTTPS)' },
-      { host: 'generativelanguage.googleapis.com', port: 443, name: 'Gemini API Endpoint' }
+      this.getProvider() === 'muse'
+        ? { host: 'api.meta.ai', port: 443, name: 'Muse API Endpoint' }
+        : { host: 'generativelanguage.googleapis.com', port: 443, name: 'Gemini API Endpoint' }
     ];
 
     const results = await Promise.allSettled(
@@ -1390,6 +1803,10 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   }
 
   async testConnection() {
+    if (this.getProvider() === 'muse') {
+      return this.testMuseConnection();
+    }
+
     if (!this.isInitialized) {
       return { success: false, error: 'Service not initialized' };
     }
@@ -1509,21 +1926,68 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     return (error?.message || 'Connection failed').replace(/^\[(GoogleGenerativeAI|GoogleGenAI) Error\]:\s*/i, '');
   }
 
-  updateApiKey(newApiKey) {
-    process.env.GEMINI_API_KEY = newApiKey;
+  async testMuseConnection() {
+    if (!this.muse.isConfigured()) {
+      return { success: false, error: 'Service not initialized' };
+    }
+
+    try {
+      const networkCheck = await this.checkNetworkConnectivity().catch(() => null);
+      const result = await this.muse.testConnection();
+      if (!result.success) {
+        return {
+          success: false,
+          error: result.error,
+          errorType: 'MUSE_ERROR',
+          networkConnectivity: networkCheck
+        };
+      }
+      logger.info('Muse connection test successful', {
+        response: result.response,
+        latency: result.latency,
+        model: result.model
+      });
+      return {
+        success: true,
+        response: result.response,
+        latency: result.latency,
+        model: result.model,
+        provider: 'muse',
+        networkConnectivity: networkCheck
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: this.muse.friendlyError(error),
+        errorType: 'MUSE_ERROR',
+        networkConnectivity: await this.checkNetworkConnectivity().catch(() => null)
+      };
+    }
+  }
+
+  updateApiKey(newApiKey, provider = null) {
+    const target = provider || this.getProvider();
+    if (target === 'muse') {
+      process.env.MODEL_API_KEY = newApiKey;
+    } else {
+      process.env.GEMINI_API_KEY = newApiKey;
+    }
     this.isInitialized = false;
     this.initializeClient();
-    
-    logger.info('API key updated and client reinitialized');
+
+    logger.info('API key updated and client reinitialized', { provider: target });
   }
 
   getStats() {
+    const provider = this.getProvider();
     return {
       isInitialized: this.isInitialized,
+      provider,
+      model: provider === 'muse' ? this.muse.getModel() : this.model,
       requestCount: this.requestCount,
       errorCount: this.errorCount,
       successRate: this.requestCount > 0 ? ((this.requestCount - this.errorCount) / this.requestCount) * 100 : 0,
-      config: config.get('llm.gemini')
+      config: config.get(provider === 'muse' ? 'llm.muse' : 'llm.gemini')
     };
   }
 

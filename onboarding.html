@@ -740,12 +740,35 @@
 
             <!-- SCREEN 2: API Key -->
             <section class="screen" data-screen="apikey">
-                <h1>Connect Google Gemini</h1>
+                <h1>Connect your AI provider</h1>
                 <p class="subtitle">
-                    OpenCluely uses Google's Gemini to generate answers. You'll need a free API key.
+                    OpenCluely answers with Gemini by default, or with Muse via the Meta Model API. Only the provider you pick needs a key.
                 </p>
 
-                <div class="field">
+                <div class="choice-list" id="llmChoices">
+                    <div class="choice-card selected" data-value="gemini">
+                        <div class="choice-icon"><i class="fas fa-robot"></i></div>
+                        <div class="choice-text">
+                            <div class="choice-title">Gemini (default)</div>
+                            <div class="choice-desc">
+                                Google's Gemini. Get a free key at aistudio.google.com/apikey.
+                            </div>
+                        </div>
+                        <div class="choice-radio"></div>
+                    </div>
+                    <div class="choice-card" data-value="muse">
+                        <div class="choice-icon"><i class="fas fa-sparkles"></i></div>
+                        <div class="choice-text">
+                            <div class="choice-title">Muse</div>
+                            <div class="choice-desc">
+                                Muse models via the Meta Model API. Get a key at dev.meta.ai.
+                            </div>
+                        </div>
+                        <div class="choice-radio"></div>
+                    </div>
+                </div>
+
+                <div class="field" id="geminiField">
                     <label for="geminiKey">Gemini API Key</label>
                     <div class="input-wrap">
                         <i class="fas fa-key icon"></i>
@@ -768,6 +791,34 @@
                         </a>.
                         It's stored locally in <code>.env</code> — never sent anywhere except Google.
                     </div>
+                </div>
+
+                <div class="field" id="museField" style="display:none;">
+                    <label for="modelKey">Model API Key</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-key icon"></i>
+                        <input
+                            type="password"
+                            id="modelKey"
+                            class="input"
+                            placeholder="Enter your Meta Model API key"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <button class="toggle-vis" id="toggleVisMuse" type="button" title="Show / hide">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="hint">
+                        Don't have one? Create a key at
+                        <a href="https://dev.meta.ai" target="_blank" rel="noreferrer">
+                            dev.meta.ai
+                        </a>.
+                        It's stored locally in <code>.env</code> — never sent anywhere except api.meta.ai.
+                    </div>
+                </div>
+
+                <div class="field">
                     <div id="keyStatus" class="status-pill idle" style="display:none;">
                         <i class="fas fa-circle-info"></i>
                         <span class="text">Enter your key above</span>

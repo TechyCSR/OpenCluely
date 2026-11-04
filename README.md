@@ -36,7 +36,7 @@ It is free and open source. Processing stays on your machine, and the only thing
 - **Hidden during screen share.** When a share starts, the app can hide every window on its own.
 - **Flexible local voice.** Choose manual start/stop capture or automatic voice-activity detection without fixed-timer sentence cuts.
 - **Configurable streamed answers.** Route voice replies to chat, the floating overlay, or both.
-- **Direct image analysis.** Screenshots go straight to Gemini for visual reasoning, with no slow OCR step in between.
+- **Direct image analysis.** Screenshots go straight to your chosen provider (Gemini or Muse) for visual reasoning, with no slow OCR step in between.
 - **Session memory.** The whole conversation is remembered, so follow-ups, edge cases, and optimizations keep their context.
 - **Language aware.** Tailored answers for C++, C, Python, Java, and JavaScript.
 - **Stealthy by design.** Runs under ordinary system names, ships with no telemetry, and keeps your session local.
@@ -77,9 +77,9 @@ If you would rather build from source, three steps are all it takes.
 
    The script installs Node dependencies, creates your `.env` from the example, sets up a local Whisper virtual environment, points the config at it, and launches the app.
 
-3. Add your Gemini key.
+3. Add your AI provider key.
 
-   On first launch the Settings window opens automatically. Get a free key from [Google AI Studio](https://aistudio.google.com/) and paste it in, or edit `.env` directly. Both work, and changes are picked up without a restart.
+   On first launch the Settings window opens automatically. Pick Gemini (the default — get a free key from [Google AI Studio](https://aistudio.google.com/)) or Muse (get a `MODEL_API_KEY` from [dev.meta.ai](https://dev.meta.ai/)), and paste it in, or edit `.env` directly. Only the active provider's key is needed. Both work, and changes are picked up without a restart.
 
 ### Platform notes
 
@@ -100,11 +100,18 @@ If you would rather build from source, three steps are all it takes.
 
 ## Configuration
 
-The setup script writes sensible defaults. The only required value is a Gemini API key.
+The setup script writes sensible defaults. The only required value is the key for your chosen LLM provider (Gemini by default).
 
 ```bash
-# Required
+# LLM provider: "gemini" (default) or "muse". Only the active key required.
+LLM_PROVIDER=gemini
+
+# Required for Gemini
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Required for Muse (Meta Model API at https://api.meta.ai/v1)
+MODEL_API_KEY=your_model_api_key_here
+MUSE_MODEL=muse-spark-1.1
 
 # Optional speech provider. Pick one.
 SPEECH_PROVIDER=whisper
@@ -139,14 +146,14 @@ For Azure Speech, create a Speech resource in the [Azure Portal](https://portal.
 ## How it works
 
 1. **Ask.** Use automatic pause detection, choose manual start/stop capture in Settings, or use the screenshot shortcut.
-2. **Reason.** Gemini reads the audio or image with full conversation context and works toward a precise answer.
+2. **Reason.** Your chosen provider (Gemini or Muse) reads the audio or image with full conversation context and works toward a precise answer.
 3. **Answer.** Voice responses stream to chat, the overlay, or both, according to Settings.
 
 ## Keyboard shortcuts
 
 | Action | Shortcut | Description |
 |---|---|---|
-| Screenshot capture | `Cmd/Ctrl + Shift + S` | Capture the screen and analyze it with Gemini |
+| Screenshot capture | `Cmd/Ctrl + Shift + S` | Capture the screen and analyze it with your chosen provider |
 | Toggle speech | `Alt + R` | Start or stop voice recognition, if configured |
 | Toggle visibility | `Cmd/Ctrl + Shift + V` | Show or hide all windows |
 | Toggle interaction | `Cmd/Ctrl + Shift + I` or `Alt + A` | Enable or disable click through |
@@ -161,7 +168,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 
 - Stealth overlay with a draggable command bar and a click through toggle
 - Hidden during screen share, with automatic hiding when a share begins
-- Screenshot capture with direct Gemini analysis, no OCR step
+- Screenshot capture with direct Gemini or Muse analysis, no OCR step
 - Configurable manual or VAD-driven voice capture
 - Persistent local Whisper worker with optional CUDA acceleration and idle GPU release
 - Configurable chat/overlay routing for streamed voice answers
@@ -177,7 +184,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 
 ### Planned
 
-- Multiple model backends alongside Gemini (OpenAI, Anthropic, local)
+- More model backends alongside Gemini and Muse (OpenAI, Anthropic, local)
 - Auto typing of code snippets into editors and IDEs
 - Export of conversation history to markdown or PDF
 - Deeper stealth, including process name randomization
