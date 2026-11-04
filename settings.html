@@ -459,15 +459,46 @@
             <div class="settings-section">
                 <div class="settings-section-title">
                     <i class="fas fa-robot"></i>
-                    Gemini Settings
+                    LLM Provider Settings
                 </div>
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Google API Key</div>
-                            <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            <div class="settings-item-label">LLM Provider</div>
+                            <div class="settings-item-description">Gemini is the default. Only the active provider's key is required.</div>
                         </div>
-                        <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        <select class="input-field" id="llmProvider">
+                            <option value="gemini">Gemini (Google)</option>
+                            <option value="muse">Muse (Meta)</option>
+                        </select>
+                    </div>
+                    <div id="geminiFields">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Google API Key</div>
+                                <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            </div>
+                            <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        </div>
+                    </div>
+                    <div id="museFields">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Model API Key</div>
+                                <div class="settings-item-description">Your Meta Model API key from dev.meta.ai for Muse models</div>
+                            </div>
+                            <input type="password" class="input-field" id="modelKey" placeholder="Enter your Meta Model API key">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Muse Model</div>
+                                <div class="settings-item-description">Muse model id, e.g. muse-spark-1.1</div>
+                            </div>
+                            <input type="text" class="input-field" id="museModel" placeholder="muse-spark-1.1">
+                        </div>
+                    </div>
+                    <div class="settings-note">
+                        Provider, keys, and model apply immediately and are written back to <code>.env</code> so they persist across restarts.
                     </div>
                 </div>
             </div>

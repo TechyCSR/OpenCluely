@@ -39,6 +39,10 @@ class ConfigManager {
       },
 
       llm: {
+        // Active LLM provider: 'gemini' (default) or 'muse'. Overridable
+        // at runtime via the LLM_PROVIDER env var so the settings UI can
+        // switch providers without a restart.
+        provider: process.env.LLM_PROVIDER || 'gemini',
         gemini: {
           model: 'gemini-3.1-flash-lite',
           fallbackModels: ['gemini-2.5-flash-lite', 'gemini-3.5-flash'],
@@ -52,6 +56,19 @@ class ConfigManager {
             topP: 0.9,
             maxOutputTokens: 4096,
             thinkingConfig: { thinkingBudget: 0 }
+          }
+        },
+        muse: {
+          baseURL: process.env.MUSE_BASE_URL || 'https://api.meta.ai/v1',
+          model: process.env.MUSE_MODEL || 'muse-spark-1.1',
+          fallbackModels: [],
+          maxRetries: 3,
+          timeout: 30000,
+          fallbackEnabled: true,
+          generation: {
+            temperature: 0.7,
+            topP: 0.9,
+            maxOutputTokens: 4096
           }
         }
       },
@@ -119,6 +136,24 @@ class ConfigManager {
   getApiKey(service) {
     const envKey = `${service.toUpperCase()}_API_KEY`;
     return process.env[envKey];
+  }
+
+  /**
+   * Active LLM provider: 'gemini' (default) or 'muse'. Reads the live
+   * process.env first so a provider switch in Settings takes effect
+   * without a restart; anything other than 'muse' falls back to gemini.
+   */
+  getLLMProvider() {
+    const raw = (process.env.LLM_PROVIDER || this.get('llm.provider') || 'gemini').trim().toLowerCase();
+    return raw === 'muse' ? 'muse' : 'gemini';
+  }
+
+  /**
+   * API key for the active LLM provider: MODEL_API_KEY for muse,
+   * GEMINI_API_KEY for gemini.
+   */
+  getActiveLLMKey() {
+    return this.getLLMProvider() === 'muse' ? this.getApiKey('MODEL') : this.getApiKey('GEMINI');
   }
 
   isFeatureEnabled(feature) {

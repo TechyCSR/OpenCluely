@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const whisperResponseTargetSelect = document.getElementById('whisperResponseTarget');
     const whisperSegmentMsInput = document.getElementById('whisperSegmentMs');
     const geminiKeyInput = document.getElementById('geminiKey');
+    const llmProviderSelect = document.getElementById('llmProvider');
+    const modelKeyInput = document.getElementById('modelKey');
+    const museModelInput = document.getElementById('museModel');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
@@ -88,6 +91,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperResponseTargetSelect) whisperResponseTargetSelect.value = settings.whisperResponseTarget || 'both';
         if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
         if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
+        if (llmProviderSelect) llmProviderSelect.value = settings.llmProvider || 'gemini';
+        if (modelKeyInput) modelKeyInput.value = settings.modelKey || '';
+        if (museModelInput) museModelInput.value = settings.museModel || 'muse-spark-1.1';
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
 
         // Set C++ as default if no coding language is specified
@@ -111,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updateSpeechFieldStates();
+        updateLlmFieldStates();
     };
 
     // Load settings when window opens
@@ -147,6 +154,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperResponseTargetSelect) settings.whisperResponseTarget = whisperResponseTargetSelect.value;
         if (whisperSegmentMsInput) settings.whisperSegmentMs = whisperSegmentMsInput.value;
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
+        if (llmProviderSelect) settings.llmProvider = llmProviderSelect.value;
+        if (modelKeyInput) settings.modelKey = modelKeyInput.value;
+        if (museModelInput) settings.museModel = museModelInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
@@ -184,6 +194,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const updateLlmFieldStates = () => {
+        const provider = llmProviderSelect ? llmProviderSelect.value : 'gemini';
+
+        // Show only the active provider's fields so the user is never
+        // asked for the inactive provider's key.
+        const geminiGroup = document.getElementById('geminiFields');
+        const museGroup = document.getElementById('museFields');
+
+        if (geminiGroup) {
+            geminiGroup.style.display = provider === 'muse' ? 'none' : '';
+        }
+        if (museGroup) {
+            museGroup.style.display = provider === 'muse' ? '' : 'none';
+        }
+    };
+
     // Add event listeners for all inputs
     const inputs = [
         azureKeyInput,
@@ -196,6 +222,8 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperResponseTargetSelect,
         whisperSegmentMsInput,
         geminiKeyInput,
+        modelKeyInput,
+        museModelInput,
         windowGapInput
     ];
 
@@ -209,6 +237,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (speechProviderSelect) {
         speechProviderSelect.addEventListener('change', () => {
             updateSpeechFieldStates();
+            saveSettings();
+        });
+    }
+
+    if (llmProviderSelect) {
+        llmProviderSelect.addEventListener('change', () => {
+            updateLlmFieldStates();
             saveSettings();
         });
     }
@@ -237,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateSpeechFieldStates();
+    updateLlmFieldStates();
 
     // Initialize icon grid with correct paths
     const initializeIconGrid = () => {

@@ -7,6 +7,7 @@
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "dev": "env -u ELECTRON_RUN_AS_NODE electron . --no-sandbox --disable-gpu",
     "test-speech": "node scripts/test-speech.js",
+    "test-llm-providers": "node scripts/test-llm-providers.js",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",

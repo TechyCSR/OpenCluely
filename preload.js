@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setGeminiApiKey: (apiKey) => ipcRenderer.invoke('set-gemini-api-key', apiKey),
   getGeminiStatus: () => ipcRenderer.invoke('get-gemini-status'),
   testGeminiConnection: () => ipcRenderer.invoke('test-gemini-connection'),
+  // Provider-neutral LLM check (tests whichever provider is active)
+  testLlmConnection: () => ipcRenderer.invoke('test-llm-connection'),
   
   // Settings
   showSettings: () => ipcRenderer.invoke('show-settings'),
