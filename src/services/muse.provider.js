@@ -285,28 +285,36 @@ class MuseProvider {
         let fullText = '';
         let buffer = '';
         res.setEncoding('utf8');
+        const handleLine = (rawLine) => {
+          const line = rawLine.trim();
+          if (!line.startsWith('data:')) return;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === '[DONE]') return;
+          try {
+            const json = JSON.parse(payload);
+            const piece = json?.choices?.[0]?.delta?.content || '';
+            if (piece) {
+              fullText += piece;
+              if (typeof onDelta === 'function') onDelta(piece);
+            }
+          } catch (_) {
+            // Skip unparseable lines.
+          }
+        };
         res.on('data', (chunk) => {
           buffer += chunk;
           let idx;
           while ((idx = buffer.indexOf('\n')) !== -1) {
-            const line = buffer.slice(0, idx).trim();
+            const line = buffer.slice(0, idx);
             buffer = buffer.slice(idx + 1);
-            if (!line.startsWith('data:')) continue;
-            const payload = line.slice(5).trim();
-            if (!payload || payload === '[DONE]') continue;
-            try {
-              const json = JSON.parse(payload);
-              const piece = json?.choices?.[0]?.delta?.content || '';
-              if (piece) {
-                fullText += piece;
-                if (typeof onDelta === 'function') onDelta(piece);
-              }
-            } catch (_) {
-              // Partial JSON across chunk boundaries; skip unparseable lines.
-            }
+            handleLine(line);
           }
         });
-        res.on('end', () => resolve(fullText.trim()));
+        res.on('end', () => {
+          handleLine(buffer);
+          buffer = '';
+          resolve(fullText.trim());
+        });
         res.on('error', (error) => reject(new Error(`Muse streaming response error: ${error.message}`)));
       });
       req.on('error', (error) => reject(new Error(`Muse streaming request failed: ${error.message}`)));

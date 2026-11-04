@@ -653,7 +653,7 @@ class ApplicationController {
     });
 
     ipcMain.handle("set-gemini-api-key", (event, apiKey) => {
-      llmService.updateApiKey(apiKey);
+      llmService.updateApiKey(apiKey, "gemini");
       return llmService.getStats();
     });
 
