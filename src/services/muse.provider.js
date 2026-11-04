@@ -162,7 +162,7 @@ class MuseProvider {
 
   _postCompletion(postData, timeout) {
     const baseURL = this.getBaseURL();
-    const url = new URL('/chat/completions', `${baseURL}/`);
+    const url = new URL('chat/completions', `${baseURL}/`);
     const apiKey = this.getApiKey();
     const options = {
       method: 'POST',
@@ -260,7 +260,7 @@ class MuseProvider {
 
   _postStream(postData, timeout, onDelta) {
     const baseURL = this.getBaseURL();
-    const url = new URL('/chat/completions', `${baseURL}/`);
+    const url = new URL('chat/completions', `${baseURL}/`);
     const apiKey = this.getApiKey();
     const options = {
       method: 'POST',
