@@ -36,7 +36,7 @@ It is free and open source. Processing stays on your machine, and the only thing
 - **Hidden during screen share.** When a share starts, the app can hide every window on its own.
 - **Flexible local voice.** Choose manual start/stop capture or automatic voice-activity detection without fixed-timer sentence cuts.
 - **Configurable streamed answers.** Route voice replies to chat, the floating overlay, or both.
-- **Direct image analysis.** Screenshots go straight to Gemini for visual reasoning, with no slow OCR step in between.
+- **Direct image analysis.** Screenshots go straight to your chosen provider (Gemini or Muse) for visual reasoning, with no slow OCR step in between.
 - **Session memory.** The whole conversation is remembered, so follow-ups, edge cases, and optimizations keep their context.
 - **Language aware.** Tailored answers for C++, C, Python, Java, and JavaScript.
 - **Stealthy by design.** Runs under ordinary system names, ships with no telemetry, and keeps your session local.
@@ -153,7 +153,7 @@ For Azure Speech, create a Speech resource in the [Azure Portal](https://portal.
 
 | Action | Shortcut | Description |
 |---|---|---|
-| Screenshot capture | `Cmd/Ctrl + Shift + S` | Capture the screen and analyze it with Gemini |
+| Screenshot capture | `Cmd/Ctrl + Shift + S` | Capture the screen and analyze it with your chosen provider |
 | Toggle speech | `Alt + R` | Start or stop voice recognition, if configured |
 | Toggle visibility | `Cmd/Ctrl + Shift + V` | Show or hide all windows |
 | Toggle interaction | `Cmd/Ctrl + Shift + I` or `Alt + A` | Enable or disable click through |
@@ -168,7 +168,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 
 - Stealth overlay with a draggable command bar and a click through toggle
 - Hidden during screen share, with automatic hiding when a share begins
-- Screenshot capture with direct Gemini analysis, no OCR step
+- Screenshot capture with direct Gemini or Muse analysis, no OCR step
 - Configurable manual or VAD-driven voice capture
 - Persistent local Whisper worker with optional CUDA acceleration and idle GPU release
 - Configurable chat/overlay routing for streamed voice answers
@@ -184,7 +184,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 
 ### Planned
 
-- Multiple model backends alongside Gemini (OpenAI, Anthropic, local)
+- More model backends alongside Gemini and Muse (OpenAI, Anthropic, local)
 - Auto typing of code snippets into editors and IDEs
 - Export of conversation history to markdown or PDF
 - Deeper stealth, including process name randomization
