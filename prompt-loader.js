@@ -28,10 +28,9 @@ class PromptLoader {
       for (const file of files) {
         if (file.endsWith('.md')) {
           const skillName = path.basename(file, '.md');
-          if (skillName !== 'dsa') continue; // only keep DSA
           const filePath = path.join(promptsDir, file);
           const promptContent = fs.readFileSync(filePath, 'utf8');
-          
+
           this.prompts.set(skillName, promptContent);
         }
       }
@@ -78,8 +77,18 @@ class PromptLoader {
    * @returns {string} Modified prompt with programming language context
    */
   injectProgrammingLanguage(promptContent, programmingLanguage, skillName) {
-    const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
-    const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
+    const languageMap = {
+      cpp: 'C++', c: 'C', python: 'Python', java: 'Java',
+      javascript: 'JavaScript', js: 'JavaScript', typescript: 'TypeScript', ts: 'TypeScript',
+      go: 'Go', rust: 'Rust', csharp: 'C#', cs: 'C#',
+      ruby: 'Ruby', php: 'PHP', swift: 'Swift', kotlin: 'Kotlin'
+    };
+    const fenceTagMap = {
+      cpp: 'cpp', c: 'c', python: 'python', java: 'java',
+      javascript: 'javascript', js: 'javascript', typescript: 'typescript', ts: 'typescript',
+      go: 'go', rust: 'rust', csharp: 'csharp', cs: 'csharp',
+      ruby: 'ruby', php: 'php', swift: 'swift', kotlin: 'kotlin'
+    };
     const norm = (programmingLanguage || '').toLowerCase();
     const languageTitle = languageMap[norm] || (programmingLanguage.charAt(0).toUpperCase() + programmingLanguage.slice(1));
     const fenceTag = fenceTagMap[norm] || norm || 'text';
@@ -89,17 +98,13 @@ class PromptLoader {
     
     switch (skillName) {
       case 'dsa':
-        languageInjection = `\n\n## IMPLEMENTATION LANGUAGE: ${languageUpper}
-STRICT REQUIREMENTS:
-- Respond ONLY in ${languageTitle}. Do not include any snippets or alternatives in other languages.
-- All code blocks must use triple backticks with the exact language tag: \`\`\`${fenceTag}\`\`\`.
-- Aim for the best possible time and space complexity; prefer optimal algorithms and data structures.
-- Provide: brief approach, then final ${languageTitle} implementation, followed by time/space complexity.
-- If the user's input is a problem statement (and does not include code), produce a complete, runnable ${languageTitle} solution without asking for clarification.
-- Avoid unnecessary verbosity; focus on correctness, clarity, and efficiency.`;
+        languageInjection = `\n\n## PREFERRED CODE LANGUAGE: ${languageUpper}
+- For DSA/coding problems, prefer ${languageTitle} with code fence tag \`\`\`${fenceTag}\`\`\`.
+- For questions about OTHER languages or technologies (HTML, CSS, JS, TS, React, SQL, etc.), answer in THAT language/technology. Do not refuse or redirect.
+- Give a brief approach, then clean implementation, then complexity when relevant.`;
         break;
       default:
-        languageInjection = `\n\n## PROGRAMMING LANGUAGE: ${languageUpper}\nAll code and examples must be in ${languageTitle}. Use code fences with tag: \`\`\`${fenceTag}\`\`\`.`;
+        languageInjection = `\n\n## PREFERRED CODE LANGUAGE: ${languageUpper}\nPrefer ${languageTitle} for code examples when relevant, but answer questions about any language or technology the user asks about.`;
     }
 
     return promptContent + languageInjection;
@@ -368,7 +373,7 @@ STRICT REQUIREMENTS:
     if (!this.promptsLoaded) {
       this.loadPrompts();
     }
-    return ['dsa'];
+    return Array.from(this.prompts.keys());
   }
 
   /**

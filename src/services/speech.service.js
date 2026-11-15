@@ -1299,7 +1299,7 @@ class SpeechService extends EventEmitter {
   }
 
   _getSilenceHangoverMs() {
-    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 700, 200);
+    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 500, 200);
   }
 
   _getMinUtteranceMs() {
