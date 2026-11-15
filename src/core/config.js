@@ -24,6 +24,8 @@ class ConfigManager {
         defaultHeight: 600,
         minWidth: 300,
         minHeight: 400,
+        maxWidth: 1920,
+        maxHeight: 1080,
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
@@ -65,7 +67,9 @@ class ConfigManager {
           outputFormat: 'detailed'
         },
         whisper: {
-          model: 'small',
+          // 'base' is ~3x faster than 'small' on CPU with acceptable accuracy
+          // for interview speech; latency matters more here than perfection.
+          model: 'base',
           language: 'auto',
           // segmentMs is the legacy fixed-window size and now acts as the
           // hard upper bound for a single utterance when VAD is enabled.
@@ -76,7 +80,7 @@ class ConfigManager {
           // with natural utterance boundaries.
           vadEnabled: true,
           // Trailing silence (ms) that ends an utterance and triggers a flush.
-          silenceHangoverMs: 700,
+          silenceHangoverMs: 500,
           // Minimum accumulated speech (ms) before a pause counts as an
           // utterance — guards against coughs/clicks producing empty flushes.
           minUtteranceMs: 350,

@@ -124,7 +124,7 @@ class ApplicationController {
     this._utteranceBuffer = "";
     this._utteranceTimer = null;
     this._utteranceDispatchInFlight = false;
-    this._utteranceCoalesceMs = 800;
+    this._utteranceCoalesceMs = 400;
 
     // First-run onboarding: detects missing .env / API key and triggers
     // a settings-window prompt on first launch so users don't have to
@@ -240,9 +240,6 @@ class ApplicationController {
     try {
       this.setupPermissions();
       this.setupNetworkConfiguration();
-
-      // Small delay to ensure desktop/space detection is accurate
-      await new Promise((resolve) => setTimeout(resolve, 200));
 
       // First-run onboarding: ensure .env exists and read status once
       // so we can decide whether to defer showing the main overlay.
@@ -1028,9 +1025,9 @@ class ApplicationController {
   }
 
   navigateSkill(direction) {
-    const availableSkills = [
-      "dsa",
-    ];
+    const { promptLoader } = require("./prompt-loader");
+    const availableSkills = promptLoader.getAvailableSkills();
+    if (!availableSkills.length) return;
 
     const currentIndex = availableSkills.indexOf(this.activeSkill);
     if (currentIndex === -1) {
@@ -1599,7 +1596,7 @@ class ApplicationController {
       azureKey: process.env.AZURE_SPEECH_KEY || "",
       azureRegion: process.env.AZURE_SPEECH_REGION || "",
       whisperCommand: process.env.WHISPER_COMMAND || "",
-      whisperModel: process.env.WHISPER_MODEL || "small",
+      whisperModel: process.env.WHISPER_MODEL || "base",
       whisperLanguage: process.env.WHISPER_LANGUAGE || "auto",
       whisperDevice: process.env.WHISPER_DEVICE || "auto",
       whisperCaptureMode: process.env.WHISPER_CAPTURE_MODE ||

@@ -298,8 +298,8 @@ class LLMService {
   }
 
   formatImageInstruction(activeSkill, programmingLanguage) {
-    const langNote = programmingLanguage ? ` Use only ${programmingLanguage.toUpperCase()} for any code.` : '';
-    return `Analyze this image for a ${activeSkill.toUpperCase()} question. Extract the problem concisely and provide the best possible solution with explanation and final code.${langNote}`;
+    const langNote = programmingLanguage ? ` Prefer ${programmingLanguage.toUpperCase()} for code when relevant, but use whatever language fits the question.` : '';
+    return `Look at this image and answer whatever question, problem, or task it shows. It could be a coding problem, a technical concept question (HTML/CSS/JS/TS/React/etc.), system design, a form to fill, or anything else. Extract what's being asked and provide a complete, concise answer.${langNote}`;
   }
 
   async processTextWithSkill(text, activeSkill, sessionMemory = [], programmingLanguage = null) {
@@ -779,63 +779,47 @@ class LLMService {
   }
 
   getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage) {
-    let prompt = `# Intelligent Transcription Response System
+    let prompt = `You are a technical interview assistant. The user is in a live interview — their speech is transcribed and sent to you. Your job: help them ace it.
 
-Assume you are asked a question in ${activeSkill.toUpperCase()} mode. Your job is to intelligently respond to question/message with appropriate brevity.
-Assume you are in an interview and you need to perform best in ${activeSkill.toUpperCase()} mode.
-Always respond to the point, do not repeat the question or unnecessary information which is not related to ${activeSkill}.`;
+Answer ANY question — DSA, HTML, CSS, JavaScript, React, system design, databases, networking, behavioral, or anything else. Every question is valid. Never reject a question or say it doesn't match a category.`;
 
-    // Add programming language context if provided
     if (programmingLanguage) {
       const lang = String(programmingLanguage).toLowerCase();
-      const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
-      const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
+      const languageMap = {
+        cpp: 'C++', c: 'C', python: 'Python', java: 'Java',
+        javascript: 'JavaScript', js: 'JavaScript', typescript: 'TypeScript', ts: 'TypeScript',
+        go: 'Go', rust: 'Rust', csharp: 'C#', cs: 'C#',
+        ruby: 'Ruby', php: 'PHP', swift: 'Swift', kotlin: 'Kotlin'
+      };
+      const fenceTagMap = {
+        cpp: 'cpp', c: 'c', python: 'python', java: 'java',
+        javascript: 'javascript', js: 'javascript', typescript: 'typescript', ts: 'typescript',
+        go: 'go', rust: 'rust', csharp: 'csharp', cs: 'csharp',
+        ruby: 'ruby', php: 'php', swift: 'swift', kotlin: 'kotlin'
+      };
       const languageTitle = languageMap[lang] || (lang.charAt(0).toUpperCase() + lang.slice(1));
       const fenceTag = fenceTagMap[lang] || lang || 'text';
-      prompt += `\n\nCODING CONTEXT: Respond ONLY in ${languageTitle}. All code blocks must use triple backticks with language tag \`\`\`${fenceTag}\`\`\`. Do not include other languages unless explicitly asked.`;
+      prompt += `\nPreferred code language for DSA problems: ${languageTitle} (use \`\`\`${fenceTag}\`\`\`). For questions about other languages or technologies (HTML, CSS, JS, TS, React, SQL, etc.), answer in that language — never refuse.`;
     }
 
     prompt += `
 
-## Response Rules:
+## How to respond:
 
-### If the transcription is casual conversation, greetings, or NOT related to ${activeSkill}:
-- Respond with: "Yeah, I'm listening. Ask your question relevant to ${activeSkill}."
-- Or similar brief acknowledgments like: "I'm here, what's your ${activeSkill} question?"
+1. **Coding/DSA problem**: approach + clean implementation + complexity.
+2. **Conceptual question** (HTML, CSS, JS, networking, OS, etc.): clear 2-4 sentence answer with an example if helpful.
+3. **System design**: requirements → architecture → key details.
+4. **Follow-up**: continue naturally from where you left off.
+5. **Conversational** (greetings, mic tests): respond briefly — "Yes, I can hear you. Ready when you are."
+6. **Ambiguous** — could be an interviewer's question: suggest what the user should say.
 
-### If the transcription IS relevant to ${activeSkill} or is a follow-up question:
-- Provide a comprehensive, detailed response
-- Use bullet points, examples, and explanations
-- Focus on actionable insights and complete answers
-- Do not truncate or shorten your response
-
-### Examples of casual/irrelevant messages:
-- "Hello", "Hi there", "How are you?"
-- "What's the weather like?"
-- "I'm just testing this"
-- Random conversations not related to ${activeSkill}
-
-### Examples of relevant messages:
-- Actual questions about ${activeSkill} concepts
-- Follow-up questions to previous responses
-- Requests for clarification on ${activeSkill} topics
-- Problem-solving requests related to ${activeSkill}
-
-## Response Format:
-- Keep responses detailed
-- Use bullet points for structured answers
-- Be encouraging and helpful
-- Stay focused on ${activeSkill}
-
-If the user's input is a coding or DSA problem statement and contains no code, produce a complete, runnable solution in the selected programming language without asking for more details. Always include the final implementation in a properly tagged code block.
-
-Remember: Be intelligent about filtering - only provide detailed responses when the user actually needs help with ${activeSkill}.`;
+Be concise. The user is reading your answer in real time during the interview.`;
 
     return prompt;
   }
 
   formatUserMessage(text, activeSkill) {
-    return `Context: ${activeSkill.toUpperCase()} analysis request\n\nText to analyze:\n${text}`;
+    return text;
   }
 
   async executeRequest(geminiRequest) {
