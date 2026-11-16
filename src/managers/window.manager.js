@@ -312,8 +312,9 @@ class WindowManager {
   }
 
   async createSettingsWindow() {
-    if (this.windows.has('settings')) {
-      return this.windows.get('settings');
+    const existing = this.windows.get('settings');
+    if (existing && !existing.isDestroyed()) {
+      return existing;
     }
     const window = await this.createWindow('settings');
     this.windows.set('settings', window);
@@ -1784,17 +1785,22 @@ class WindowManager {
     this.broadcastToAllWindows('llm-window-state', { isOpen: false });
   }
 
-  showSettings() {
+  async showSettings() {
     if (this.isScreenBeingShared) return;
 
-    const settingsWindow = this.windows.get('settings');
-    if (settingsWindow) {
+    let settingsWindow = this.windows.get('settings');
+    if (!settingsWindow || settingsWindow.isDestroyed()) {
+      settingsWindow = await this.createSettingsWindow();
+    }
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
       this.showOnCurrentDesktop(settingsWindow);
       this.centerWindow(settingsWindow); // This now positions at top-center
       
       // Notify that settings window is shown
       setTimeout(() => {
-        settingsWindow.webContents.send('settings-window-shown');
+        if (!settingsWindow.isDestroyed()) {
+          settingsWindow.webContents.send('settings-window-shown');
+        }
       }, 50);
       
       logger.info('Settings window displayed at top');
@@ -1804,7 +1810,7 @@ class WindowManager {
   closeSettings() {
     const settingsWindow = this.windows.get('settings');
     if (settingsWindow && !settingsWindow.isDestroyed()) {
-      settingsWindow.close();
+      settingsWindow.hide();
     }
   }
 
