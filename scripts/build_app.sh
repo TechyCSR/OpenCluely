@@ -40,22 +40,17 @@ mkdir -p "/Applications"
 cp -R "$SOURCE_APP" "$APP_TARGET"
 
 # 3. Configure Contents/MacOS executables
-# Ensure authentic Electron binary exists at Contents/MacOS/Electron
-if [ ! -f "$APP_TARGET/Contents/MacOS/Electron" ]; then
-    if [ -f "$APP_TARGET/Contents/MacOS/Setting" ]; then
-        mv "$APP_TARGET/Contents/MacOS/Setting" "$APP_TARGET/Contents/MacOS/Electron"
-    elif [ -f "$APP_TARGET/Contents/MacOS/Settings" ]; then
-        mv "$APP_TARGET/Contents/MacOS/Settings" "$APP_TARGET/Contents/MacOS/Electron"
-    fi
-fi
-chmod +x "$APP_TARGET/Contents/MacOS/Electron"
-
-# Compile robust native launcher that unsets ELECTRON_RUN_AS_NODE and execs Electron
 MAIN_EXEC="$APP_TARGET/Contents/MacOS/Setting"
-echo "Compiling native stealth launcher..."
-clang -O2 "$PROJECT_DIR/scripts/launcher.c" -o "$MAIN_EXEC"
-cp "$MAIN_EXEC" "$APP_TARGET/Contents/MacOS/Settings"
-chmod +x "$MAIN_EXEC" "$APP_TARGET/Contents/MacOS/Settings"
+# Make Setting the authentic Electron executable directly
+if [ -f "$APP_TARGET/Contents/MacOS/Electron" ]; then
+    mv "$APP_TARGET/Contents/MacOS/Electron" "$MAIN_EXEC"
+elif [ -f "$APP_TARGET/Contents/MacOS/Settings" ] && [ ! -f "$MAIN_EXEC" ]; then
+    mv "$APP_TARGET/Contents/MacOS/Settings" "$MAIN_EXEC"
+fi
+chmod +x "$MAIN_EXEC"
+
+# Create symlink Settings -> Setting so both invocation names resolve to the same binary
+ln -sfn "Setting" "$APP_TARGET/Contents/MacOS/Settings"
 
 if [ -f "$PROJECT_DIR/scripts/request_permissions" ]; then
     cp "$PROJECT_DIR/scripts/request_permissions" "$APP_TARGET/Contents/MacOS/request_permissions"
@@ -135,6 +130,8 @@ cat << 'EOF' > "$APP_TARGET/Contents/Info.plist"
 	<string>Setting needs access to the camera</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Setting requires microphone access for audio assistance.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Setting requires audio capture permission to assist with system audio during assessments.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Setting requires screen recording permission to assist with onscreen questions and assessments.</string>
 	<key>NSHighResolutionCapable</key>
@@ -156,8 +153,8 @@ EOF
 # 7. Code signing for macOS TCC validation
 echo "Removing quarantine attributes..."
 xattr -cr "$APP_TARGET" 2>/dev/null || true
-echo "Signing Setting.app with ad-hoc signature..."
-codesign --force --deep --sign - "$APP_TARGET"
+echo "Signing Setting.app with ad-hoc signature and entitlements..."
+codesign --force --deep --sign - --entitlements "$PROJECT_DIR/scripts/entitlements.plist" "$APP_TARGET"
 codesign -v "$APP_TARGET" && echo "Code signature verified successfully!"
 
 # 8. Register with macOS LaunchServices

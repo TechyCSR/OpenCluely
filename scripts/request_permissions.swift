@@ -13,7 +13,10 @@ print("Setting Permission Helper running under bundle: \(bundleId)")
 let hasScreenAccess = CGPreflightScreenCaptureAccess()
 print("Screen capture preflight status: \(hasScreenAccess)")
 if !hasScreenAccess {
-    print("Screen capture access not granted.")
+    print("Screen capture access not granted; requesting prompt...")
+    if #available(macOS 11.0, *) {
+        _ = CGRequestScreenCaptureAccess()
+    }
 } else {
     print("Screen capture access already granted.")
 }
@@ -34,7 +37,8 @@ if micStatus == .notDetermined {
 }
 
 // 3. Accessibility Permission (Required for keyboard input injection)
-let isAccessibilityTrusted = AXIsProcessTrusted()
+let promptOptions = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+let isAccessibilityTrusted = AXIsProcessTrustedWithOptions(promptOptions)
 print("Accessibility authorization status: \(isAccessibilityTrusted)")
 
 print("Permissions check complete.")

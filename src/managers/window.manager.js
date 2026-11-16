@@ -1224,10 +1224,19 @@ class WindowManager {
     const checkedAt = new Date().toISOString();
 
     try {
-      await desktopCapturer.getSources({
-        types: ['screen', 'window'],
-        thumbnailSize: { width: 1, height: 1 }
-      });
+      try {
+        await desktopCapturer.getSources({
+          types: ['screen', 'window'],
+          thumbnailSize: { width: 1, height: 1 }
+        });
+      } catch (firstErr) {
+        // Fall back to screen-only enumeration if window enumeration fails
+        logger.debug('Screen+window enumeration failed, trying screen only', { error: firstErr?.message || String(firstErr) });
+        await desktopCapturer.getSources({
+          types: ['screen'],
+          thumbnailSize: { width: 1, height: 1 }
+        });
+      }
 
       this.screenCaptureStatus = {
         available: true,
@@ -1239,14 +1248,15 @@ class WindowManager {
         logger.info('Screen capture enumeration recovered');
       }
     } catch (error) {
+      const errMsg = error ? (error.message || error.stack || String(error)) : 'Unknown error';
       this.screenCaptureStatus = {
         available: false,
-        lastError: error.message,
+        lastError: errMsg,
         lastCheckedAt: checkedAt
       };
 
       const logContext = {
-        error: error.message,
+        error: errMsg,
         isScreenBeingShared: this.isScreenBeingShared
       };
 

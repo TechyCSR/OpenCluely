@@ -462,14 +462,45 @@ class ApplicationController {
         return false;
       }
       try {
-        const pagePath = path.resolve(fileURLToPath(webContents.getURL()));
-        const appRoot = path.resolve(__dirname);
-        const normalizeForComparison = (value) => process.platform === "win32"
-          ? value.toLowerCase()
-          : value;
-        const page = normalizeForComparison(pagePath);
-        const root = normalizeForComparison(appRoot + path.sep);
-        return page.startsWith(root);
+        const rawUrl = webContents.getURL();
+        if (!rawUrl || !rawUrl.startsWith("file://")) {
+          return false;
+        }
+        const pagePath = path.resolve(fileURLToPath(rawUrl));
+        let realPagePath;
+        try {
+          realPagePath = fs.realpathSync(pagePath);
+        } catch (_) {
+          realPagePath = pagePath;
+        }
+
+        let realAppRoot;
+        try {
+          realAppRoot = fs.realpathSync(__dirname);
+        } catch (_) {
+          realAppRoot = path.resolve(__dirname);
+        }
+
+        let appPathRoot;
+        try {
+          appPathRoot = fs.realpathSync(app.getAppPath());
+        } catch (_) {
+          appPathRoot = path.resolve(app.getAppPath());
+        }
+
+        const normalize = (value) =>
+          process.platform === "win32" ? value.toLowerCase() : value;
+        const normRealPage = normalize(realPagePath);
+        const normRawPage = normalize(pagePath);
+        const normRealRoot = normalize(realAppRoot + path.sep);
+        const normAppPath = normalize(appPathRoot + path.sep);
+
+        return (
+          normRealPage.startsWith(normRealRoot) ||
+          normRealPage.startsWith(normAppPath) ||
+          normRawPage.startsWith(normRealRoot) ||
+          normRawPage.startsWith(normAppPath)
+        );
       } catch (_) {
         return false;
       }
@@ -483,9 +514,9 @@ class ApplicationController {
           return false;
         }
         if (permission === "media") {
-          return !details.mediaType || details.mediaType === "audio";
+          return !details.mediaType || details.mediaType === "audio" || details.mediaType === "video";
         }
-        return permission === "display-capture";
+        return permission === "display-capture" || permission === "screen";
       }
     );
 
@@ -495,9 +526,9 @@ class ApplicationController {
         if (isTrustedAppContents(webContents)) {
           if (permission === "media") {
             const mediaTypes = Array.isArray(details.mediaTypes) ? details.mediaTypes : [];
-            granted = mediaTypes.length === 0 || mediaTypes.includes("audio");
+            granted = mediaTypes.length === 0 || mediaTypes.includes("audio") || mediaTypes.includes("video");
           } else {
-            granted = permission === "display-capture";
+            granted = permission === "display-capture" || permission === "screen";
           }
         }
 
@@ -510,6 +541,24 @@ class ApplicationController {
       }
     );
 
+    if (process.platform === "darwin") {
+      try {
+        const { systemPreferences } = require("electron");
+        if (typeof systemPreferences.getMediaAccessStatus === "function") {
+          const screenStatus = systemPreferences.getMediaAccessStatus("screen");
+          const micStatus = systemPreferences.getMediaAccessStatus("microphone");
+          logger.info("macOS System Permissions probe", {
+            screen: screenStatus,
+            microphone: micStatus
+          });
+          if (micStatus === "not-determined" && typeof systemPreferences.askForMediaAccess === "function") {
+            systemPreferences.askForMediaAccess("microphone").catch(() => {});
+          }
+        }
+      } catch (err) {
+        logger.debug("System media permissions check skipped", { error: err.message });
+      }
+    }
   }
 
   setupGlobalShortcuts() {
