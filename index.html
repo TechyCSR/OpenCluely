@@ -1247,12 +1247,12 @@
       </div>
       <div class="command-separator"></div>
 
-      <!-- Live Microphone & Audio Input (Always Visible) -->
-      <div class="command-item mic-control-item" id="micButton" title="Toggle Live Recording / Listen (⌥R / Alt+R)">
-        <i class="fas fa-microphone" id="micButtonIcon"></i>
-        <span id="micButtonLabel">Mic</span>
+      <!-- Live Speech Capture (Always Anonymous System Audio, No Switch) -->
+      <div class="command-item mic-control-item" id="micButton" title="Toggle Live Speech Capture (⌥R / Alt+R)">
+        <i class="fas fa-headphones" id="micButtonIcon"></i>
+        <span id="micButtonLabel">Listen</span>
       </div>
-      <div class="command-item audio-source-item" id="audioSourceToggle" title="Audio Source: Click to switch between Interviewer System Audio and Microphone">
+      <div class="command-item audio-source-item" id="audioSourceToggle" style="display: none !important;">
         <i class="fas fa-volume-high" id="audioSourceIcon"></i>
         <span id="audioSourceLabel">System</span>
       </div>

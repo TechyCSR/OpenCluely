@@ -1590,28 +1590,11 @@ class MainWindowUI {
         });
     }
 
-    setAudioSourceModeUI(mode) {
-        this.audioSourceMode = mode === 'microphone' ? 'microphone' : 'system';
+    setAudioSourceModeUI(_mode) {
+        // User requirement: Always anonymous system audio (no mic mode switch)
+        this.audioSourceMode = 'system';
         if (this.audioSourceToggle) {
-            if (this.audioSourceMode === 'system') {
-                this.audioSourceToggle.classList.add('active');
-                this.audioSourceToggle.title = 'Audio Source: System Audio (Interviewer Bot Speech) - Click for Mic';
-                if (this.audioSourceIcon) {
-                    this.audioSourceIcon.className = 'fas fa-volume-high';
-                }
-                if (this.audioSourceLabel) {
-                    this.audioSourceLabel.textContent = 'System';
-                }
-            } else {
-                this.audioSourceToggle.classList.remove('active');
-                this.audioSourceToggle.title = 'Audio Source: Microphone (Candidate Voice) - Click for System Audio';
-                if (this.audioSourceIcon) {
-                    this.audioSourceIcon.className = 'fas fa-microphone-lines';
-                }
-                if (this.audioSourceLabel) {
-                    this.audioSourceLabel.textContent = 'Mic In';
-                }
-            }
+            this.audioSourceToggle.style.display = 'none';
         }
     }
 

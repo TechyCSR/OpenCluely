@@ -1087,7 +1087,7 @@ CRITICAL CODE GENERATION RULES (STRICT COMPLIANCE REQUIRED):
     const sessionManager = require('../managers/session.manager');
     
     if (sessionManager && typeof sessionManager.getConversationHistory === 'function') {
-      const conversationHistory = sessionManager.getConversationHistory(10);
+      const conversationHistory = sessionManager.getConversationHistory(16);
       const skillContext = sessionManager.getSkillContext(activeSkill, programmingLanguage);
       return this.buildIntelligentTranscriptionRequestWithHistory(cleanText, activeSkill, conversationHistory, skillContext, programmingLanguage);
     }
@@ -1158,7 +1158,7 @@ CRITICAL CODE GENERATION RULES (STRICT COMPLIANCE REQUIRED):
                typeof event.content === 'string' && 
                event.content.trim().length > 0;
       })
-      .slice(-4) // Keep recent 2 exchanges (4 turns) for ultra-fast TTFT and prompt prefill
+      .slice(-10) // Keep recent 5 exchanges (10 turns) for rich conversational context
       .map(event => {
         const content = event.content.trim();
         if (!content) {
@@ -1175,7 +1175,8 @@ CRITICAL CODE GENERATION RULES (STRICT COMPLIANCE REQUIRED):
     // Strict multi-turn alternation enforcement for Gemini v1beta API:
     // 1. Alternation must be strict: user -> model -> user -> model
     // 2. Consecutive entries of the same role must be merged into a single turn
-    // 3. Since cleanText is appended as the new 'user' turn, the history MUST end in 'model'
+    // 3. Gemini contents array MUST begin with 'user'
+    // 4. Since cleanText is appended as the new 'user' turn, the history MUST end in 'model'
     const sanitizedHistory = [];
     for (const item of conversationContents) {
       if (sanitizedHistory.length === 0) {
@@ -1188,6 +1189,11 @@ CRITICAL CODE GENERATION RULES (STRICT COMPLIANCE REQUIRED):
           sanitizedHistory.push({ role: item.role, parts: [{ text: item.parts[0].text }] });
         }
       }
+    }
+
+    // Ensure contents starts with 'user' (Gemini API strict requirement: contents[0].role MUST be 'user')
+    while (sanitizedHistory.length > 0 && sanitizedHistory[0].role !== 'user') {
+      sanitizedHistory.shift();
     }
 
     // Never let history end on 'user' right before we push our new user prompt
@@ -1214,9 +1220,9 @@ CRITICAL CODE GENERATION RULES (STRICT COMPLIANCE REQUIRED):
       programmingLanguage: programmingLanguage || 'not specified',
       historyLength: conversationHistory.length,
       totalContents: request.contents.length,
-      hasSkillPrompt: !!skillContext.skillPrompt,
+      hasSkillPrompt: !!(skillContext && skillContext.skillPrompt),
       cleanTextLength: cleanText.length,
-      requiresProgrammingLanguage: skillContext.requiresProgrammingLanguage || false
+      requiresProgrammingLanguage: !!(skillContext && skillContext.requiresProgrammingLanguage)
     });
 
     return request;
@@ -1254,11 +1260,24 @@ CRITICAL CODE GENERATION RULES (STRICT COMPLIANCE REQUIRED):
       }
     }
 
-    let prompt = `# Intelligent Technical Co-Pilot Response System
+    let prompt = `# Intelligent Technical Co-Pilot Response System (Candidate: Jenil Soni)
 
 Assume you are asked a question in ${activeSkill.toUpperCase()} mode. Your job is to intelligently respond to the question/message with appropriate brevity.
 Assume you are in an interview and you need to perform at the highest professional level.
-Always respond directly to the point. Do not repeat the question or produce unnecessary filler.`;
+Always respond directly to the point. Do not repeat the question or produce unnecessary filler.
+
+## CANDIDATE REAL-WORLD PROJECT CONTEXT (Jenil Soni):
+Always ground architectural and production examples in Jenil's real flagship projects:
+1. ClinicOS: Node.js/Express, PostgreSQL normalized across 18+ tables, RBAC/ABAC healthcare data isolation, 100+ secure REST endpoints, B-Tree index dropping query latency from 420ms to 18ms.
+2. Vedprada Consultancy: Full-stack spiritual learning platform, Redis clustering, 99.9% uptime during high-concurrency broadcasts, 70% reduction in manual operational overhead.
+3. REC — Realtime Event Capturing: 512-d AuraFace-v1 face embeddings matched via cosine similarity, Redis caching, FastAPI/PostgreSQL sub-second photo retrieval.
+4. AI CCTV Surveillance System: 6 ONNX models orchestrated with YOLOv8, <100ms latency per frame, 95%+ detection accuracy, 15+ automated security rules.
+5. AirSight — Environmental Intelligence: NASA Space Apps Hackathon, NASA TEMPO satellite atmospheric observations + terrestrial sensors, XGBoost, 20% higher prediction accuracy.
+6. Manjushri Jewellers: Production inventory management, automated GST billing reducing processing time by 80%, 3x customer engagement.
+7. Brainy Beam Technologies: ML Intern, YOLO, ResNet, PyTorch, 92% validation accuracy.
+
+## MULTI-TURN CONVERSATION & PRONOUN RESOLUTION:
+When the interviewer asks a follow-up question (e.g. "How is it better?", "What about its latency?", "Why choose that over SQL?", "Can you elaborate on that trade-off?"), IMMEDIATELY resolve pronouns ("it", "that", "this") using the preceding question/answer turns in the conversation history. Never answer generically or ask for clarification—ground the answer directly in the active subject previously discussed.`;
 
     // Add programming language context if provided
     if (programmingLanguage) {

@@ -93,23 +93,30 @@
             width: 7px;
             height: 7px;
             border-radius: 50%;
-            background-color: var(--emerald-primary);
-            box-shadow: 0 0 8px var(--emerald-primary);
+            background-color: rgba(255, 255, 255, 0.40);
+            box-shadow: none;
             flex-shrink: 0;
             transition: all 0.25s ease;
         }
 
-        .status-dot.listening {
-            background-color: #06b6d4;
-            box-shadow: 0 0 8px #06b6d4;
-            animation: pulseStatus 1.3s infinite ease-in-out;
+        .status-dot.idle {
+            background-color: rgba(255, 255, 255, 0.35);
+            box-shadow: none;
+            animation: none;
         }
 
+        .status-dot.listening {
+            background-color: #06b6d4;
+            box-shadow: 0 0 10px #06b6d4;
+            animation: pulseStatus 1.2s infinite ease-in-out;
+        }
+
+        .status-dot.processing,
         .status-dot.analyzing,
         .status-dot.retrying {
             background-color: #f59e0b;
-            box-shadow: 0 0 8px #f59e0b;
-            animation: pulseStatus 1.1s infinite ease-in-out;
+            box-shadow: 0 0 10px #f59e0b;
+            animation: pulseStatus 1.0s infinite ease-in-out;
         }
 
         .status-dot.answering {
@@ -121,6 +128,7 @@
         .status-dot.ready {
             background-color: #10b981;
             box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+            animation: none;
         }
 
         @keyframes pulseStatus {
@@ -700,10 +708,10 @@
             <!-- Left: Live Status Ribbon & Alert Info -->
             <div class="header-left">
                 <div class="status-ribbon" id="statusRibbon">
-                    <span class="status-dot ready" id="statusDot"></span>
-                    <span class="status-label" id="statusLabel">READY</span>
+                    <span class="status-dot idle" id="statusDot"></span>
+                    <span class="status-label" id="statusLabel">IDLE</span>
                 </div>
-                <span class="header-alert-text" id="headerAlertText">Listening for interviewer…</span>
+                <span class="header-alert-text" id="headerAlertText">Waiting for speech…</span>
             </div>
 
             <!-- Center: Question Badge, Left/Right Navigation & Latency Ribbon -->
@@ -837,9 +845,21 @@
             // Loading state trigger
             if (api.onShowLoading) {
                 api.onShowLoading(() => {
-                    setStatus('ANALYZING');
-                    setAlertText('Analyzing audio…');
-                    showLoadingState('Analyzing');
+                    if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
+                    setStatus('PROCESSING');
+                    setAlertText('Processing question…');
+                    showLoadingState('Processing');
+                });
+            }
+
+            // Realtime speech active indicator
+            if (api.onSpeechActive) {
+                api.onSpeechActive(() => {
+                    if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
+                    if (!isStreaming) {
+                        setStatus('LISTENING');
+                        setAlertText('Listening to speech…');
+                    }
                 });
             }
 
@@ -850,16 +870,18 @@
                     if (!statusMsg) return;
 
                     const lower = statusMsg.toLowerCase();
-                    if (lower.includes('listening') || lower.includes('recording')) {
+                    if (lower.includes('speaking') || lower.includes('listening to') || lower.includes('speech active')) {
+                        if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                         setStatus('LISTENING');
-                        setAlertText(statusMsg);
+                        setAlertText('Listening…');
                     } else if (lower.includes('processing') || lower.includes('analyzing')) {
-                        setStatus('ANALYZING');
-                        setAlertText(statusMsg);
-                    } else if (lower.includes('ready')) {
-                        if (!isStreaming) {
-                            setStatus('READY');
-                            setAlertText('Listening for interviewer…');
+                        if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
+                        setStatus('PROCESSING');
+                        setAlertText('Processing question…');
+                    } else if (lower.includes('waiting') || lower.includes('stopped') || lower.includes('idle')) {
+                        if (!isStreaming && !readyToIdleTimer) {
+                            setStatus('IDLE');
+                            setAlertText('Waiting for speech…');
                         }
                     } else {
                         setAlertText(statusMsg);
@@ -870,11 +892,11 @@
             // Interim / Transcribed question received
             if (api.onTranscriptionReceived) {
                 api.onTranscriptionReceived((_e, payload) => {
+                    if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                     const text = (payload && payload.text) || (typeof payload === 'string' ? payload : '');
                     if (text && text.trim()) {
-                        setStatus('ANALYZING');
-                        setAlertText('Transcribed question…');
-                        showLoadingState('Analyzing');
+                        setStatus('LISTENING');
+                        setAlertText(`Listening: "${text.substring(0, 32)}…"`);
                     }
                 });
             }
@@ -882,6 +904,7 @@
             // Retry event
             if (api.onTranscriptionLlmRetry) {
                 api.onTranscriptionLlmRetry((_e, data) => {
+                    if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                     const attempt = data && data.attempt ? data.attempt : 2;
                     const maxAttempts = data && data.maxAttempts ? data.maxAttempts : 3;
                     setStatus('RETRYING');
@@ -911,19 +934,22 @@
             // Streaming start
             if (api.onTranscriptionLlmResponseStart) {
                 api.onTranscriptionLlmResponseStart((_e, data) => {
+                    if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                     const skill = data && data.skill;
                     updateSkillBadge(skill);
                     streamAccumulator = '';
                     isStreaming = true;
-                    setStatus('ANSWERING');
-                    setAlertText('Synthesizing answer…');
-                    showLoadingState('Answering');
+                    setStatus('PROCESSING');
+                    const qPreview = data && data.questionPreview ? data.questionPreview.substring(0, 32) : '';
+                    setAlertText(qPreview ? `Processing: "${qPreview}…"` : 'Processing question…');
+                    showLoadingState('Processing');
                 });
             }
 
             // Streaming chunk
             if (api.onTranscriptionLlmResponseChunk) {
                 api.onTranscriptionLlmResponseChunk((_e, payload) => {
+                    if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                     if (!payload) return;
                     const chunk = payload.delta || payload.chunk || payload.text || (typeof payload === 'string' ? payload : '');
                     if (!chunk) return;
@@ -934,7 +960,7 @@
                             streamTimer = null;
                             if (streamAccumulator.trim()) {
                                 hideLoadingState();
-                                setStatus('ANSWERING');
+                                setStatus('PROCESSING');
                                 setAlertText('Streaming answer…');
                                 displayStructuredAnswer({ content: streamAccumulator, metadata: payload.metadata });
                             }
@@ -969,6 +995,18 @@
                 setStatus('READY');
                 setAlertText('Answer ready');
                 saveAndDisplayAnswer(data);
+
+                // Auto-transition to IDLE after 2 seconds while background audio remains active
+                if (readyToIdleTimer) {
+                    clearTimeout(readyToIdleTimer);
+                }
+                readyToIdleTimer = setTimeout(() => {
+                    readyToIdleTimer = null;
+                    if (!isStreaming) {
+                        setStatus('IDLE');
+                        setAlertText('Waiting for speech…');
+                    }
+                }, 2000);
             }
 
             if (api.onDisplayLlmResponse) {
@@ -981,6 +1019,8 @@
         }
 
         // ── Status & Ribbon Updates ──
+        let readyToIdleTimer = null;
+
         function setStatus(status) {
             const dot = document.getElementById('statusDot');
             const label = document.getElementById('statusLabel');
@@ -990,11 +1030,21 @@
             label.textContent = st;
 
             dot.className = 'status-dot';
-            if (st === 'LISTENING') dot.classList.add('listening');
-            else if (st === 'ANALYZING') dot.classList.add('analyzing');
-            else if (st === 'RETRYING') dot.classList.add('retrying');
-            else if (st === 'ANSWERING') dot.classList.add('answering');
-            else dot.classList.add('ready');
+            if (st === 'IDLE') {
+                dot.classList.add('idle');
+            } else if (st === 'LISTENING') {
+                dot.classList.add('listening');
+            } else if (st === 'PROCESSING' || st === 'ANALYZING') {
+                dot.classList.add('processing');
+            } else if (st === 'RETRYING') {
+                dot.classList.add('retrying');
+            } else if (st === 'ANSWERING') {
+                dot.classList.add('answering');
+            } else if (st === 'READY') {
+                dot.classList.add('ready');
+            } else {
+                dot.classList.add('idle');
+            }
         }
 
         function setAlertText(text) {

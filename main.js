@@ -836,30 +836,32 @@ class ApplicationController {
       }
     });
 
-    ipcMain.handle("set-audio-source-mode", (_event, mode) => {
-      this.audioSourceMode = mode === "microphone" ? "microphone" : "system";
+    ipcMain.handle("set-audio-source-mode", (_event, _mode) => {
+      // User requirement: Always anonymous system audio (no mic mode switch)
+      this.audioSourceMode = "system";
       if (typeof speechService.updateSettings === 'function') {
-        speechService.updateSettings({ audioSourceMode: this.audioSourceMode });
+        speechService.updateSettings({ audioSourceMode: "system" });
       }
       windowManager.broadcastToAllWindows("audio-source-mode-changed", {
-        mode: this.audioSourceMode,
+        mode: "system",
       });
-      return { success: true, mode: this.audioSourceMode };
+      return { success: true, mode: "system" };
     });
 
     ipcMain.handle("get-audio-source-mode", () => {
-      return this.audioSourceMode || "system";
+      return "system";
     });
 
     ipcMain.handle("toggle-audio-source-mode", () => {
-      this.audioSourceMode = this.audioSourceMode === "system" ? "microphone" : "system";
+      // User requirement: Always anonymous system audio (no mic mode switch)
+      this.audioSourceMode = "system";
       if (typeof speechService.updateSettings === 'function') {
-        speechService.updateSettings({ audioSourceMode: this.audioSourceMode });
+        speechService.updateSettings({ audioSourceMode: "system" });
       }
       windowManager.broadcastToAllWindows("audio-source-mode-changed", {
-        mode: this.audioSourceMode,
+        mode: "system",
       });
-      return { success: true, mode: this.audioSourceMode };
+      return { success: true, mode: "system" };
     });
 
     // Raw PCM audio captured by the renderer's Web Audio API (Windows Whisper path)
@@ -2436,12 +2438,13 @@ class ApplicationController {
     const isPreambleOnly = isInterviewQuestion && this._isRecruiterPreambleOnly(this._utteranceBuffer);
 
     // Conversational debounce:
-    // - If question ends with '?', debounce promptly at 200ms
-    // - If ending in '.' or '!', wait 250ms
-    // - If mid-sentence or without punctuation, wait 350ms so speech coalesces into one complete thought
-    // - If pure preamble acknowledgment, wait 650ms for the actual question body
+    // Natural pause buffer so questions don't get cut in half while interviewer is speaking:
+    // - If pure preamble acknowledgment, wait 850ms
+    // - If question ends with '?', debounce at 750ms
+    // - If ending in '.' or '!', wait 850ms
+    // - If mid-sentence or without punctuation, wait 1100ms so pauses and cuts in question are absorbed
     const coalesceDelay = isInterviewQuestion 
-      ? (isPreambleOnly ? 650 : (isQuestionMark ? 200 : (isOtherPunctuation ? 250 : 350))) 
+      ? (isPreambleOnly ? 850 : (isQuestionMark ? 750 : (isOtherPunctuation ? 850 : 1100))) 
       : this._utteranceCoalesceMs;
 
     this._utteranceTimer = setTimeout(() => {
@@ -2454,7 +2457,7 @@ class ApplicationController {
    * Send the coalesced utterance to the LLM.
    * Linear Motion & Latest-Wins Preemption Pipeline:
    * 1. If an existing LLM generation or analysis is currently in flight, immediately abort it.
-   * 2. Immediately notify the Voice UI to transition from "Hearing..." to "Analyzing: [new question]".
+   * 2. Immediately notify the Voice UI to transition from "LISTENING" to "PROCESSING".
    * 3. Evaluate fastest path first (instant greeting, curated KB, or Gemini 3.5 Flash Lite stream).
    */
   async dispatchCoalescedUtterance() {
@@ -2513,11 +2516,12 @@ class ApplicationController {
     const messageId = `tr-${Date.now()}-${this._responseSeq}`;
 
     // 2. IMMEDIATE LINEAR UI NOTIFICATION:
-    // Instantly transition the UI from "Hearing..." to "Analyzing: [new question]"
+    // Instantly transition the UI state to "PROCESSING" with question preview
     this.sendToVoiceResponseWindows("transcription-llm-response-start", {
       messageId,
       skill: this.activeSkill,
       questionPreview: targetQuestion.substring(0, 80),
+      status: 'PROCESSING',
       isAnalyzing: true
     });
     if (this.shouldShowVoiceOverlay()) {

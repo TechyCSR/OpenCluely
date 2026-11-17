@@ -793,6 +793,16 @@ class SpeechService extends EventEmitter {
 
       this.systemAudioProcess.on('exit', (code, signal) => {
         logger.info('System audio recorder exited', { code, signal });
+        this.systemAudioProcess = null;
+        // Auto-heal: If recording is still supposed to be active, automatically resurrect recorder
+        if (this.isRecording && this.runtimeSettings.audioSourceMode === 'system') {
+          logger.warn('System audio recorder exited unexpectedly; automatically restarting in 400ms');
+          setTimeout(() => {
+            if (this.isRecording && this.runtimeSettings.audioSourceMode === 'system' && !this.systemAudioProcess) {
+              this._startSystemAudioCapture();
+            }
+          }, 400);
+        }
       });
 
       if (!this._isManualCaptureMode()) {
@@ -950,18 +960,18 @@ class SpeechService extends EventEmitter {
 
     const floor = this._getVadEnergyFloor();
     // Seed / adapt the background noise floor while not actively speaking so
-    // the threshold tracks the room rather than a hard-coded constant. Seed
-    // conservatively: if the very first chunk is already loud (the user started
-    // talking immediately), clamp to the configured floor so a high seed can't
-    // push the enter-threshold out of reach and stall VAD for the whole session.
+    // the threshold tracks the room rather than a hard-coded constant.
+    // Clamp to a strict ceiling so loud speech or system audio NEVER drives
+    // the noise floor up and permanently blinds VAD on subsequent questions.
+    const maxNoiseCeiling = Math.max(floor * 1.5, 0.0035);
     if (!this.vadNoiseInit) {
-      this.vadNoiseFloor = Math.min(energy, floor);
+      this.vadNoiseFloor = Math.min(energy, maxNoiseCeiling);
       this.vadNoiseInit = true;
     }
-    // Hysteresis: it takes more energy to *start* an utterance than to keep
-    // one going, so a brief dip mid-sentence doesn't end it prematurely.
-    const enterThreshold = Math.max(floor, this.vadNoiseFloor * 2.5);
-    const exitThreshold = Math.max(floor * 0.7, this.vadNoiseFloor * 1.6);
+    // Hysteresis with bounded enter threshold:
+    // Ensure enterThreshold NEVER exceeds 0.005 so normal speech always triggers onset
+    const enterThreshold = Math.min(0.005, Math.max(floor, this.vadNoiseFloor * 1.8));
+    const exitThreshold = Math.max(floor * 0.5, this.vadNoiseFloor * 1.2);
     const isVoiced = this.vadSpeaking ? energy >= exitThreshold : energy >= enterThreshold;
 
     if (!this.vadSpeaking) {
@@ -981,8 +991,8 @@ class SpeechService extends EventEmitter {
         this.segmentBytes += buffer.length;
         this.vadSpeechMs += chunkMs;
       } else {
-        // Background: adapt the noise floor and keep a short pre-roll ring.
-        this.vadNoiseFloor = this.vadNoiseFloor * 0.95 + energy * 0.05;
+        // Background: adapt the noise floor with strict upper ceiling clamp
+        this.vadNoiseFloor = Math.min(this.vadNoiseFloor * 0.95 + energy * 0.05, maxNoiseCeiling);
         this.vadPreRoll.push(buffer);
         this.vadPreRollMs += chunkMs;
         const preRollLimit = this._getPreRollMs();
@@ -1402,9 +1412,9 @@ class SpeechService extends EventEmitter {
 
   _getSilenceHangoverMs() {
     if (this.runtimeSettings.audioSourceMode === 'system') {
-      return 400; // Fast pause detection for live bot interviews
+      return 600; // Natural pause tolerance for live interview questions
     }
-    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 450, 200);
+    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 600, 200);
   }
 
   _getMinUtteranceMs() {
@@ -1424,9 +1434,9 @@ class SpeechService extends EventEmitter {
 
   _getVadEnergyFloor() {
     if (this.runtimeSettings.audioSourceMode === 'system') {
-      return 0.002; // Ultra-sensitive floor for internal device audio capture
+      return 0.0015; // Ultra-sensitive floor for internal device audio capture
     }
-    return this._vadNumber('whisperVadEnergyFloor', 'WHISPER_VAD_ENERGY_FLOOR', 'speech.whisper.vadEnergyFloor', 0.008, 0.0005);
+    return this._vadNumber('whisperVadEnergyFloor', 'WHISPER_VAD_ENERGY_FLOOR', 'speech.whisper.vadEnergyFloor', 0.004, 0.0005);
   }
 
   _getSetting(key) {
@@ -2014,12 +2024,16 @@ class SpeechService extends EventEmitter {
     if (this.whisperWorker.isConfigured()) {
       const startedAt = Date.now();
       try {
-        const result = await this.whisperWorker.transcribe(audioFilePath, {
+        const transcribePromise = this.whisperWorker.transcribe(audioFilePath, {
           model: this._getWhisperModel(),
           language: this._getWhisperLanguage(),
           modelDir: this._getWhisperModelDir(),
           device: this._getWhisperDevice()
         });
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Whisper worker transcription timed out after 10000ms')), 10000);
+        });
+        const result = await Promise.race([transcribePromise, timeoutPromise]);
         logger.info('Persistent Whisper transcription completed', {
           processingTime: Date.now() - startedAt,
           model: result.model,
