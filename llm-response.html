@@ -3,18 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Response</title>
+    <title>Interview Answer Dialogue</title>
     <script src="lib/markdown.js"></script>
     <script src="lib/mathrender.js"></script>
     <script src="./src/ui/corner-hover-drag.js"></script>
     <style>
         :root {
-            --bg-glass: rgba(14, 14, 14, 0.85);
+            --bg-glass: rgba(11, 12, 16, 0.94);
             --border-glass: rgba(255, 255, 255, 0.12);
-            --text-primary: rgba(255, 255, 255, 0.95);
-            --text-secondary: rgba(255, 255, 255, 0.70);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.78);
             --text-muted: rgba(255, 255, 255, 0.45);
-            --code-bg: rgba(0, 0, 0, 0.55);
+            --emerald-primary: #10b981;
+            --emerald-light: #34d399;
+            --emerald-glow: rgba(16, 185, 129, 0.28);
+            --emerald-bg: rgba(16, 185, 129, 0.10);
+            --emerald-border: rgba(16, 185, 129, 0.32);
+            --code-bg: rgba(0, 0, 0, 0.65);
         }
 
         *, *::before, *::after {
@@ -24,9 +30,9 @@
         }
 
         body {
-            background: rgba(13, 13, 13, 0.88);
-            backdrop-filter: blur(28px);
-            -webkit-backdrop-filter: blur(28px);
+            background: var(--bg-glass);
+            backdrop-filter: blur(32px);
+            -webkit-backdrop-filter: blur(32px);
             border-radius: 10px;
             border: 1px solid var(--border-glass);
             -webkit-app-region: no-drag;
@@ -35,91 +41,227 @@
             height: 100vh;
             width: 100vw;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
-            font-size: 13px;
+            font-size: 13.5px;
             line-height: 1.55;
             letter-spacing: 0.1px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.12);
             user-select: text;
         }
 
-        /* ── Draggable Header ── */
+        /* ── Draggable Window Header with Ribbon & Status ── */
         .window-header {
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
-            height: 32px;
+            height: 38px;
             -webkit-app-region: drag;
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 12px;
-            background: rgba(0, 0, 0, 0.55);
+            background: rgba(0, 0, 0, 0.68);
             border-bottom: 1px solid rgba(255, 255, 255, 0.10);
             z-index: 50;
             color: var(--text-secondary);
             font-size: 12px;
             font-weight: 600;
-            letter-spacing: 0.4px;
         }
 
-        .window-title {
-            pointer-events: none;
-            user-select: none;
+        .header-left {
             display: flex;
             align-items: center;
-            gap: 6px;
-            margin-left: 12px;
+            gap: 10px;
+            -webkit-app-region: drag;
+            min-width: 0;
         }
 
-        .window-title .title-badge {
+        /* ── Live Status Ribbon & Pulsing Dot ── */
+        .status-ribbon {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            padding: 2.5px 8px;
+            border-radius: 12px;
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: var(--emerald-primary);
+            box-shadow: 0 0 8px var(--emerald-primary);
+            flex-shrink: 0;
+            transition: all 0.25s ease;
+        }
+
+        .status-dot.listening {
+            background-color: #06b6d4;
+            box-shadow: 0 0 8px #06b6d4;
+            animation: pulseStatus 1.3s infinite ease-in-out;
+        }
+
+        .status-dot.analyzing,
+        .status-dot.retrying {
+            background-color: #f59e0b;
+            box-shadow: 0 0 8px #f59e0b;
+            animation: pulseStatus 1.1s infinite ease-in-out;
+        }
+
+        .status-dot.answering {
+            background-color: #10b981;
+            box-shadow: 0 0 10px #10b981;
+            animation: pulseStatus 0.9s infinite ease-in-out;
+        }
+
+        .status-dot.ready {
+            background-color: #10b981;
+            box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+        }
+
+        @keyframes pulseStatus {
+            0%, 100% { transform: scale(0.85); opacity: 0.65; }
+            50% { transform: scale(1.25); opacity: 1; }
+        }
+
+        .status-label {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.7px;
+            text-transform: uppercase;
+            color: #ffffff;
+        }
+
+        .header-alert-text {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 190px;
+            user-select: none;
+        }
+
+        /* ── Center: Question Badge, Navigation Arrows & Latency Ribbon ── */
+        .header-center {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            -webkit-app-region: no-drag;
+            user-select: none;
+        }
+
+        .question-nav-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 2px 4px;
+            border-radius: 6px;
+        }
+
+        .nav-arrow-btn {
+            width: 22px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            cursor: pointer;
+            transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1;
+            user-select: none;
+            -webkit-app-region: no-drag;
+        }
+
+        .nav-arrow-btn:not(.disabled):hover {
+            background: rgba(16, 185, 129, 0.22);
+            border-color: rgba(16, 185, 129, 0.65);
+            color: #ffffff;
+            transform: scale(1.15);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+        }
+
+        .nav-arrow-btn.disabled {
+            opacity: 0.25;
+            pointer-events: none;
+            cursor: default;
+        }
+
+        .q-badge {
             background: rgba(255, 255, 255, 0.10);
-            border: 1px solid rgba(255, 255, 255, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            color: #ffffff;
+            font-size: 10.5px;
+            font-weight: 800;
+            padding: 2px 7px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+            min-width: 28px;
+            text-align: center;
+            user-select: none;
+        }
+
+        /* ── Latency Ribbon ── */
+        .time-ribbon {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: var(--emerald-bg);
+            border: 1px solid var(--emerald-border);
+            color: var(--emerald-light);
+            padding: 2.5px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 750;
+            letter-spacing: 0.3px;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+            user-select: none;
+            -webkit-app-region: no-drag;
+            transition: all 0.2s ease;
+        }
+
+        .time-ribbon .time-bolt {
+            color: var(--emerald-primary);
+            font-size: 11px;
+            font-weight: 900;
+        }
+
+        /* ── Right Controls ── */
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            -webkit-app-region: no-drag;
+        }
+
+        .title-badge {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.20);
             color: #ffffff;
             font-size: 9.5px;
             font-weight: 700;
-            padding: 1px 5px;
-            border-radius: 3px;
+            padding: 2px 6px;
+            border-radius: 4px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-        }
-
-        .history-badge {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            color: var(--text-secondary);
-            font-size: 10px;
-            font-weight: 600;
-            padding: 1px 5px;
-            border-radius: 3px;
-            letter-spacing: 0.3px;
-            margin-left: 4px;
-            display: inline-flex;
-            align-items: center;
-        }
-
-        .history-nav-btn {
-            font-size: 14px;
-            font-weight: 700;
-            line-height: 1;
-        }
-
-        .history-badge.hidden,
-        .history-nav-btn.hidden {
-            display: none !important;
-        }
-
-        .window-controls {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            -webkit-app-region: no-drag;
-            margin-right: 12px;
+            user-select: none;
         }
 
         .window-btn {
-            width: 20px;
-            height: 20px;
+            width: 22px;
+            height: 22px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -135,15 +277,9 @@
         }
 
         .window-btn:hover {
-            background: rgba(255, 255, 255, 0.22);
+            background: rgba(255, 255, 255, 0.25);
             color: #ffffff;
-            border-color: rgba(255, 255, 255, 0.35);
-        }
-
-        .window-btn-close:hover {
-            background: rgba(255, 255, 255, 0.28);
-            border-color: rgba(255, 255, 255, 0.45);
-            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.4);
         }
 
         /* ── Main Container ── */
@@ -155,36 +291,46 @@
             background: transparent;
         }
 
-        .has-header #response-content,
-        .has-header #loading {
-            margin-top: 32px;
-            height: calc(100vh - 32px);
+        .content-area {
+            -webkit-app-region: no-drag;
+            margin-top: 38px;
+            height: calc(100vh - 38px);
+            overflow: hidden;
+            position: relative;
         }
 
-        /* ── Loading State ── */
-        .loading {
+        /* ── Loading Overlay State ── */
+        .loading-container {
+            position: absolute;
+            top: 38px;
+            left: 0;
+            right: 0;
+            bottom: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(0, 0, 0, 0.2);
+            background: rgba(11, 12, 16, 0.65);
+            z-index: 40;
+            backdrop-filter: blur(8px);
         }
 
         .loading-compact {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 8px 18px;
-            border-radius: 20px;
+            gap: 12px;
+            background: rgba(18, 19, 24, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 10px 22px;
+            border-radius: 24px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
         }
 
         .loading-text {
-            color: var(--text-secondary);
+            color: #ffffff;
             font-size: 12px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
+            font-weight: 700;
+            letter-spacing: 0.6px;
             text-transform: uppercase;
         }
 
@@ -198,7 +344,7 @@
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background-color: #ffffff;
+            background-color: var(--emerald-primary);
             animation: bounce 1.3s infinite ease-in-out;
         }
 
@@ -208,197 +354,315 @@
 
         @keyframes bounce {
             0%, 80%, 100% { transform: scale(0.4); opacity: 0.4; }
-            40% { transform: scale(1.1); opacity: 1; }
+            40% { transform: scale(1.15); opacity: 1; }
         }
 
-        /* ── Content Area & Layouts ── */
-        .content-area {
-            -webkit-app-region: no-drag;
+        /* ── Interview Mode Part-Wise Layout ── */
+        .interview-scroll-wrapper {
             height: 100%;
-            overflow: hidden;
-        }
-
-        /* Split layout: Text on left, Code on right */
-        .split-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            height: 100%;
-            padding: 10px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 12px 16px 20px 16px;
             box-sizing: border-box;
-            overflow: hidden;
+            scroll-behavior: smooth;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
         }
 
-        .text-panel, .code-panel {
-            background: rgba(0, 0, 0, 0.35);
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            overflow: hidden;
-            position: relative;
-            min-height: 0;
+        .interview-scroll-wrapper::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .interview-scroll-wrapper::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        .interview-cards-container {
             display: flex;
             flex-direction: column;
+            gap: 12px;
+            max-width: 900px;
+            margin: 0 auto;
         }
 
-        .panel-content {
-            height: 100%;
-            overflow-y: auto;
-            overflow-x: auto;
-            padding: 12px 14px;
-            box-sizing: border-box;
-            scroll-behavior: smooth;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-        }
-
-        .panel-content::-webkit-scrollbar {
-            display: none;
-        }
-
-        /* Full layout: single wide panel (MCQ, conceptual) */
-        .full-content {
-            height: 100%;
-            padding: 10px;
-            box-sizing: border-box;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .full-content-inner {
-            height: 100%;
-            background: rgba(0, 0, 0, 0.35);
+        /* ── Reusable Part Card Styling ── */
+        .interview-card {
+            background: rgba(18, 19, 24, 0.75);
+            border: 1px solid var(--border-subtle);
             border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            overflow-y: auto;
-            overflow-x: auto;
-            padding: 14px 18px;
-            box-sizing: border-box;
-            scroll-behavior: smooth;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
+            padding: 12px 15px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            position: relative;
+            transition: border-color 0.15s ease;
         }
 
-        .full-content-inner::-webkit-scrollbar {
-            display: none;
+        .interview-card:hover {
+            border-color: rgba(255, 255, 255, 0.16);
         }
 
-        /* ── Markdown Content Styling (Strict Monochrome) ── */
-        .markdown-content {
-            line-height: 1.6;
-            color: var(--text-primary);
-            font-size: 13px;
+        .card-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
 
-        .markdown-content h1, .markdown-content h2, .markdown-content h3 {
-            margin-top: 1rem;
-            margin-bottom: 0.5rem;
-            font-weight: 700;
+        /* Title in Green Color */
+        .card-tag.text-green {
+            color: var(--emerald-primary);
+            font-size: 11px;
+            font-weight: 850;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .card-tag.text-green::before {
+            content: '';
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--emerald-primary);
+            box-shadow: 0 0 6px var(--emerald-primary);
+        }
+
+        .card-hint {
+            font-size: 10.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.2px;
+        }
+
+        /* ── Specific Card Topologies ── */
+
+        /* 1. Question Card */
+        .card-question {
+            background: rgba(24, 25, 32, 0.85);
+            border-color: rgba(255, 255, 255, 0.14);
+            padding: 10px 14px;
+        }
+
+        .question-text.bold-white {
+            font-size: 14.5px;
+            font-weight: 800;
             color: #ffffff;
+            line-height: 1.45;
+            letter-spacing: -0.1px;
         }
 
-        .markdown-content h1 { font-size: 1.25rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 4px; }
-        .markdown-content h2 { font-size: 1.15rem; color: #ffffff; }
-        .markdown-content h3 { font-size: 1.05rem; }
-        .markdown-content p { margin-bottom: 0.65rem; }
-        .markdown-content ul, .markdown-content ol { margin-bottom: 0.65rem; padding-left: 1.4rem; }
-        .markdown-content li { margin-bottom: 0.3rem; }
+        /* 2. Introduction Spoken Card */
+        .card-intro {
+            background: rgba(16, 185, 129, 0.04);
+            border-color: rgba(16, 185, 129, 0.22);
+        }
 
-        .markdown-content code {
+        .intro-quote-box {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            background: rgba(16, 185, 129, 0.07);
+            border-left: 3.5px solid var(--emerald-primary);
+            border-top: 1px solid rgba(16, 185, 129, 0.18);
+            border-right: 1px solid rgba(16, 185, 129, 0.12);
+            border-bottom: 1px solid rgba(16, 185, 129, 0.18);
+            border-radius: 0 8px 8px 0;
+            padding: 10px 14px;
+            margin-top: 4px;
+        }
+
+        .quote-symbol {
+            font-family: Georgia, serif;
+            font-size: 26px;
+            line-height: 1;
+            color: var(--emerald-primary);
+            opacity: 0.9;
+            user-select: none;
+            flex-shrink: 0;
+            font-weight: 900;
+        }
+
+        .intro-quote-text.bold-white {
+            font-size: 14px;
+            font-weight: 750;
+            color: #ffffff;
+            line-height: 1.5;
+            letter-spacing: 0.1px;
+        }
+
+        /* 3. Content Details Card */
+        .card-content {
+            background: rgba(18, 19, 24, 0.8);
+        }
+
+        .content-body {
+            font-size: 13.5px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.92);
+            font-weight: 600;
+        }
+
+        .content-body p {
+            margin-bottom: 8px;
+        }
+
+        .content-body p:last-child {
+            margin-bottom: 0;
+        }
+
+        .content-body ul, .content-body ol {
+            padding-left: 1.2rem;
+            margin-bottom: 8px;
+        }
+
+        .content-body li {
+            margin-bottom: 6px;
+            line-height: 1.55;
+        }
+
+        .content-body li::marker {
+            color: var(--emerald-primary);
+            font-size: 11px;
+        }
+
+        /* 4. Examples Card */
+        .card-examples {
+            background: rgba(18, 19, 24, 0.85);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .examples-body {
+            font-size: 13.5px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.92);
+            font-weight: 600;
+        }
+
+        .examples-body ul {
+            padding-left: 1.2rem;
+            margin-bottom: 6px;
+        }
+
+        .examples-body li {
+            margin-bottom: 5px;
+        }
+
+        /* 5. Conclusion Card */
+        .card-conclusion {
+            background: rgba(16, 185, 129, 0.05);
+            border: 1px solid rgba(16, 185, 129, 0.28);
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+
+        .conclusion-body.bold-white {
+            font-size: 13.5px;
+            font-weight: 750;
+            color: #ffffff;
+            line-height: 1.5;
+            letter-spacing: 0.1px;
+        }
+
+        /* ── Highlight Tokens, Pills & Bold Elements ── */
+        .concept-pill {
+            display: inline-block;
+            background: var(--emerald-bg);
+            border: 1px solid var(--emerald-border);
+            color: var(--emerald-light);
+            font-weight: 750;
+            font-size: 12px;
+            padding: 0 6px;
+            border-radius: 4px;
+            letter-spacing: 0.3px;
+            margin-right: 5px;
+        }
+
+        .metric-pill {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 12px;
+            padding: 0 5px;
+            border-radius: 3px;
+            letter-spacing: 0.2px;
+        }
+
+        .complexity-pill {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 12px;
+            padding: 0 6px;
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+        }
+
+        .mech-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 4px 0;
+        }
+
+        .mech-arrow {
+            color: var(--emerald-primary);
+            font-weight: 900;
+            font-size: 14px;
+            flex-shrink: 0;
+            user-select: none;
+        }
+
+        .mech-text {
+            color: #ffffff;
+            font-weight: 750;
+            font-size: 13.5px;
+            line-height: 1.5;
+        }
+
+        .bold-highlight {
+            color: #ffffff;
+            font-weight: 800;
+        }
+
+        /* ── Inline Code & Blocks ── */
+        code {
             background-color: rgba(255, 255, 255, 0.10);
             padding: 0.15rem 0.35rem;
             border-radius: 0.25rem;
             font-family: 'JetBrains Mono', 'Courier New', monospace;
             font-size: 12px;
             color: #ffffff;
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.14);
         }
 
-        .markdown-content pre {
-            position: relative;
-            background-color: var(--code-bg);
-            padding: 0.85rem 1rem;
-            border-radius: 6px;
-            margin: 0.75rem 0;
-            overflow-x: auto;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-        }
-
-        .markdown-content pre code {
-            background-color: transparent;
-            padding: 0;
-            color: #ffffff;
-            font-size: 12px;
-            line-height: 1.45;
-            border: none;
-        }
-
-        .markdown-content blockquote {
-            border-left: 3px solid rgba(255, 255, 255, 0.6);
-            padding-left: 0.85rem;
-            margin: 0.65rem 0;
-            font-style: italic;
-            color: var(--text-secondary);
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 0 4px 4px 0;
-        }
-
-        .math {
-            font-family: 'Cambria Math', 'STIX Two Math', Georgia, serif;
-            white-space: nowrap;
-        }
-
-        /* ── MCQ High-Visibility Monochrome Badges & Options ── */
-        .mcq-answer-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(255, 255, 255, 0.12);
-            border: 1.5px solid rgba(255, 255, 255, 0.55);
-            color: #ffffff;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-weight: 700;
-            font-size: 13.5px;
-            letter-spacing: 0.4px;
-            margin: 6px 0 10px 0;
-            box-shadow: 0 0 14px rgba(255, 255, 255, 0.1);
-        }
-
-        .mcq-option-line {
-            padding: 4px 8px;
-            margin: 3px 0;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .mcq-option-line.correct {
-            background: rgba(255, 255, 255, 0.14);
-            border-color: rgba(255, 255, 255, 0.5);
-            font-weight: 600;
-            color: #ffffff;
-        }
-
-        /* ── Code Blocks with Language Header & Hover Copy Button ── */
         .code-block {
             background-color: var(--code-bg);
-            margin-bottom: 0.85rem;
+            margin: 0.65rem 0;
             border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.14);
             position: relative;
             overflow: hidden;
         }
 
         .code-header {
-            background-color: rgba(0, 0, 0, 0.6);
-            padding: 5px 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 6px 12px;
             font-family: 'JetBrains Mono', 'Courier New', monospace;
             font-size: 11px;
             color: var(--text-secondary);
-            font-weight: 700;
+            font-weight: 750;
             letter-spacing: 0.5px;
             text-transform: uppercase;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -427,39 +691,26 @@
             border: none;
         }
 
-        .no-code {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: var(--text-muted);
-            font-style: italic;
-        }
-
-        /* ── 3-Second Hover Copy Button (Monochrome & Dwell Feedback) ── */
+        /* ── 3-Second Hover / Instant Click Copy Button ── */
         .copy-btn {
-            position: absolute;
-            top: 6px;
-            right: 8px;
             background: rgba(24, 24, 27, 0.85);
             color: rgba(255, 255, 255, 0.75);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 4px 10px;
-            font-size: 11px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            padding: 3px 9px;
+            font-size: 10.5px;
             font-weight: 600;
             border-radius: 4px;
             cursor: pointer;
             -webkit-app-region: no-drag;
             transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-            opacity: 0.65;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             z-index: 25;
             user-select: none;
             backdrop-filter: blur(8px);
             overflow: hidden;
-            position: absolute;
+            position: relative;
         }
 
         .copy-btn .copy-progress-fill {
@@ -468,7 +719,7 @@
             left: 0;
             bottom: 0;
             width: 0%;
-            background: rgba(255, 255, 255, 0.25);
+            background: rgba(16, 185, 129, 0.35);
             transition: width 0.05s linear;
             pointer-events: none;
             z-index: 1;
@@ -482,12 +733,9 @@
             gap: 4px;
         }
 
-        pre:hover .copy-btn,
-        .code-block:hover .copy-btn,
         .copy-btn:hover {
-            opacity: 1;
             background: rgba(32, 32, 35, 0.95);
-            border-color: rgba(255, 255, 255, 0.5);
+            border-color: rgba(16, 185, 129, 0.6);
             color: #ffffff;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
@@ -497,39 +745,73 @@
             background: #ffffff !important;
             border-color: #ffffff !important;
             color: #000000 !important;
-            opacity: 1 !important;
-            transform: scale(0.98);
+            font-weight: 800;
         }
 
         .copy-btn.copied .copy-progress-fill {
             display: none;
         }
 
-        /* ── Helper utilities ── */
+        /* ── MCQ Answer Pill ── */
+        .mcq-answer-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--emerald-bg);
+            border: 1.5px solid var(--emerald-primary);
+            color: #ffffff;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 13.5px;
+            letter-spacing: 0.3px;
+            margin: 6px 0 10px 0;
+            box-shadow: 0 0 14px var(--emerald-glow);
+        }
+
+        /* ── Helpers ── */
         .hidden { display: none !important; }
         .visible { display: block !important; }
     </style>
 </head>
 <body>
-    <div class="main-container has-header">
-        <!-- Draggable Header -->
+    <div class="main-container">
+        <!-- Draggable Window Header -->
         <div class="window-header">
-            <div class="window-title">
-                <span>AI Response</span>
-                <span class="title-badge" id="skillBadge">AI</span>
-                <span class="history-badge hidden" id="historyBadge">1/1</span>
+            <!-- Left: Live Status Ribbon & Alert Info -->
+            <div class="header-left">
+                <div class="status-ribbon" id="statusRibbon">
+                    <span class="status-dot ready" id="statusDot"></span>
+                    <span class="status-label" id="statusLabel">READY</span>
+                </div>
+                <span class="header-alert-text" id="headerAlertText">Listening for interviewer…</span>
             </div>
-            <div class="window-controls">
-                <button id="history-prev-btn" class="window-btn history-nav-btn hidden" title="Previous Answer (Alt+Left)">‹</button>
-                <button id="history-next-btn" class="window-btn history-nav-btn hidden" title="Next Answer (Alt+Right)">›</button>
-                <button id="close-window-btn" class="window-btn window-btn-close" title="Close (Cmd+Shift+V / Esc)">×</button>
+
+            <!-- Center: Question Badge, Left/Right Navigation & Latency Ribbon -->
+            <div class="header-center">
+                <div class="question-nav-container">
+                    <button id="history-prev-btn" class="nav-arrow-btn disabled" title="Previous Question (Alt+Left)" aria-label="Previous Question">‹</button>
+                    <span class="q-badge" id="qBadge">Q1</span>
+                    <button id="history-next-btn" class="nav-arrow-btn disabled" title="Next Question (Alt+Right)" aria-label="Next Question">›</button>
+                </div>
+
+                <div class="time-ribbon" id="timeRibbon" title="Response Generation Latency">
+                    <span class="time-bolt">⚡</span>
+                    <span class="time-value" id="timeValue">0.8s</span>
+                </div>
+            </div>
+
+            <!-- Right: Mode Badge & Close Button -->
+            <div class="header-right">
+                <span class="title-badge" id="skillBadge">INTERVIEW</span>
+                <button id="close-window-btn" class="window-btn" title="Close (Cmd+Shift+V / Esc)">×</button>
             </div>
         </div>
 
-        <!-- Loading State -->
-        <div id="loading" class="loading">
+        <!-- Loading Overlay (Shown when analyzing/generating without content) -->
+        <div id="loading" class="loading-container hidden">
             <div class="loading-compact">
-                <span class="loading-text">Analyzing</span>
+                <span class="loading-text" id="loadingText">Analyzing</span>
                 <div class="dots-container">
                     <div class="bouncing-dot"></div>
                     <div class="bouncing-dot"></div>
@@ -538,59 +820,41 @@
             </div>
         </div>
 
-        <!-- Response Content -->
-        <div id="response-content" class="content-area hidden">
-            <!-- Split Layout (Code on right, explanation on left) -->
-            <div id="split-layout" class="split-layout hidden">
-                <div class="text-panel">
-                    <div class="panel-content" tabindex="0">
-                        <div id="text-content" class="markdown-content"></div>
-                    </div>
-                </div>
-                <div class="code-panel">
-                    <div class="panel-content" tabindex="0">
-                        <div id="code-content"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Full Content (MCQ, Concepts, Math) -->
-            <div id="full-content" class="full-content hidden">
-                <div class="full-content-inner" tabindex="0">
-                    <div id="full-markdown" class="markdown-content"></div>
+        <!-- Main Answer Dialogue Area -->
+        <div id="response-content" class="content-area">
+            <div class="interview-scroll-wrapper" id="scrollWrapper" tabindex="0">
+                <div class="interview-cards-container" id="interviewCards">
+                    <!-- Dynamic Part-Wise Cards rendered here -->
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        let currentLayout = 'split';
-        let hasCode = false;
+        let answerHistory = [];
+        let currentHistoryIndex = -1;
         let isStreaming = false;
         let streamAccumulator = '';
         let streamTimer = null;
-        let scrollableElements = [];
         let initialized = false;
-        let answerHistory = [];
-        let currentHistoryIndex = -1;
         let loadingWatchdogTimer = null;
 
-        document.addEventListener('DOMContentLoaded', initLLMResponseWindow);
+        document.addEventListener('DOMContentLoaded', initInterviewWindow);
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            setTimeout(initLLMResponseWindow, 0);
+            setTimeout(initInterviewWindow, 0);
         }
 
-        function initLLMResponseWindow() {
+        function initInterviewWindow() {
             if (initialized) return;
             initialized = true;
 
             const api = window.electronAPI;
             if (!api) {
-                console.warn('[LLM-RESPONSE] No electronAPI found');
+                console.warn('[INTERVIEW-UI] electronAPI not detected');
                 return;
             }
 
-            // Close button
+            // Window Close button
             const closeBtn = document.getElementById('close-window-btn');
             if (closeBtn) {
                 closeBtn.addEventListener('click', () => {
@@ -605,7 +869,7 @@
                 });
             }
 
-            // History navigation buttons
+            // Navigation buttons
             const prevBtn = document.getElementById('history-prev-btn');
             if (prevBtn) {
                 prevBtn.addEventListener('click', (e) => {
@@ -613,6 +877,7 @@
                     navigateHistory(-1);
                 });
             }
+
             const nextBtn = document.getElementById('history-next-btn');
             if (nextBtn) {
                 nextBtn.addEventListener('click', (e) => {
@@ -626,7 +891,7 @@
                 window.initCornerHoverDrag('llmResponse');
             }
 
-            // Opacity sync
+            // Opacity Synchronization
             if (api.onOpacityUpdate) {
                 api.onOpacityUpdate((_e, opacity) => {
                     document.body.style.opacity = opacity;
@@ -636,28 +901,72 @@
                 api.getOpacity().then(o => { if (o) document.body.style.opacity = o; }).catch(() => {});
             }
 
-            // Session reset
+            // Session reset listener
             if (api.onSessionCleared) {
                 api.onSessionCleared(() => {
                     hideLoadingState();
                     answerHistory = [];
                     currentHistoryIndex = -1;
-                    updateHistoryUI();
-                    const resp = document.getElementById('response-content');
-                    if (resp) resp.classList.add('hidden');
+                    updateNavigationUI();
+                    setAlertText('Session cleared');
+                    setStatus('READY');
+                    const container = document.getElementById('interviewCards');
+                    if (container) container.innerHTML = '';
                 });
             }
 
-            // Loading state
+            // Loading state trigger
             if (api.onShowLoading) {
-                api.onShowLoading(() => showLoadingState('Analyzing'));
+                api.onShowLoading(() => {
+                    setStatus('ANALYZING');
+                    setAlertText('Analyzing audio…');
+                    showLoadingState('Analyzing');
+                });
             }
 
-            // Retry state (updates loading indicator immediately)
+            // Live speech status listener
+            if (api.onSpeechStatus) {
+                api.onSpeechStatus((_e, data) => {
+                    const statusMsg = (data && data.status) ? String(data.status) : (typeof data === 'string' ? data : '');
+                    if (!statusMsg) return;
+
+                    const lower = statusMsg.toLowerCase();
+                    if (lower.includes('listening') || lower.includes('recording')) {
+                        setStatus('LISTENING');
+                        setAlertText(statusMsg);
+                    } else if (lower.includes('processing') || lower.includes('analyzing')) {
+                        setStatus('ANALYZING');
+                        setAlertText(statusMsg);
+                    } else if (lower.includes('ready')) {
+                        if (!isStreaming) {
+                            setStatus('READY');
+                            setAlertText('Listening for interviewer…');
+                        }
+                    } else {
+                        setAlertText(statusMsg);
+                    }
+                });
+            }
+
+            // Interim / Transcribed question received
+            if (api.onTranscriptionReceived) {
+                api.onTranscriptionReceived((_e, payload) => {
+                    const text = (payload && payload.text) || (typeof payload === 'string' ? payload : '');
+                    if (text && text.trim()) {
+                        setStatus('ANALYZING');
+                        setAlertText('Transcribed question…');
+                        showLoadingState('Analyzing');
+                    }
+                });
+            }
+
+            // Retry event
             if (api.onTranscriptionLlmRetry) {
                 api.onTranscriptionLlmRetry((_e, data) => {
                     const attempt = data && data.attempt ? data.attempt : 2;
                     const maxAttempts = data && data.maxAttempts ? data.maxAttempts : 3;
+                    setStatus('RETRYING');
+                    setAlertText(`Retrying (${attempt}/${maxAttempts})…`);
                     showLoadingState(`Retrying (${attempt}/${maxAttempts})`);
                 });
             }
@@ -670,12 +979,12 @@
                 });
             }
 
-            // Restore active answer (e.g. trailing mumbles or audio filler canceled)
+            // Restore active answer
             if (api.onRestoreActiveAnswer) {
                 api.onRestoreActiveAnswer(() => {
                     hideLoadingState();
                     if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
-                        displayResponse(answerHistory[currentHistoryIndex]);
+                        displayStructuredAnswer(answerHistory[currentHistoryIndex]);
                     }
                 });
             }
@@ -687,7 +996,9 @@
                     updateSkillBadge(skill);
                     streamAccumulator = '';
                     isStreaming = true;
-                    showLoadingState('Analyzing');
+                    setStatus('ANSWERING');
+                    setAlertText('Synthesizing answer…');
+                    showLoadingState('Answering');
                 });
             }
 
@@ -704,15 +1015,17 @@
                             streamTimer = null;
                             if (streamAccumulator.trim()) {
                                 hideLoadingState();
-                                displayResponse({ content: streamAccumulator });
+                                setStatus('ANSWERING');
+                                setAlertText('Streaming answer…');
+                                displayStructuredAnswer({ content: streamAccumulator, metadata: payload.metadata });
                             }
-                        }, 50);
+                        }, 40);
                     }
                 });
             }
 
-            // Final responses
-            function handleResponse(data) {
+            // Final response handler
+            function handleFinalResponse(data) {
                 if (streamTimer) {
                     clearTimeout(streamTimer);
                     streamTimer = null;
@@ -722,6 +1035,7 @@
                     loadingWatchdogTimer = null;
                 }
                 isStreaming = false;
+
                 const text = (data && (data.content || data.response)) || (typeof data === 'string' ? data : '');
                 if (!text || !text.trim()) {
                     if (streamAccumulator.trim()) {
@@ -730,68 +1044,116 @@
                     }
                     return;
                 }
+
                 streamAccumulator = '';
                 hideLoadingState();
+                setStatus('READY');
+                setAlertText('Answer ready');
                 saveAndDisplayAnswer(data);
-                setupScrolling();
             }
 
             if (api.onDisplayLlmResponse) {
-                api.onDisplayLlmResponse((_e, data) => {
-                    const actualData = data || _e;
-                    handleResponse(actualData);
-                });
+                api.onDisplayLlmResponse((_e, data) => handleFinalResponse(data || _e));
             }
 
             if (api.onTranscriptionLlmResponse) {
-                api.onTranscriptionLlmResponse((_e, data) => {
-                    const actualData = data || _e;
-                    handleResponse(actualData);
-                });
+                api.onTranscriptionLlmResponse((_e, data) => handleFinalResponse(data || _e));
             }
         }
 
+        // ── Status & Ribbon Updates ──
+        function setStatus(status) {
+            const dot = document.getElementById('statusDot');
+            const label = document.getElementById('statusLabel');
+            if (!dot || !label) return;
+
+            const st = String(status).toUpperCase();
+            label.textContent = st;
+
+            dot.className = 'status-dot';
+            if (st === 'LISTENING') dot.classList.add('listening');
+            else if (st === 'ANALYZING') dot.classList.add('analyzing');
+            else if (st === 'RETRYING') dot.classList.add('retrying');
+            else if (st === 'ANSWERING') dot.classList.add('answering');
+            else dot.classList.add('ready');
+        }
+
+        function setAlertText(text) {
+            const alertEl = document.getElementById('headerAlertText');
+            if (alertEl && text) {
+                alertEl.textContent = text;
+            }
+        }
+
+        function updateLatencyRibbon(metadata) {
+            const timeEl = document.getElementById('timeValue');
+            if (!timeEl) return;
+
+            let formatted = '0.8s';
+            if (metadata && metadata.processingTime !== undefined) {
+                const pt = metadata.processingTime;
+                if (typeof pt === 'number') {
+                    if (pt <= 0) formatted = '15ms';
+                    else if (pt < 100) formatted = `${pt}ms`;
+                    else if (pt < 1000) formatted = `${pt}ms`;
+                    else formatted = `${(pt / 1000).toFixed(1)}s`;
+                } else if (typeof pt === 'string' && pt.trim()) {
+                    formatted = pt.trim();
+                }
+            }
+            timeEl.textContent = formatted;
+        }
+
+        function updateSkillBadge(skill) {
+            const badge = document.getElementById('skillBadge');
+            if (!badge) return;
+            if (!skill || skill === 'general' || skill === 'interview') {
+                badge.textContent = 'INTERVIEW';
+            } else {
+                badge.textContent = String(skill).toUpperCase();
+            }
+        }
+
+        // ── History & Navigation Management ──
         function saveAndDisplayAnswer(data) {
             const text = (data && (data.content || data.response)) || (typeof data === 'string' ? data : '');
             if (!text || !text.trim()) return;
 
-            // Avoid pushing duplicate consecutive answers
             const lastItem = answerHistory[answerHistory.length - 1];
             const isDuplicate = lastItem && ((lastItem.content || lastItem.response) === text);
             if (!isDuplicate) {
                 answerHistory.push(data);
                 currentHistoryIndex = answerHistory.length - 1;
             }
-            updateHistoryUI();
-            displayResponse(data);
+
+            updateNavigationUI();
+            displayStructuredAnswer(data);
         }
 
-        function updateHistoryUI() {
-            const badge = document.getElementById('historyBadge');
+        function updateNavigationUI() {
+            const badge = document.getElementById('qBadge');
             const prevBtn = document.getElementById('history-prev-btn');
             const nextBtn = document.getElementById('history-next-btn');
 
-            if (answerHistory.length > 1) {
-                if (badge) {
-                    badge.textContent = `${currentHistoryIndex + 1}/${answerHistory.length}`;
-                    badge.classList.remove('hidden');
+            const total = answerHistory.length;
+            const current = currentHistoryIndex >= 0 ? currentHistoryIndex + 1 : 1;
+
+            if (badge) {
+                if (total > 1) {
+                    badge.textContent = `Q${current} (${current}/${total})`;
+                } else {
+                    badge.textContent = `Q${current}`;
                 }
-                if (prevBtn) {
-                    prevBtn.classList.remove('hidden');
-                    prevBtn.disabled = currentHistoryIndex <= 0;
-                    prevBtn.style.opacity = currentHistoryIndex <= 0 ? '0.35' : '1';
-                    prevBtn.style.pointerEvents = currentHistoryIndex <= 0 ? 'none' : 'auto';
-                }
-                if (nextBtn) {
-                    nextBtn.classList.remove('hidden');
-                    nextBtn.disabled = currentHistoryIndex >= answerHistory.length - 1;
-                    nextBtn.style.opacity = currentHistoryIndex >= answerHistory.length - 1 ? '0.35' : '1';
-                    nextBtn.style.pointerEvents = currentHistoryIndex >= answerHistory.length - 1 ? 'none' : 'auto';
-                }
-            } else {
-                if (badge) badge.classList.add('hidden');
-                if (prevBtn) prevBtn.classList.add('hidden');
-                if (nextBtn) nextBtn.classList.add('hidden');
+            }
+
+            if (prevBtn) {
+                const canPrev = currentHistoryIndex > 0;
+                prevBtn.classList.toggle('disabled', !canPrev);
+            }
+
+            if (nextBtn) {
+                const canNext = currentHistoryIndex < total - 1;
+                nextBtn.classList.toggle('disabled', !canNext);
             }
         }
 
@@ -800,43 +1162,31 @@
             const newIndex = currentHistoryIndex + delta;
             if (newIndex >= 0 && newIndex < answerHistory.length) {
                 currentHistoryIndex = newIndex;
-                updateHistoryUI();
+                updateNavigationUI();
                 hideLoadingState();
-                displayResponse(answerHistory[currentHistoryIndex]);
-                setupScrolling();
+                const item = answerHistory[currentHistoryIndex];
+                displayStructuredAnswer(item);
+                if (item && item.metadata) {
+                    updateLatencyRibbon(item.metadata);
+                }
             }
         }
 
-        function updateSkillBadge(skill) {
-            const badge = document.getElementById('skillBadge');
-            if (!badge) return;
-            if (!skill || skill === 'general') {
-                badge.textContent = 'AI';
-            } else {
-                badge.textContent = String(skill).toUpperCase();
-            }
-        }
-
+        // ── Loading Controls ──
         function showLoadingState(statusText = 'Analyzing') {
-            const loadingElement = document.getElementById('loading');
-            const responseElement = document.getElementById('response-content');
-            const loadingTextEl = loadingElement ? loadingElement.querySelector('.loading-text') : null;
-            if (loadingTextEl) {
-                loadingTextEl.textContent = statusText;
-            }
-            if (loadingElement) loadingElement.classList.remove('hidden');
-            if (responseElement) responseElement.classList.add('hidden');
+            const loading = document.getElementById('loading');
+            const loadingText = document.getElementById('loadingText');
+            if (loadingText) loadingText.textContent = statusText;
+            if (loading) loading.classList.remove('hidden');
 
-            // Safety watchdog: if stuck on loading for > 7s with no chunks/responses,
-            // and an answer is available in history, automatically unhide and restore it
             if (loadingWatchdogTimer) clearTimeout(loadingWatchdogTimer);
             loadingWatchdogTimer = setTimeout(() => {
                 if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
-                    console.warn('[LLM-RESPONSE] Loading safety watchdog fired; restoring previous answer');
+                    console.warn('[INTERVIEW-UI] Loading watchdog timeout; restoring active answer');
                     hideLoadingState();
-                    displayResponse(answerHistory[currentHistoryIndex]);
+                    displayStructuredAnswer(answerHistory[currentHistoryIndex]);
                 }
-            }, 7000);
+            }, 7500);
         }
 
         function hideLoadingState() {
@@ -844,35 +1194,142 @@
                 clearTimeout(loadingWatchdogTimer);
                 loadingWatchdogTimer = null;
             }
-            const loadingElement = document.getElementById('loading');
-            if (loadingElement) loadingElement.classList.add('hidden');
-            const responseElement = document.getElementById('response-content');
-            if (responseElement) responseElement.classList.remove('hidden');
+            const loading = document.getElementById('loading');
+            if (loading) loading.classList.add('hidden');
         }
 
-        function escapeHtml(text) {
+        // ── Dynamic Structured Parser ──
+        function parseStructuredAnswer(rawText, metadata = {}) {
+            if (!rawText) return null;
+            const text = String(rawText).trim();
+
+            let question = (metadata && metadata.question) ? String(metadata.question).trim() : '';
+            let intro = '';
+            let content = '';
+            let examples = '';
+            let conclusion = '';
+
+            // Robust multi-variant section header regex
+            const sectionRegex = /###\s*(?:[^\w\n]*\s*)?(Question|Introduction|Start with|Content|Talking Points|Technical Details|Examples|Example|Implementation|Production|Conclusion|Takeaway|Key Takeaway)\s*[:\n]/gi;
+
+            let match;
+            const sections = [];
+            let lastIndex = 0;
+            let lastSectionType = null;
+
+            while ((match = sectionRegex.exec(text)) !== null) {
+                if (lastSectionType) {
+                    const chunk = text.slice(lastIndex, match.index).trim();
+                    sections.push({ type: lastSectionType, content: chunk });
+                }
+                const name = match[1].toLowerCase();
+                if (name.includes('question')) lastSectionType = 'question';
+                else if (name.includes('intro') || name.includes('start')) lastSectionType = 'intro';
+                else if (name.includes('content') || name.includes('point') || name.includes('detail')) lastSectionType = 'content';
+                else if (name.includes('example') || name.includes('implement') || name.includes('prod')) lastSectionType = 'examples';
+                else if (name.includes('conclusion') || name.includes('takeaway')) lastSectionType = 'conclusion';
+
+                lastIndex = match.index + match[0].length;
+            }
+
+            if (lastSectionType && lastIndex < text.length) {
+                const chunk = text.slice(lastIndex).trim();
+                sections.push({ type: lastSectionType, content: chunk });
+            }
+
+            // Populate identified sections
+            for (const sec of sections) {
+                if (sec.type === 'question' && (!question || question === 'Technical Interview Assessment')) question = sec.content;
+                else if (sec.type === 'intro' && !intro) intro = sec.content;
+                else if (sec.type === 'content' && !content) content = sec.content;
+                else if (sec.type === 'examples' && !examples) examples = sec.content;
+                else if (sec.type === 'conclusion' && !conclusion) conclusion = sec.content;
+            }
+
+            // Fallback parsing for unstructured or legacy streaming text
+            if (!intro && !content && !examples && !conclusion) {
+                const quoteMatch = text.match(/^["“]([^"”]+)["”]/);
+                if (quoteMatch) {
+                    intro = quoteMatch[1].trim();
+                    content = text.slice(quoteMatch[0].length).trim();
+                } else {
+                    const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim());
+                    if (paragraphs.length >= 3) {
+                        intro = paragraphs[0];
+                        conclusion = paragraphs[paragraphs.length - 1];
+                        content = paragraphs.slice(1, paragraphs.length - 1).join('\n\n');
+                    } else if (paragraphs.length === 2) {
+                        intro = paragraphs[0];
+                        content = paragraphs[1];
+                    } else {
+                        content = text;
+                    }
+                }
+            }
+
+            // Strip enclosing quotes from intro so styled quotation mark container wraps it cleanly
+            if (intro) {
+                intro = intro.replace(/^["“]\s*/, '').replace(/\s*["”]$/, '').trim();
+            }
+
+            if (!question) {
+                question = 'Summarized Interview Question';
+            }
+
+            return { question, intro, content, examples, conclusion };
+        }
+
+        // ── Text & Keyword Highlighting Engine ──
+        function escapeHtml(str) {
             const div = document.createElement('div');
-            div.textContent = text;
+            div.textContent = str;
             return div.innerHTML;
         }
 
-        function renderMarkdown(text) {
-            if (!text) return '';
-            let parsed = '';
-            if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
-                parsed = marked.parse(text);
-            } else if (typeof markdown !== 'undefined' && typeof markdown.toHTML === 'function') {
-                parsed = markdown.toHTML(text);
-            } else {
-                parsed = escapeHtml(text).replace(/\n/g, '<br>');
-            }
+        function highlightKeywordsAndTerms(htmlContent) {
+            if (!htmlContent) return '';
+            let processed = htmlContent;
 
-            // Highlight MCQ answer patterns cleanly
-            parsed = parsed.replace(/\*\*(?:Q\d+\s+)?Correct Option:\s*([^*]+)\*\*/gi, (match, opt) => {
-                return `<div class="mcq-answer-pill">✓ Correct Option: ${opt.trim()}</div>`;
+            // 1. Concept anchors: [Concept Name] or <strong>[Concept Name]</strong> -> Styled Emerald Pills
+            processed = processed.replace(/(?:<strong>\s*)?\[([A-Za-z0-9_.\- /+]{2,35})\](?:\s*<\/strong>)?/g, (_match, token) => {
+                return `<span class="concept-pill">${token.trim()}</span>`;
             });
 
-            return parsed;
+            // 2. Arrow mechanism lines: → Mechanism step
+            processed = processed.replace(/(?:^|\n|<p>|<li>)\s*(?:[-*•]\s*)?(?:→|->)\s*([^<\n]+)/g, (_match, stepText) => {
+                return `<div class="mech-row"><span class="mech-arrow">→</span><span class="mech-text">${stepText.trim()}</span></div>`;
+            });
+
+            // 3. Time, latency, percentages, and performance metrics: e.g. 15ms, 99.9%, 420ms, 200k RPS
+            processed = processed.replace(/\b(\d+(?:\.\d+)?(?:ms|s|k|M|GB|MB|RPS|QPS\b|%(?!\w)))/g, (_match, metric) => {
+                return `<span class="metric-pill">${metric}</span>`;
+            });
+
+            // 4. Big-O Complexity notation: O(1), O(log N), O(N), O(N^2)
+            processed = processed.replace(/\b(O\([1nNkK\s*log\+\^]+\))/g, (_match, oComp) => {
+                return `<span class="complexity-pill">${oComp}</span>`;
+            });
+
+            return processed;
+        }
+
+        function renderPartMarkdown(text) {
+            if (!text) return '';
+            let html = '';
+            if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
+                html = marked.parse(text);
+            } else if (typeof markdown !== 'undefined' && typeof markdown.toHTML === 'function') {
+                html = markdown.toHTML(text);
+            } else {
+                html = escapeHtml(text).replace(/\n/g, '<br>');
+            }
+
+            // MCQ pill replacement
+            html = html.replace(/\*\*(?:Q\d+\s+)?Correct Option:\s*([^*]+)\*\*/gi, (_match, opt) => {
+                return `<div class="mcq-answer-pill">✓ Correct Option: ${escapeHtml(opt.trim())}</div>`;
+            });
+
+            return highlightKeywordsAndTerms(html);
         }
 
         function extractCodeBlocks(text) {
@@ -888,7 +1345,8 @@
             return blocks;
         }
 
-        function attachCopy(btn, text) {
+        // ── 3-Second Hover & Click Copy Button Helper ──
+        function attachCopyHandler(btn, text) {
             btn.innerHTML = '<span class="copy-progress-fill"></span><span class="copy-label">Copy</span>';
             const fill = btn.querySelector('.copy-progress-fill');
             const label = btn.querySelector('.copy-label');
@@ -928,7 +1386,7 @@
                         }, 1400);
                     }
                 } catch (err) {
-                    console.warn('[LLM-RESPONSE] Copy failed', err);
+                    console.warn('[INTERVIEW-UI] Copy action failed', err);
                 }
             };
 
@@ -972,133 +1430,165 @@
                 }, DWELL_MS);
             });
 
-            btn.addEventListener('mouseleave', () => {
-                cancelDwell();
-            });
-
-            btn.addEventListener('click', (e) => {
-                performCopy(e);
-            });
+            btn.addEventListener('mouseleave', cancelDwell);
+            btn.addEventListener('click', (e) => performCopy(e));
         }
 
-        function displayResponse(data) {
-            const responseElement = document.getElementById('response-content');
-            if (responseElement) responseElement.classList.remove('hidden');
-
-            const response = (data && (data.content || data.response)) || (typeof data === 'string' ? data : '');
-            if (!response || !response.trim()) return;
+        // ── Main Display Renderer ──
+        function displayStructuredAnswer(data) {
+            const raw = (data && (data.content || data.response)) || (typeof data === 'string' ? data : '');
+            if (!raw || !raw.trim()) return;
 
             const metadata = data.metadata || {};
             if (metadata.skill) updateSkillBadge(metadata.skill);
+            updateLatencyRibbon(metadata);
 
-            const codeBlocks = extractCodeBlocks(response);
-            hasCode = codeBlocks.length > 0;
+            const parsed = parseStructuredAnswer(raw, metadata);
+            if (!parsed) return;
 
-            if (hasCode) {
-                displaySplitLayout(response, codeBlocks);
-                try {
-                    const combined = codeBlocks.map(b => b.code).join('\n\n');
-                    if (window.electronAPI && typeof window.electronAPI.reportCodeAvailable === 'function') {
-                        window.electronAPI.reportCodeAvailable(combined);
-                    }
-                } catch (_) {}
-            } else {
-                displayFullLayout(response);
+            const container = document.getElementById('interviewCards');
+            if (!container) return;
+            container.innerHTML = '';
+
+            // Card 1: Question in Green Title + Bold White Text
+            if (parsed.question) {
+                const qCard = document.createElement('section');
+                qCard.className = 'interview-card card-question';
+                qCard.innerHTML = `
+                    <div class="card-header-row">
+                        <span class="card-tag text-green">QUESTION</span>
+                        <span class="card-hint">Summarized Interviewer Query</span>
+                    </div>
+                    <div class="question-text bold-white">${escapeHtml(parsed.question)}</div>
+                `;
+                container.appendChild(qCard);
             }
 
-            // Window resize request based on content metrics
+            // Card 2: Introduction Spoken Opener in Quotes
+            if (parsed.intro) {
+                const introCard = document.createElement('section');
+                introCard.className = 'interview-card card-intro';
+                introCard.innerHTML = `
+                    <div class="card-header-row">
+                        <span class="card-tag text-green">INTRODUCTION</span>
+                        <span class="card-hint">Opening Spoken Line</span>
+                    </div>
+                    <div class="intro-quote-box">
+                        <span class="quote-symbol">“</span>
+                        <div class="intro-quote-text bold-white">${renderPartMarkdown(parsed.intro)}</div>
+                        <span class="quote-symbol">”</span>
+                    </div>
+                `;
+                container.appendChild(introCard);
+            }
+
+            // Card 3: Content Core Technical Details
+            if (parsed.content) {
+                const contentCard = document.createElement('section');
+                contentCard.className = 'interview-card card-content';
+                contentCard.innerHTML = `
+                    <div class="card-header-row">
+                        <span class="card-tag text-green">CONTENT</span>
+                        <span class="card-hint">Technical Architecture & Mechanisms</span>
+                    </div>
+                    <div class="content-body">${renderPartMarkdown(parsed.content)}</div>
+                `;
+                container.appendChild(contentCard);
+            }
+
+            // Card 4: Examples / Code (Dynamic: rendered only if present)
+            if (parsed.examples && parsed.examples.trim()) {
+                const exCard = document.createElement('section');
+                exCard.className = 'interview-card card-examples';
+
+                const codeBlocks = extractCodeBlocks(parsed.examples);
+                if (codeBlocks.length > 0) {
+                    exCard.innerHTML = `
+                        <div class="card-header-row">
+                            <span class="card-tag text-green">EXAMPLES</span>
+                            <span class="card-hint">Implementation / Minimal Code</span>
+                        </div>
+                        <div class="examples-body"></div>
+                    `;
+                    const exBody = exCard.querySelector('.examples-body');
+
+                    // Non-code text
+                    let nonCodeText = parsed.examples;
+                    codeBlocks.forEach(b => { nonCodeText = nonCodeText.replace(b.fullMatch, ''); });
+                    if (nonCodeText.trim()) {
+                        const notes = document.createElement('div');
+                        notes.innerHTML = renderPartMarkdown(nonCodeText.trim());
+                        exBody.appendChild(notes);
+                    }
+
+                    // Render code blocks with header & copy button
+                    codeBlocks.forEach(block => {
+                        const blockDiv = document.createElement('div');
+                        blockDiv.className = 'code-block';
+                        blockDiv.innerHTML = `
+                            <div class="code-header">
+                                <span>${escapeHtml(block.language.toUpperCase())}</span>
+                            </div>
+                            <div class="code-content">
+                                <pre><code>${escapeHtml(block.code)}</code></pre>
+                            </div>
+                        `;
+                        const header = blockDiv.querySelector('.code-header');
+                        const copyBtn = document.createElement('button');
+                        copyBtn.className = 'copy-btn';
+                        attachCopyHandler(copyBtn, block.code);
+                        header.appendChild(copyBtn);
+                        exBody.appendChild(blockDiv);
+                    });
+                } else {
+                    exCard.innerHTML = `
+                        <div class="card-header-row">
+                            <span class="card-tag text-green">EXAMPLES</span>
+                            <span class="card-hint">Production Case & Implementation</span>
+                        </div>
+                        <div class="examples-body">${renderPartMarkdown(parsed.examples)}</div>
+                    `;
+                }
+                container.appendChild(exCard);
+            }
+
+            // Card 5: Conclusion Punchy Takeaway
+            if (parsed.conclusion) {
+                const concCard = document.createElement('section');
+                concCard.className = 'interview-card card-conclusion';
+                concCard.innerHTML = `
+                    <div class="card-header-row">
+                        <span class="card-tag text-green">CONCLUSION</span>
+                        <span class="card-hint">Key Takeaway</span>
+                    </div>
+                    <div class="conclusion-body bold-white">${renderPartMarkdown(parsed.conclusion)}</div>
+                `;
+                container.appendChild(concCard);
+            }
+
+            // Render math expressions if KaTeX / mathrender is present
+            if (window.renderMathInElement) {
+                window.renderMathInElement(container);
+            }
+
+            // Window sizing notification
             if (window.electronAPI && window.electronAPI.resizeLlmWindowForContent) {
-                const lineCount = response.split('\n').length;
+                const totalLines = raw.split('\n').length;
                 window.electronAPI.resizeLlmWindowForContent({
-                    lineCount,
-                    hasCode,
-                    codeBlocks: codeBlocks.length,
-                    complexity: hasCode ? 'medium' : 'low'
+                    lineCount: totalLines,
+                    hasCode: !!(parsed.examples && parsed.examples.includes('```')),
+                    complexity: 'medium'
                 }).catch(() => {});
             }
         }
 
-        function displaySplitLayout(response, codeBlocks) {
-            document.getElementById('split-layout').classList.remove('hidden');
-            document.getElementById('full-content').classList.add('hidden');
-
-            // Strip code blocks from text panel
-            let textContent = response;
-            codeBlocks.forEach(block => {
-                textContent = textContent.replace(block.fullMatch, '');
-            });
-            textContent = textContent.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
-
-            const textPanel = document.getElementById('text-content');
-            textPanel.innerHTML = renderMarkdown(textContent);
-            if (window.renderMathInElement) window.renderMathInElement(textPanel);
-
-            // Render code blocks into code panel
-            const codeContainer = document.getElementById('code-content');
-            codeContainer.innerHTML = '';
-
-            codeBlocks.forEach(block => {
-                const blockDiv = document.createElement('div');
-                blockDiv.className = 'code-block';
-                blockDiv.innerHTML = `
-                    <div class="code-header">${escapeHtml(block.language.toUpperCase())}</div>
-                    <div class="code-content">
-                        <pre><code>${escapeHtml(block.code)}</code></pre>
-                    </div>
-                `;
-                const pre = blockDiv.querySelector('pre');
-                const btn = document.createElement('button');
-                btn.className = 'copy-btn';
-                btn.innerHTML = 'Copy';
-                attachCopy(btn, block.code || '');
-                pre.appendChild(btn);
-
-                codeContainer.appendChild(blockDiv);
-            });
-        }
-
-        function displayFullLayout(response) {
-            document.getElementById('split-layout').classList.add('hidden');
-            document.getElementById('full-content').classList.remove('hidden');
-
-            const full = document.getElementById('full-markdown');
-            full.innerHTML = renderMarkdown(response);
-            if (window.renderMathInElement) window.renderMathInElement(full);
-
-            // Add hover copy buttons to any pre code blocks in full view
-            const pres = full.querySelectorAll('pre');
-            pres.forEach(pre => {
-                if (pre.querySelector('.copy-btn')) return;
-                const codeEl = pre.querySelector('code');
-                const text = codeEl ? codeEl.textContent : pre.textContent;
-                const btn = document.createElement('button');
-                btn.className = 'copy-btn';
-                btn.innerHTML = 'Copy';
-                attachCopy(btn, text || '');
-                pre.appendChild(btn);
-            });
-        }
-
-        function setupScrolling() {
-            setTimeout(() => {
-                if (hasCode) {
-                    scrollableElements = [
-                        document.querySelector('.text-panel .panel-content'),
-                        document.querySelector('.code-panel .panel-content')
-                    ].filter(Boolean);
-                } else {
-                    scrollableElements = [
-                        document.querySelector('.full-content-inner')
-                    ].filter(Boolean);
-                }
-            }, 100);
-        }
-
-        // Keyboard scrolling navigation
+        // ── Keyboard Navigation (Esc, Alt+Left/Right, Arrow Scroll) ──
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 if (window.electronAPI && window.electronAPI.closeWindow) {
                     window.electronAPI.closeWindow();
+                } else if (window.electronAPI && window.electronAPI.hideLLMResponse) {
+                    window.electronAPI.hideLLMResponse();
                 }
                 return;
             }
@@ -1115,35 +1605,34 @@
                 return;
             }
 
-            const activeElement = document.activeElement;
-            let target = scrollableElements.find(el => el === activeElement || el.contains(activeElement)) || scrollableElements[0];
-            if (!target) return;
+            const scroller = document.getElementById('scrollWrapper');
+            if (!scroller) return;
 
-            const scrollDelta = 60;
+            const scrollDelta = 65;
             switch(e.key) {
                 case 'ArrowUp':
                     e.preventDefault();
-                    target.scrollBy({ top: -scrollDelta, behavior: 'smooth' });
+                    scroller.scrollBy({ top: -scrollDelta, behavior: 'smooth' });
                     break;
                 case 'ArrowDown':
                     e.preventDefault();
-                    target.scrollBy({ top: scrollDelta, behavior: 'smooth' });
+                    scroller.scrollBy({ top: scrollDelta, behavior: 'smooth' });
                     break;
                 case 'PageUp':
                     e.preventDefault();
-                    target.scrollBy({ top: -target.clientHeight * 0.8, behavior: 'smooth' });
+                    scroller.scrollBy({ top: -scroller.clientHeight * 0.8, behavior: 'smooth' });
                     break;
                 case 'PageDown':
                     e.preventDefault();
-                    target.scrollBy({ top: target.clientHeight * 0.8, behavior: 'smooth' });
+                    scroller.scrollBy({ top: scroller.clientHeight * 0.8, behavior: 'smooth' });
                     break;
                 case 'Home':
                     e.preventDefault();
-                    target.scrollTo({ top: 0, behavior: 'smooth' });
+                    scroller.scrollTo({ top: 0, behavior: 'smooth' });
                     break;
                 case 'End':
                     e.preventDefault();
-                    target.scrollTo({ top: target.scrollHeight, behavior: 'smooth' });
+                    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
                     break;
             }
         });

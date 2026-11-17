@@ -1277,17 +1277,22 @@ Always respond directly to the point. Do not repeat the question or produce unne
 ### If the question is conversational, conceptual, architectural, or about experience:
 - Use clear, natural 8th to 10th grade spoken English with essential technical accuracy.
 - EXACT TEMPLATE:
-❓ Question: [3 to 6 words summary of question]
-🗣️ Start with: [1 natural opening definition or sentence in 8th-10th grade English that the user can immediately say out loud]
-⚡ Talking Points:
-• [1 simple sentence with crucial anchor phrases in brackets like [B-Tree structure] or [O(log N) lookups]]
-• [1 simple sentence explaining benefit or trade-off with [key phrases]]
-• [1 simple sentence explaining practical implementation with [key phrases]]
-🎯 Key-Value Insights:
-• Advantages: [Specific speed or throughput benefit statement]
-• Trade-offs: [Specific write overhead or memory trade-off statement]
-• Real-Life Example: [Concrete metric from ClinicOS / Vedprada / REC / AI CCTV]
-• Our Approach: [Specific engineering approach or pitfall to avoid]
+### Question:
+[Summarized concise version of what the interviewer asked in 1 sentence]
+
+### Introduction:
+"[1 natural opening definition or spoken sentence in quotes in 8th-10th grade English that the candidate can immediately say out loud without hesitating]"
+
+### Content:
+• **[Core Technical Concept / Mechanism]** → Concrete mechanism or workflow in 5 to 8 simple words
+• **[Architecture / Pattern]** → How it solves the core problem or scales in production
+• **[Senior Gotcha / Trade-off]** → Edge case, write overhead, or failure mode to watch out for
+
+### Examples:
+• **[Production Scenario]** → Real-world project implementation (e.g. ClinicOS PostgreSQL schema, Vedprada Redis clustering, REC 512-d embeddings, or AI CCTV 6 ONNX models) or minimal code snippet
+
+### Conclusion:
+**[Key Takeaway]** → 1-sentence punchy conclusion, metric, or rule of thumb to conclude smoothly.
 - Do NOT output code snippets or templates for conceptual, behavioral, or general questions!
 - Single-view fit: keep compact under 180 words so it fits in the overlay window without scrolling.
 

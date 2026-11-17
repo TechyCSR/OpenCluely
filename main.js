@@ -2608,7 +2608,7 @@ class ApplicationController {
       // Pure greeting fast-path: Instant 15ms response for greetings so recruiter can move on immediately
       if (this._isPureGreeting(cleanText)) {
         logger.info("Handling pure conversational greeting with ultra-fast instant response", { text: cleanText });
-        const greetingResponse = `❓ Question: Warm interview greeting\n🗣️ Start with: "I'm doing well, thank you! It's great to connect with you today—I'm really excited for our conversation."\n⚡ Talking Points:\n• Express [genuine enthusiasm] about the role, team, and technology stack.\n• Confirm [clear audio] and that you are ready to dive into technical discussions.\n🎯 Key-Value Insights:\n• Candidate Mindset: Warm, articulate, humble, and engineering-ready.\n• Our Approach: Keep initial greeting brief and transition smoothly to technical questions.`;
+        const greetingResponse = `### Question:\nWarm interview greeting\n\n### Introduction:\n"I'm doing well, thank you! It's great to connect with you today—I'm really excited for our conversation."\n\n### Content:\n• **[Candidate Mindset]** → Warm, articulate, humble, and engineering-ready\n• **[Readiness]** → Confirm clear audio and transition smoothly into technical discussion\n\n### Examples:\n• **[Connection]** → Briefly reference excitement about backend and AI engineering challenges\n\n### Conclusion:\n**[Key Takeaway]** → Keep greeting under 15 seconds so interviewer can lead the discussion.`;
         
         const fastResult = {
           response: greetingResponse,
@@ -2617,7 +2617,8 @@ class ApplicationController {
             processingTime: 15,
             usedFallback: false,
             isTranscriptionResponse: true,
-            messageId
+            messageId,
+            question: cleanText
           }
         };
 
@@ -2652,7 +2653,8 @@ class ApplicationController {
             isInstantResponse: true,
             isLocked: true,
             isTranscriptionResponse: true,
-            messageId
+            messageId,
+            question: cleanText
           }
         };
 
@@ -2744,7 +2746,12 @@ class ApplicationController {
           return;
         }
 
-        llmResult.metadata = { ...llmResult.metadata, messageId };
+        llmResult.metadata = { 
+          ...llmResult.metadata, 
+          messageId,
+          question: cleanText,
+          processingTime: llmResult.metadata && llmResult.metadata.processingTime ? llmResult.metadata.processingTime : (Date.now() - startTime)
+        };
 
         // Add LLM response to session memory
         sessionManager.addModelResponse(llmResult.response, {

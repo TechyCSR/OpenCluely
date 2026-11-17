@@ -91,16 +91,32 @@ class LocalKnowledgeService {
 
   _formatResponse(item) {
     const lines = [];
-    lines.push(`❓ Question: ${item.title}`);
-    lines.push(`🗣️ Start with: "${item.startWith.replace(/^"|"$/g, '')}"`);
-    lines.push(`⚡ Talking Points:`);
+    lines.push(`### Question:`);
+    lines.push(item.title);
+    lines.push(``);
+    lines.push(`### Introduction:`);
+    lines.push(`"${item.startWith.replace(/^["'“”]+|["'“”]+$/g, '')}"`);
+    lines.push(``);
+    lines.push(`### Content:`);
     for (const pt of item.talkingPoints) {
       lines.push(`• ${pt}`);
     }
-    lines.push(`🎯 Architecture & Problem Breakdown:`);
-    for (const kv of item.keyValuePairs) {
-      lines.push(`• ${kv.key}: ${kv.value}`);
+    lines.push(``);
+    lines.push(`### Examples:`);
+    const examples = (item.keyValuePairs || []).filter(kv => /example|metric|project|clinic|vedprada|rec|cctv|production/i.test(kv.key));
+    if (examples.length > 0) {
+      for (const kv of examples) {
+        lines.push(`• **[${kv.key}]** → ${kv.value}`);
+      }
+    } else if (item.keyValuePairs && item.keyValuePairs.length > 0) {
+      for (const kv of item.keyValuePairs.slice(0, 2)) {
+        lines.push(`• **[${kv.key}]** → ${kv.value}`);
+      }
     }
+    lines.push(``);
+    lines.push(`### Conclusion:`);
+    const conclusion = (item.keyValuePairs || []).find(kv => /conclusion|fix|approach|takeaway|senior/i.test(kv.key)) || (item.keyValuePairs && item.keyValuePairs[item.keyValuePairs.length - 1]);
+    lines.push(`**[Key Takeaway]** → ${conclusion ? conclusion.value : 'Focus on low latency, data integrity, and measurable reliability in production.'}`);
     return lines.join('\n');
   }
 
