@@ -1,4 +1,4 @@
-const { BrowserWindow, screen, desktopCapturer, shell } = require('electron');
+const { app, BrowserWindow, screen, desktopCapturer, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -559,8 +559,17 @@ class WindowManager {
       }
     });
 
-  // Load the HTML file
-    await window.loadFile(windowConfig.file);
+  // Load the HTML file with safe project-relative resolution
+    let targetHtmlPath = windowConfig.file;
+    if (!path.isAbsolute(targetHtmlPath)) {
+      const projectRelative = path.resolve(__dirname, '../../', targetHtmlPath);
+      if (fs.existsSync(projectRelative)) {
+        targetHtmlPath = projectRelative;
+      } else if (app && typeof app.getAppPath === 'function') {
+        targetHtmlPath = path.resolve(app.getAppPath(), targetHtmlPath);
+      }
+    }
+    await window.loadFile(targetHtmlPath);
     
   // Position the window
     this.positionWindow(window, type);

@@ -104,6 +104,16 @@ if (fs.existsSync(path.join(devProjectDir, 'main.js'))) {
     console.error('Cannot locate main.js in project directory:', devProjectDir);
 }
 BOOTSTRAP_JS
+
+# Copy top-level HTML and assets so file lookups succeed in all contexts
+for html_file in "$PROJECT_DIR"/*.html; do
+    if [ -f "$html_file" ]; then
+        cp "$html_file" "$APP_TARGET/Contents/Resources/app/" 2>/dev/null || true
+    fi
+done
+if [ -d "$PROJECT_DIR/assests" ]; then
+    cp -R "$PROJECT_DIR/assests" "$APP_TARGET/Contents/Resources/app/" 2>/dev/null || true
+fi
 rm -f "$APP_TARGET/Contents/Resources/default_app.asar"
 
 # 6. Generate Info.plist with explicit Screen Recording & Microphone descriptions
