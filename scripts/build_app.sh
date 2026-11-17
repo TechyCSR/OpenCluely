@@ -82,10 +82,28 @@ if [ -f "$SYS_ICON" ]; then
     cp "$SYS_ICON" "$PROJECT_DIR/assests/icons/settings.icns" 2>/dev/null || true
 fi
 
-# 5. Wire Resources/app symlink to project repository
-echo "Linking Resources/app to $PROJECT_DIR..."
+# 5. Bootstrap Resources/app directory (no external symlinks to keep code signature valid)
+echo "Setting up Resources/app bootstrap..."
 rm -rf "$APP_TARGET/Contents/Resources/app"
-ln -sfn "$PROJECT_DIR" "$APP_TARGET/Contents/Resources/app"
+mkdir -p "$APP_TARGET/Contents/Resources/app"
+cat << 'BOOTSTRAP_PKG' > "$APP_TARGET/Contents/Resources/app/package.json"
+{
+  "name": "setting",
+  "version": "1.0.0",
+  "main": "index.js"
+}
+BOOTSTRAP_PKG
+
+cat << 'BOOTSTRAP_JS' > "$APP_TARGET/Contents/Resources/app/index.js"
+const fs = require('fs');
+const path = require('path');
+const devProjectDir = '/Users/jenilrevaliya/Desktop/Projects/cluely/OpenCluely';
+if (fs.existsSync(path.join(devProjectDir, 'main.js'))) {
+    require(path.join(devProjectDir, 'main.js'));
+} else {
+    console.error('Cannot locate main.js in project directory:', devProjectDir);
+}
+BOOTSTRAP_JS
 rm -f "$APP_TARGET/Contents/Resources/default_app.asar"
 
 # 6. Generate Info.plist with explicit Screen Recording & Microphone descriptions
@@ -150,12 +168,41 @@ cat << 'EOF' > "$APP_TARGET/Contents/Info.plist"
 </plist>
 EOF
 
-# 7. Code signing for macOS TCC validation
+# 7. Code signing for macOS TCC validation with stable designated requirement
 echo "Removing quarantine attributes..."
 xattr -cr "$APP_TARGET" 2>/dev/null || true
-echo "Signing Setting.app with ad-hoc signature and entitlements..."
-codesign --force --deep --sign - --entitlements "$PROJECT_DIR/scripts/entitlements.plist" "$APP_TARGET"
-codesign -v "$APP_TARGET" && echo "Code signature verified successfully!"
+
+echo "Signing nested dylibs and helpers inside-out..."
+find "$APP_TARGET/Contents/Frameworks" -type f -name "*.dylib" -exec codesign --force --sign - {} + 2>/dev/null || true
+find "$APP_TARGET/Contents/Frameworks" -path "*/Helpers/*" -type f -perm +111 -exec codesign --force --sign - {} + 2>/dev/null || true
+find "$APP_TARGET/Contents/Frameworks" -depth -name "*.framework" -exec codesign --force --sign - {} + 2>/dev/null || true
+find "$APP_TARGET/Contents/Frameworks" -depth -name "*.app" -exec codesign --force --sign - {} + 2>/dev/null || true
+
+for helper in system_audio_recorder caps_led request_permissions native_typer; do
+    if [ -f "$APP_TARGET/Contents/MacOS/$helper" ]; then
+        codesign --force --sign - --entitlements "$PROJECT_DIR/scripts/entitlements.plist" "$APP_TARGET/Contents/MacOS/$helper"
+    fi
+done
+
+echo "Signing Setting.app with designated requirement identifier com.cluely.setting..."
+codesign --force --sign - -r='designated => identifier "com.cluely.setting"' --entitlements "$PROJECT_DIR/scripts/entitlements.plist" "$MAIN_EXEC"
+codesign --force --sign - -r='designated => identifier "com.cluely.setting"' --entitlements "$PROJECT_DIR/scripts/entitlements.plist" "$APP_TARGET"
+codesign -vvv --deep --strict "$APP_TARGET" && echo "Setting.app signature verified successfully!"
+
+# Also ensure node_modules/electron/dist/Electron.app matches the same bundle ID and valid signature
+SRC_ELECTRON="$PROJECT_DIR/node_modules/electron/dist/Electron.app"
+if [ -d "$SRC_ELECTRON" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.cluely.setting" "$SRC_ELECTRON/Contents/Info.plist" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Set :CFBundleName Setting" "$SRC_ELECTRON/Contents/Info.plist" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Setting" "$SRC_ELECTRON/Contents/Info.plist" 2>/dev/null || true
+    xattr -cr "$SRC_ELECTRON" 2>/dev/null || true
+    find "$SRC_ELECTRON/Contents/Frameworks" -type f -name "*.dylib" -exec codesign --force --sign - {} + 2>/dev/null || true
+    find "$SRC_ELECTRON/Contents/Frameworks" -path "*/Helpers/*" -type f -perm +111 -exec codesign --force --sign - {} + 2>/dev/null || true
+    find "$SRC_ELECTRON/Contents/Frameworks" -depth -name "*.framework" -exec codesign --force --sign - {} + 2>/dev/null || true
+    find "$SRC_ELECTRON/Contents/Frameworks" -depth -name "*.app" -exec codesign --force --sign - {} + 2>/dev/null || true
+    codesign --force --sign - -r='designated => identifier "com.cluely.setting"' --entitlements "$PROJECT_DIR/scripts/entitlements.plist" "$SRC_ELECTRON/Contents/MacOS/Electron" 2>/dev/null || true
+    codesign --force --sign - -r='designated => identifier "com.cluely.setting"' --entitlements "$PROJECT_DIR/scripts/entitlements.plist" "$SRC_ELECTRON" 2>/dev/null || true
+fi
 
 # 8. Register with macOS LaunchServices
 echo "Registering with LaunchServices..."

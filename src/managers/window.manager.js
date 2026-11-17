@@ -1207,10 +1207,29 @@ class WindowManager {
   }
 
   setupScreenCaptureAvailabilityWatcher() {
-    // Only check once at startup to verify screen capture enumeration works,
-    // avoiding continuous 5-second polling that races with user screen captures.
-    this.checkScreenCaptureAvailability().catch(() => {});
-    logger.info('Screen capture availability initial check complete');
+    // On macOS, avoid calling desktopCapturer.getSources on startup because it triggers
+    // macOS system permission modals before the UI is even rendered.
+    // Use passive systemPreferences.getMediaAccessStatus instead.
+    if (process.platform === 'darwin') {
+      try {
+        const { systemPreferences } = require('electron');
+        const status = systemPreferences.getMediaAccessStatus ? systemPreferences.getMediaAccessStatus('screen') : 'unknown';
+        this.screenCaptureStatus = {
+          available: status === 'granted',
+          lastError: status === 'granted' ? null : `macOS screen status: ${status}`,
+          lastCheckedAt: new Date().toISOString()
+        };
+        logger.info('Screen capture availability initial check (passive)', { status });
+        return;
+      } catch (_) {}
+    }
+
+    this.screenCaptureStatus = {
+      available: true,
+      lastError: null,
+      lastCheckedAt: new Date().toISOString()
+    };
+    logger.info('Screen capture availability initialized (passive)');
   }
 
   async checkScreenCaptureAvailability() {

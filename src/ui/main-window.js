@@ -189,10 +189,22 @@ class MainWindowUI {
 
     applyMicVisibility() {
         if (this.micButton) {
-            if (this.speechAvailable) {
-                this.micButton.style.display = '';
+            // Keep mic button visible on toolbar at all times
+            this.micButton.style.display = 'inline-flex';
+            const micLabel = document.getElementById('micButtonLabel');
+            if (this.isRecording) {
+                this.micButton.classList.add('recording');
+                if (micLabel) micLabel.textContent = 'Rec';
             } else {
-                this.micButton.style.display = 'none';
+                this.micButton.classList.remove('recording');
+                if (micLabel) micLabel.textContent = 'Mic';
+            }
+            if (this.speechAvailable) {
+                this.micButton.style.opacity = '1';
+                this.micButton.title = 'Toggle Recording / Live Audio (⌥R / Alt+R)';
+            } else {
+                this.micButton.style.opacity = '0.85';
+                this.micButton.title = 'Speech engine ready / Click or Alt+R to record';
             }
             // Resize to reflect layout change
             setTimeout(() => this.resizeWindowToContent(), 50);
@@ -443,6 +455,11 @@ class MainWindowUI {
     setupElements() {
         this.statusDot = document.getElementById('statusDot');
         this.skillIndicator = document.getElementById('skillIndicator');
+        this.modeInterviewBtn = document.getElementById('modeInterviewBtn');
+        this.modeDsaBtn = document.getElementById('modeDsaBtn');
+        this.audioSourceToggle = document.getElementById('audioSourceToggle');
+        this.audioSourceIcon = document.getElementById('audioSourceIcon');
+        this.audioSourceLabel = document.getElementById('audioSourceLabel');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
         this.languageSelector = document.getElementById('languageSelector');
@@ -1056,20 +1073,39 @@ class MainWindowUI {
             });
         }
 
-        // Skill indicator click & hover handler cycles DSA and Interview skills
-        const toggleSkillAction = () => {
-            const nextSkill = this.currentSkill === 'dsa' ? 'interview' : 'dsa';
-            if (window.electronAPI && window.electronAPI.updateActiveSkill) {
-                window.electronAPI.updateActiveSkill(nextSkill).then(() => {
-                    this.handleSkillActivated(nextSkill);
-                });
-            } else {
-                this.handleSkillActivated(nextSkill);
-            }
+        // Skill indicator & mode selector handlers (Interview vs DSA)
+        const selectInterviewMode = (e) => {
+            if (e) e.stopPropagation();
+            this.setSkill('interview');
         };
-        this.skillIndicator.addEventListener('click', toggleSkillAction);
-        if (window.RubicHoverDwell) {
-            window.RubicHoverDwell.attach(this.skillIndicator, toggleSkillAction);
+        const selectDsaMode = (e) => {
+            if (e) e.stopPropagation();
+            this.setSkill('dsa');
+        };
+
+        if (this.modeInterviewBtn) {
+            this.modeInterviewBtn.addEventListener('click', selectInterviewMode);
+        }
+        if (this.modeDsaBtn) {
+            this.modeDsaBtn.addEventListener('click', selectDsaMode);
+        }
+
+        // Audio Source toggle handler (System Audio vs Mic)
+        if (this.audioSourceToggle) {
+            this.audioSourceToggle.addEventListener('click', async (e) => {
+                if (e) e.stopPropagation();
+                if (window.electronAPI && window.electronAPI.toggleAudioSourceMode) {
+                    try {
+                        const res = await window.electronAPI.toggleAudioSourceMode();
+                        if (res && res.mode) {
+                            this.setAudioSourceModeUI(res.mode);
+                        }
+                    } catch (_) {}
+                } else {
+                    const nextMode = this.audioSourceMode === 'system' ? 'microphone' : 'system';
+                    this.setAudioSourceModeUI(nextMode);
+                }
+            });
         }
 
         // Check for required elements (settingsIndicator is optional)
@@ -1563,11 +1599,17 @@ class MainWindowUI {
                 if (this.audioSourceIcon) {
                     this.audioSourceIcon.className = 'fas fa-volume-high';
                 }
+                if (this.audioSourceLabel) {
+                    this.audioSourceLabel.textContent = 'System';
+                }
             } else {
                 this.audioSourceToggle.classList.remove('active');
                 this.audioSourceToggle.title = 'Audio Source: Microphone (Candidate Voice) - Click for System Audio';
                 if (this.audioSourceIcon) {
                     this.audioSourceIcon.className = 'fas fa-microphone-lines';
+                }
+                if (this.audioSourceLabel) {
+                    this.audioSourceLabel.textContent = 'Mic In';
                 }
             }
         }
@@ -2056,7 +2098,39 @@ class MainWindowUI {
         }
     }
 
+    setSkill(skillName) {
+        if (this.currentSkill === skillName) {
+            this.animateSkillChange();
+            return;
+        }
+        this.currentSkill = skillName;
+        if (window.electronAPI && window.electronAPI.updateActiveSkill) {
+            window.electronAPI.updateActiveSkill(skillName).then(() => {
+                this.handleSkillActivated(skillName);
+            }).catch(() => {
+                this.handleSkillActivated(skillName);
+            });
+        } else {
+            this.handleSkillActivated(skillName);
+        }
+    }
+
     updateSkillIndicator() {
+        if (this.modeInterviewBtn && this.modeDsaBtn) {
+            const isInterview = this.currentSkill === 'interview';
+            this.modeInterviewBtn.classList.toggle('active', isInterview);
+            this.modeDsaBtn.classList.toggle('active', !isInterview);
+
+            // Preserve explicit labels and icons for each segmented pill
+            const interviewSpan = this.modeInterviewBtn.querySelector('span');
+            if (interviewSpan) interviewSpan.textContent = 'Interview';
+            const dsaSpan = this.modeDsaBtn.querySelector('span');
+            if (dsaSpan) dsaSpan.textContent = 'DSA';
+
+            this.animateSkillChange();
+            return;
+        }
+
         const skillNames = {
             'dsa': 'DSA',
             'interview': 'Interview',
@@ -2077,18 +2151,11 @@ class MainWindowUI {
         });
         
         if (!this.skillIndicator) {
-            logger.error('Skill indicator element not found!');
             return;
         }
         
         const skillName = skillNames[this.currentSkill] || this.currentSkill.toUpperCase();
         const skillSpan = this.skillIndicator.querySelector('span');
-        
-        logger.info('Looking for skill span element', {
-            component: 'MainWindowUI',
-            spanExists: !!skillSpan,
-            skillName: skillName
-        });
         
         if (skillSpan) {
             const oldText = skillSpan.textContent;
@@ -2097,18 +2164,7 @@ class MainWindowUI {
             if (skillIcon) {
                 skillIcon.className = this.currentSkill === 'interview' ? 'fas fa-user-tie' : 'fas fa-brain';
             }
-                        
-            // Add visual feedback for skill change
             this.animateSkillChange();
-            
-            logger.info('Skill indicator updated successfully', {
-                component: 'MainWindowUI',
-                oldText: oldText,
-                newText: skillName,
-                interactive: this.isInteractive
-            });
-        } else {
-            logger.error('Skill span element not found within skill indicator!');
         }
     }
 

@@ -199,8 +199,103 @@
 
 
 
-      /* Small round info button */
-      #infoButton {
+      /* Mode Segmented Control: Unambiguous Interview vs DSA switcher */
+      .mode-segmented-control {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 6px;
+        padding: 2px;
+        gap: 2px;
+        user-select: none;
+        -webkit-app-region: no-drag;
+        flex-shrink: 0;
+      }
+
+      .mode-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.65);
+        cursor: pointer !important;
+        transition: all 0.18s ease;
+        user-select: none;
+        border: 1px solid transparent;
+      }
+
+      .mode-pill * {
+        pointer-events: none !important;
+      }
+
+      .mode-pill:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.95);
+      }
+
+      .mode-pill.active {
+        background: rgba(16, 185, 129, 0.24) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(16, 185, 129, 0.6) !important;
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.35) !important;
+        font-weight: 750 !important;
+      }
+
+      .mode-pill.active i {
+        color: #10b981 !important;
+      }
+
+      .mode-pill.active[data-skill="dsa"] {
+        background: rgba(56, 189, 248, 0.22) !important;
+        border-color: rgba(56, 189, 248, 0.6) !important;
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.35) !important;
+      }
+
+      .mode-pill.active[data-skill="dsa"] i {
+        color: #38bdf8 !important;
+      }
+
+      /* Audio Source Item */
+      .command-item.audio-source-item {
+        font-size: 11px;
+        padding: 3px 8px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 5px;
+        cursor: pointer !important;
+        color: rgba(255, 255, 255, 0.85);
+      }
+
+      .command-item.audio-source-item:hover {
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+      }
+
+      .command-item.audio-source-item i {
+        color: #38bdf8;
+      }
+
+      /* Recording Animation */
+      .command-item.recording {
+        color: #ff4757 !important;
+        background: rgba(255, 71, 87, 0.22) !important;
+        border: 1px solid rgba(255, 71, 87, 0.5) !important;
+        animation: pulseRec 1.3s infinite ease-in-out !important;
+      }
+
+      .command-item.recording i {
+        color: #ff4757 !important;
+        text-shadow: 0 0 8px rgba(255, 71, 87, 0.8) !important;
+      }
+
+      @keyframes pulseRec {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.05); opacity: 0.8; }
+      }
         width: 26px;
         height: 26px;
         border-radius: 9999px;
@@ -1151,6 +1246,31 @@
         <i class="fas fa-times" id="snapshotCloseIcon"></i>
       </div>
       <div class="command-separator"></div>
+
+      <!-- Live Microphone & Audio Input (Always Visible) -->
+      <div class="command-item mic-control-item" id="micButton" title="Toggle Live Recording / Listen (⌥R / Alt+R)">
+        <i class="fas fa-microphone" id="micButtonIcon"></i>
+        <span id="micButtonLabel">Mic</span>
+      </div>
+      <div class="command-item audio-source-item" id="audioSourceToggle" title="Audio Source: Click to switch between Interviewer System Audio and Microphone">
+        <i class="fas fa-volume-high" id="audioSourceIcon"></i>
+        <span id="audioSourceLabel">System</span>
+      </div>
+      <div class="command-separator"></div>
+
+      <!-- Clear Unambiguous Segmented Mode Switcher (Interview vs DSA) -->
+      <div class="mode-segmented-control" id="skillIndicator" title="Active Assistant Mode">
+        <div class="mode-pill active" id="modeInterviewBtn" data-skill="interview" title="Interview Mode: Live question assistance with glanceable cards">
+          <i class="fas fa-user-tie"></i>
+          <span>Interview</span>
+        </div>
+        <div class="mode-pill" id="modeDsaBtn" data-skill="dsa" title="DSA Mode: Screen coding & algorithmic solutions">
+          <i class="fas fa-brain"></i>
+          <span>DSA</span>
+        </div>
+      </div>
+      <div class="command-separator"></div>
+
       <!-- Prefix tools: MCQ (Hidden in minimal mode, shown in expanded mode) -->
       <div class="extended-prefix-group" id="extendedPrefixGroup">
         <div class="command-item" id="mcqToggle" title="Toggle MCQ Mode">
@@ -1197,15 +1317,6 @@
       </div>
       <!-- Extended / Wide options (Shown only when expanded) -->
       <div class="extended-tools-group" id="extendedToolsGroup">
-        <div class="command-item" id="micButton">
-          <i class="fas fa-microphone" id="micButtonIcon"></i>
-        </div>
-        <div class="command-separator"></div>
-        <div class="command-item" id="skillIndicator">
-          <i class="fas fa-user-tie"></i>
-          <span>Interview</span>
-        </div>
-        <div class="command-separator"></div>
         <div class="command-item language-selector-wrapper" id="languageSelector" title="Click or hover 3s to choose programming language">
           <i class="fas fa-code"></i>
           <span id="currentLanguageLabel">C++</span>
