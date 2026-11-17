@@ -2438,13 +2438,13 @@ class ApplicationController {
     const isPreambleOnly = isInterviewQuestion && this._isRecruiterPreambleOnly(this._utteranceBuffer);
 
     // Conversational debounce:
-    // Natural pause buffer so questions don't get cut in half while interviewer is speaking:
-    // - If pure preamble acknowledgment, wait 850ms
-    // - If question ends with '?', debounce at 750ms
-    // - If ending in '.' or '!', wait 850ms
-    // - If mid-sentence or without punctuation, wait 1100ms so pauses and cuts in question are absorbed
+    // Low-latency interview dispatch with multi-turn pronoun resolution backing:
+    // - If question ends with '?', flush immediately at 220ms
+    // - If ending in '.' or '!', flush at 300ms
+    // - If mid-sentence, flush at 420ms (down from 1100ms)
+    // - If pure preamble acknowledgment, wait 600ms
     const coalesceDelay = isInterviewQuestion 
-      ? (isPreambleOnly ? 850 : (isQuestionMark ? 750 : (isOtherPunctuation ? 850 : 1100))) 
+      ? (isPreambleOnly ? 600 : (isQuestionMark ? 220 : (isOtherPunctuation ? 300 : 420))) 
       : this._utteranceCoalesceMs;
 
     this._utteranceTimer = setTimeout(() => {

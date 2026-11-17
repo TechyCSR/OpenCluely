@@ -31,20 +31,20 @@ console.log('3. Checking Layout & Spacing improvements...');
 const scrollWrapperCss = htmlContent.match(/\.interview-scroll-wrapper\s*\{[^}]+\}/s);
 assert(scrollWrapperCss, '.interview-scroll-wrapper must exist');
 assert(scrollWrapperCss[0].includes('overflow: hidden !important'), 'Strict zero scroll must be enforced');
-assert(scrollWrapperCss[0].includes('padding: 8px 18px 10px 18px;'), 'Padding must be refined to 8px 18px 10px 18px');
+assert(scrollWrapperCss[0].includes('padding: 14px 22px 16px 22px;'), 'Padding must be 14px 22px 16px 22px');
 
 const interviewFlowCss = htmlContent.match(/\.interview-flow\s*\{[^}]+\}/s);
 assert(interviewFlowCss, '.interview-flow must exist');
-assert(interviewFlowCss[0].includes('gap: 7px;'), 'Flow gap must be 7px');
+assert(interviewFlowCss[0].includes('gap: 13px;'), 'Flow gap must be 13px');
 
 const introCss = htmlContent.match(/\.intro-spoken-text\s*\{[^}]+\}/s);
 assert(introCss, '.intro-spoken-text must exist');
-assert(introCss[0].includes('border-left: 2.5px solid rgba(16, 185, 129, 0.55);'), 'Intro spoken text must have left accent border');
+assert(introCss[0].includes('border-left: 3px solid #10b981;'), 'Intro spoken text must have 3px emerald left accent border');
 
-const conclusionCss = htmlContent.match(/\.conclusion-body-text\s*\{[^}]+\}/s);
-assert(conclusionCss, '.conclusion-body-text must exist');
-assert(conclusionCss[0].includes('background: rgba(16, 185, 129, 0.08);'), 'Conclusion must have soft background highlight');
-assert(conclusionCss[0].includes('border: 1px solid rgba(16, 185, 129, 0.22);'), 'Conclusion must have border highlight');
+const takeawayCardCss = htmlContent.match(/\.takeaway-card\s*\{[^}]+\}/s);
+assert(takeawayCardCss, '.takeaway-card must exist');
+assert(takeawayCardCss[0].includes('background: rgba(16, 185, 129, 0.08);'), 'Takeaway card must have soft background highlight');
+assert(takeawayCardCss[0].includes('border: 1px solid rgba(16, 185, 129, 0.24);'), 'Takeaway card must have border highlight');
 
 // 4. Verify attachNavDwell logic and 1000ms hover dwell auto-click
 console.log('4. Checking attachNavDwell implementation...');
@@ -142,5 +142,23 @@ assert.strictEqual(navigatedDelta, 1, 'Direct click must navigate immediately');
 
 // Restore setTimeout
 global.setTimeout = origSetTimeout;
+
+// 6. Verify Speech Hangover, Coalesce Latencies, and Interview Prompt Templates
+console.log('6. Checking Low-Latency Speech & Sentence-to-Say Prompts...');
+const speechServicePath = path.join(__dirname, '..', 'src', 'services', 'speech.service.js');
+const speechServiceContent = fs.readFileSync(speechServicePath, 'utf8');
+assert(speechServiceContent.includes('return 280; // Fast end-of-speech flush'), 'SpeechService must have 280ms silence hangover');
+
+const mainJsPath = path.join(__dirname, '..', 'main.js');
+const mainJsContent = fs.readFileSync(mainJsPath, 'utf8');
+assert(mainJsContent.includes('isQuestionMark ? 220 : (isOtherPunctuation ? 300 : 420)'), 'main.js must have 220ms question debounce');
+
+const promptMdPath = path.join(__dirname, '..', 'prompts', 'interview.md');
+const promptMdContent = fs.readFileSync(promptMdPath, 'utf8');
+assert(promptMdContent.includes('SENTENCE-TO-SAY WISE — STRICTLY NO BULLET POINTS'), 'interview.md must enforce sentence-to-say without bullets');
+
+const llmServicePath = path.join(__dirname, '..', 'src', 'services', 'llm.service.js');
+const llmServiceContent = fs.readFileSync(llmServicePath, 'utf8');
+assert(llmServiceContent.includes('SENTENCE-TO-SAY WISE: Strictly NO bullet points'), 'llm.service.js must enforce sentence-to-say without bullets');
 
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');

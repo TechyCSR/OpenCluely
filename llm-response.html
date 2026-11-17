@@ -406,11 +406,11 @@
             40% { transform: scale(1.15); opacity: 1; }
         }
 
-        /* ── Unified Interview Flow: Zero Waste, Zero Extra Containers, Zero Scroll ── */
+        /* ── Unified Interview Flow: Zero Waste, Zero Congestion, Zero Scroll ── */
         .interview-scroll-wrapper {
             height: calc(100vh - 38px);
             overflow: hidden !important; /* Strict zero scroll */
-            padding: 8px 18px 10px 18px;
+            padding: 14px 22px 16px 22px;
             box-sizing: border-box;
             scrollbar-width: none !important;
             user-select: text;
@@ -425,7 +425,7 @@
         .interview-flow {
             display: flex;
             flex-direction: column;
-            gap: 7px; /* Clean rhythm between flow sections */
+            gap: 13px; /* Relaxed, readable rhythm between speech steps */
             max-width: 900px;
             margin: 0 auto;
         }
@@ -433,26 +433,42 @@
         .flow-section {
             display: flex;
             flex-direction: column;
-            gap: 2.5px;
+            gap: 4px;
             position: relative;
         }
 
-        /* ── Titles in Vibrant Green, Strictly NO GREEN ACTIVE DOT ── */
+        /* ── Speech Step Badges in Vibrant Emerald (Strictly NO Green Active Dot) ── */
+        .speech-step-badge,
         .section-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             color: #10b981 !important;
             font-size: 10.5px;
             font-weight: 850;
             letter-spacing: 0.85px;
             text-transform: uppercase;
             user-select: none;
-            display: inline-block;
             line-height: 1.2;
-            margin-bottom: 1.5px;
+            margin-bottom: 2px;
+        }
+
+        .step-tag-pill {
+            background: rgba(16, 185, 129, 0.14);
+            border: 1px solid rgba(16, 185, 129, 0.40);
+            color: #34d399;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 9.5px;
+            font-weight: 800;
+            letter-spacing: 0.3px;
         }
 
         /* Guarantee NO green active dot pseudo-element before/after any titles */
         .section-label::before,
         .section-label::after,
+        .speech-step-badge::before,
+        .speech-step-badge::after,
         .card-tag::before,
         .card-tag::after {
             display: none !important;
@@ -461,51 +477,54 @@
 
         /* 1. Question Section */
         .question-title-text {
-            font-size: 13px;
+            font-size: 14.5px;
             font-weight: 800;
             color: #ffffff;
-            line-height: 1.35;
-            letter-spacing: -0.1px;
+            line-height: 1.4;
+            letter-spacing: -0.15px;
         }
 
-        /* 2. Introduction Section */
+        /* 2. Introduction Section (Say this first - clean inline quotes) */
         .intro-spoken-text {
-            font-size: 13px;
+            font-size: 15.5px;
             font-weight: 700;
             color: #ffffff;
-            line-height: 1.4;
+            line-height: 1.55;
             letter-spacing: 0.05px;
-            border-left: 2.5px solid rgba(16, 185, 129, 0.55);
-            padding-left: 8px;
+            border-left: 3px solid #10b981;
+            padding: 4px 0 4px 12px;
             margin-left: 1px;
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, transparent 100%);
+            border-radius: 0 6px 6px 0;
         }
 
-        /* 3. Content Section */
+        /* 3. Content Section (Core explanation - natural sentences, NO bullets) */
         .content-body-text {
-            font-size: 12.5px;
-            font-weight: 650;
-            color: rgba(255, 255, 255, 0.95);
-            line-height: 1.45;
+            font-size: 14.5px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.94);
+            line-height: 1.58;
+            letter-spacing: 0.05px;
         }
 
         .content-body-text ul,
         .content-body-text ol {
-            padding-left: 14px;
-            margin: 2px 0;
+            padding-left: 16px;
+            margin: 3px 0;
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            gap: 3px;
         }
 
         .content-body-text li {
             margin: 0;
             padding: 0;
-            line-height: 1.35;
+            line-height: 1.45;
         }
 
         .content-body-text p {
-            margin: 2px 0;
-            line-height: 1.4;
+            margin: 3px 0;
+            line-height: 1.58;
         }
 
         /* Mechanism Arrow Rows */
@@ -513,7 +532,7 @@
             display: flex;
             align-items: baseline;
             gap: 6px;
-            line-height: 1.35;
+            line-height: 1.45;
             margin: 2px 0;
         }
 
@@ -521,14 +540,14 @@
             color: #ff4d4f; /* Vibrant red arrow */
             font-weight: 900;
             flex-shrink: 0;
-            font-size: 13px;
+            font-size: 14px;
         }
 
         .mech-text {
             color: #ffffff;
             font-weight: 700;
-            font-size: 12.5px;
-            line-height: 1.35;
+            font-size: 14px;
+            line-height: 1.5;
         }
 
         /* ── Important Words Highlighted in RED ── */
@@ -546,10 +565,10 @@
             background: rgba(239, 68, 68, 0.12) !important;
             border: 1px solid rgba(239, 68, 68, 0.38) !important;
             color: #ff5252 !important;
-            padding: 0px 5px;
+            padding: 1px 6px;
             border-radius: 4px;
             font-weight: 800;
-            font-size: 12px;
+            font-size: 13px;
             letter-spacing: 0.2px;
             margin: 0 1px;
         }
@@ -559,10 +578,10 @@
             background: rgba(255, 77, 79, 0.10);
             border: 1px solid rgba(255, 77, 79, 0.32);
             color: #ff7875;
-            padding: 0 4px;
-            border-radius: 3px;
+            padding: 0 5px;
+            border-radius: 4px;
             font-weight: 800;
-            font-size: 11.5px;
+            font-size: 12.5px;
         }
 
         .complexity-pill {
@@ -570,31 +589,48 @@
             background: rgba(255, 77, 79, 0.12);
             border: 1px solid rgba(255, 77, 79, 0.38);
             color: #ff4d4f;
-            padding: 0 5px;
-            border-radius: 3px;
+            padding: 0 6px;
+            border-radius: 4px;
             font-family: 'JetBrains Mono', monospace;
             font-weight: 800;
-            font-size: 11.5px;
-        }
-
-        /* 4. Examples Section */
-        .examples-body-text {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.92);
-            line-height: 1.38;
-        }
-
-        /* 5. Conclusion Section */
-        .conclusion-body-text {
             font-size: 12.5px;
+        }
+
+        /* 4. Examples Section (Production story) */
+        .examples-body-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.92);
+            line-height: 1.55;
+            letter-spacing: 0.05px;
+        }
+
+        .examples-body-text p {
+            margin: 3px 0;
+            line-height: 1.55;
+        }
+
+        /* 5. Conclusion Section (Wrap-up Takeaway Box) */
+        .takeaway-card {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.24);
+            border-radius: 8px;
+            padding: 9px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .conclusion-body-text {
+            font-size: 14px;
             font-weight: 750;
             color: #ffffff;
-            line-height: 1.35;
-            background: rgba(16, 185, 129, 0.08);
-            border: 1px solid rgba(16, 185, 129, 0.22);
-            border-radius: 6px;
-            padding: 5px 9px;
-            margin-top: 1px;
+            line-height: 1.48;
+        }
+
+        .conclusion-body-text p {
+            margin: 0;
+            line-height: 1.48;
         }
 
         /* ── Inline Code & Blocks ── */
@@ -1539,35 +1575,45 @@
                 const qSec = document.createElement('div');
                 qSec.className = 'flow-section flow-question';
                 qSec.innerHTML = `
-                    <span class="section-label">QUESTION</span>
+                    <div class="speech-step-badge">
+                        <span>QUESTION</span>
+                    </div>
                     <div class="question-title-text">${escapeHtml(parsed.question)}</div>
                 `;
                 flow.appendChild(qSec);
             }
 
-            // 2. Introduction (Green Title, Spoken line in quotes, Bold White Text, NO Green Dot)
+            // 2. Introduction (SAY THIS FIRST — Clean Inline Quotes, Spoken Opening Sentence)
             if (parsed.intro) {
                 const introSec = document.createElement('div');
                 introSec.className = 'flow-section flow-intro';
+                const cleanIntro = String(parsed.intro).replace(/^["“]\s*/, '').replace(/\s*["”]$/, '').trim();
+                const formattedIntro = highlightKeywordsAndTerms(escapeHtml(cleanIntro));
                 introSec.innerHTML = `
-                    <span class="section-label">INTRODUCTION</span>
-                    <div class="intro-spoken-text">“${renderPartMarkdown(parsed.intro)}”</div>
+                    <div class="speech-step-badge">
+                        <span>SAY THIS FIRST</span>
+                        <span class="step-tag-pill">DIRECT OPENING</span>
+                    </div>
+                    <div class="intro-spoken-text">“${formattedIntro}”</div>
                 `;
                 flow.appendChild(introSec);
             }
 
-            // 3. Content (Green Title, Technical Details with Red Highlights, NO Green Dot)
+            // 3. Content (CORE EXPLANATION — Natural Spoken Sentences, NO Bullets)
             if (parsed.content) {
                 const contentSec = document.createElement('div');
                 contentSec.className = 'flow-section flow-content';
                 contentSec.innerHTML = `
-                    <span class="section-label">CONTENT</span>
+                    <div class="speech-step-badge">
+                        <span>CORE EXPLANATION</span>
+                        <span class="step-tag-pill">TALKING FLOW</span>
+                    </div>
                     <div class="content-body-text">${renderPartMarkdown(parsed.content)}</div>
                 `;
                 flow.appendChild(contentSec);
             }
 
-            // 4. Examples (Green Title, Code / Production Case, Dynamic, NO Green Dot)
+            // 4. Examples (PRODUCTION STORY — Grounded in Real Experience)
             if (parsed.examples && parsed.examples.trim()) {
                 const exSec = document.createElement('div');
                 exSec.className = 'flow-section flow-examples';
@@ -1575,7 +1621,10 @@
                 const codeBlocks = extractCodeBlocks(parsed.examples);
                 if (codeBlocks.length > 0) {
                     exSec.innerHTML = `
-                        <span class="section-label">EXAMPLES</span>
+                        <div class="speech-step-badge">
+                            <span>PRODUCTION STORY</span>
+                            <span class="step-tag-pill">CODE IMPLEMENTATION</span>
+                        </div>
                         <div class="examples-body-text"></div>
                     `;
                     const exBody = exSec.querySelector('.examples-body-text');
@@ -1608,20 +1657,27 @@
                     });
                 } else {
                     exSec.innerHTML = `
-                        <span class="section-label">EXAMPLES</span>
+                        <div class="speech-step-badge">
+                            <span>PRODUCTION STORY</span>
+                            <span class="step-tag-pill">REAL EXPERIENCE</span>
+                        </div>
                         <div class="examples-body-text">${renderPartMarkdown(parsed.examples)}</div>
                     `;
                 }
                 flow.appendChild(exSec);
             }
 
-            // 5. Conclusion (Green Title, Punchy Takeaway, Dynamic, NO Green Dot)
+            // 5. Conclusion (WRAP-UP TAKEAWAY — Punchy Closing Card)
             if (parsed.conclusion) {
                 const concSec = document.createElement('div');
                 concSec.className = 'flow-section flow-conclusion';
                 concSec.innerHTML = `
-                    <span class="section-label">CONCLUSION</span>
-                    <div class="conclusion-body-text">${renderPartMarkdown(parsed.conclusion)}</div>
+                    <div class="takeaway-card">
+                        <div class="speech-step-badge">
+                            <span>WRAP-UP TAKEAWAY</span>
+                        </div>
+                        <div class="conclusion-body-text">${renderPartMarkdown(parsed.conclusion)}</div>
+                    </div>
                 `;
                 flow.appendChild(concSec);
             }

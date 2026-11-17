@@ -1412,9 +1412,9 @@ class SpeechService extends EventEmitter {
 
   _getSilenceHangoverMs() {
     if (this.runtimeSettings.audioSourceMode === 'system') {
-      return 600; // Natural pause tolerance for live interview questions
+      return 280; // Fast end-of-speech flush; multi-turn context handles follow-up pauses
     }
-    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 600, 200);
+    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 280, 160);
   }
 
   _getMinUtteranceMs() {
