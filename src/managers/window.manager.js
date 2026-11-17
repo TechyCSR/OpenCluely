@@ -43,6 +43,7 @@ class WindowManager {
     // State persistence
     this.stateFilePath = path.join(os.homedir(), '.sysconfig', 'window-state.json');
     this.isHoverDragging = false;
+    this._mainWasHiddenByOverlap = false;
     this.hoverDragInterval = null;
     this._saveStateTimer = null;
     this.loadSavedWindowState();
@@ -857,6 +858,7 @@ class WindowManager {
 
     llmWindow.setPosition(x, y);
     this.userPositions['llmResponse'] = { x, y };
+    this.checkAndResolveWindowOverlap();
     logger.debug('Positioned LLM response window directly near webcam', { x, y, width: targetW, height: targetH });
   }
 
@@ -1811,6 +1813,55 @@ class WindowManager {
     }
   }
 
+  checkAndResolveWindowOverlap() {
+    const mainWindow = this.windows.get('main');
+    const llmWindow = this.windows.get('llmResponse');
+    if (!mainWindow || mainWindow.isDestroyed() || !llmWindow || llmWindow.isDestroyed()) return;
+
+    if (!llmWindow.isVisible()) {
+      if (this._mainWasHiddenByOverlap) {
+        mainWindow.setOpacity(this.currentOpacity !== undefined ? this.currentOpacity : 0.95);
+        this._mainWasHiddenByOverlap = false;
+      }
+      return;
+    }
+
+    const mainBounds = mainWindow.getBounds();
+    const llmBounds = llmWindow.getBounds();
+
+    // Check collision / overlap between LLM response window and Cluely bar
+    const overlaps = (
+      mainBounds.x < llmBounds.x + llmBounds.width &&
+      mainBounds.x + mainBounds.width > llmBounds.x &&
+      mainBounds.y < llmBounds.y + llmBounds.height &&
+      mainBounds.y + mainBounds.height > llmBounds.y
+    );
+
+    if (overlaps) {
+      const display = this.currentDisplay || screen.getPrimaryDisplay();
+      const { y: displayY, height: screenHeight } = display.workArea;
+      const targetMainY = llmBounds.y + llmBounds.height + 10;
+
+      if (targetMainY + mainBounds.height <= displayY + screenHeight) {
+        // Sufficient vertical screen space: adjust Cluely bar position cleanly below
+        mainWindow.setPosition(mainBounds.x, targetMainY);
+        this.boundWindowsPosition = { x: mainBounds.x, y: targetMainY };
+        this.userPositions['main'] = { x: mainBounds.x, y: targetMainY };
+        if (this._mainWasHiddenByOverlap) {
+          mainWindow.setOpacity(this.currentOpacity !== undefined ? this.currentOpacity : 0.95);
+          this._mainWasHiddenByOverlap = false;
+        }
+      } else {
+        // In tight vertical screen space: make Cluely bar invisible while answer window is open
+        mainWindow.setOpacity(0);
+        this._mainWasHiddenByOverlap = true;
+      }
+    } else if (this._mainWasHiddenByOverlap) {
+      mainWindow.setOpacity(this.currentOpacity !== undefined ? this.currentOpacity : 0.95);
+      this._mainWasHiddenByOverlap = false;
+    }
+  }
+
   hideLLMResponse() {
     if (this.isHoverDragging && this.hoverDraggingWindowName === 'llmResponse') {
       this.stopHoverDrag();
@@ -1821,6 +1872,15 @@ class WindowManager {
     }
     this.isLLMWindowOpen = false;
     this.broadcastToAllWindows('llm-window-state', { isOpen: false });
+
+    // Restore Cluely bar opacity if it was hidden to avoid overlap
+    if (this._mainWasHiddenByOverlap) {
+      const mainWindow = this.windows.get('main');
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setOpacity(this.currentOpacity !== undefined ? this.currentOpacity : 0.95);
+      }
+      this._mainWasHiddenByOverlap = false;
+    }
   }
 
   async showSettings() {
@@ -1948,6 +2008,7 @@ class WindowManager {
     if (Math.abs(currentW - width) >= 2 || Math.abs(currentH - height) >= 2 || Math.abs(currentX - x) >= 2 || Math.abs(currentY - y) >= 2) {
       llmWindow.setBounds({ x, y, width, height });
       this.userPositions['llmResponse'] = { x, y };
+      this.checkAndResolveWindowOverlap();
       
       logger.debug('LLM window resized atomically', { 
         newSize: `${width}x${height}`,
@@ -1965,7 +2026,7 @@ class WindowManager {
     const llmY = (llmWindow && !llmWindow.isDestroyed()) ? llmWindow.getPosition()[1] : (displayY + 8);
 
     // Maximum safe vertical height on screen (leaves bottom safety margin for macOS Dock/Taskbar)
-    const maxAvailableHeight = Math.max(300, screenHeight - (llmY - displayY) - 40);
+    const maxAvailableHeight = Math.max(250, screenHeight - (llmY - displayY) - 40);
 
     // Stable locked width (780px standard, 840px for code) to eliminate width jitter/cheating
     const hasCode = contentMetrics && contentMetrics.hasCode;
@@ -1973,14 +2034,14 @@ class WindowManager {
       ? Math.min(Math.round(screenWidth * 0.75), 840)
       : Math.min(Math.round(screenWidth * 0.65), 780);
     const width = Math.max(760, stableWidth);
-    let height = 380;
+    let height = 320;
     
     if (contentMetrics && typeof contentMetrics === 'object') {
       const measured = Number(contentMetrics.measuredHeight);
       if (measured && measured > 30) {
         // Dynamic adaptive height: fits the measured content exactly with zero clipping or scrollbars
         const desiredHeight = Math.round(measured) + 4;
-        height = Math.min(maxAvailableHeight, Math.max(360, desiredHeight));
+        height = Math.min(maxAvailableHeight, Math.max(200, desiredHeight));
       }
     }
     

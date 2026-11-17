@@ -1316,11 +1316,68 @@ Follow with a crisp 2-3 bullet point justification.`;
     return prompt;
   }
 
+  cleanAcousticAndPhoneticText(rawText) {
+    if (!rawText || typeof rawText !== 'string') return '';
+    let text = rawText.trim();
+
+    // 1. Strip leading speech filler, throat-clearing, and candidate greetings
+    text = text.replace(/^(\s*(at\s+is|what\s+is\s+at\s+is|um+|uh+|ah+|like|so\s+basically|can\s+you\s+tell\s+me|can\s+you\s+explain|hey\s+jenil|hi\s+jenil|jenil|thanks\s+jenil|tell\s+me\s+about|tell\s+us\s+about)\s+)+/i, '');
+
+    // 2. High-frequency ASR phonetic typos & homophones
+    const phoneticMap = [
+      [/\bmurn\s*stack\b/gi, 'MERN stack'],
+      [/\bmern\s*stak\b/gi, 'MERN stack'],
+      [/\bmeen\s*stack\b/gi, 'MEAN stack'],
+      [/\bcoober\s*netties?\b/gi, 'Kubernetes'],
+      [/\bkuber\s*nettes?\b/gi, 'Kubernetes'],
+      [/\bcoobernetes\b/gi, 'Kubernetes'],
+      [/\bpost\s*grass\b/gi, 'PostgreSQL'],
+      [/\bpost\s*grease\b/gi, 'PostgreSQL'],
+      [/\bpostgres\s*sequel\b/gi, 'PostgreSQL'],
+      [/\bred\s*iss\b/gi, 'Redis'],
+      [/\bread\s*is\b/gi, 'Redis'],
+      [/\bradis\b/gi, 'Redis'],
+      [/\bdock\s*her\b/gi, 'Docker'],
+      [/\brest\s*ape\s*eye\b/gi, 'REST API'],
+      [/\bgraph\s*queue\s*ell\b/gi, 'GraphQL'],
+      [/\bpie\s*torch\b/gi, 'PyTorch'],
+      [/\bten\s*sir\s*flow\b/gi, 'TensorFlow'],
+      [/\bfast\s*ape\s*eye\b/gi, 'FastAPI'],
+      [/\bto\s*sum\b/gi, 'Two Sum'],
+      [/\btoo\s*sum\b/gi, 'Two Sum'],
+      [/\basset\s*properties\b/gi, 'ACID properties'],
+      [/\bcup\s*theorem\b/gi, 'CAP Theorem'],
+      [/\bcough\s*car\b/gi, 'Kafka'],
+      [/\bkafca\b/gi, 'Kafka'],
+      [/\bno\s*sequel\b/gi, 'NoSQL'],
+      [/\bsee\s*kwell\b/gi, 'SQL'],
+      [/\bes\s*cue\s*el\b/gi, 'SQL']
+    ];
+
+    for (const [pattern, replacement] of phoneticMap) {
+      text = text.replace(pattern, replacement);
+    }
+
+    return text.trim();
+  }
+
   formatUserMessage(text, activeSkill) {
     if (this.isMcqMode) {
       return `Context: MCQ ONLY analysis request for ${activeSkill.toUpperCase()}.\nTreat this strictly as a Multiple Choice Question, identify all choices, choose the single best answer, and output the correct option with concise justification.\n\nText to analyze:\n${text}`;
     }
-    return `Context: ${activeSkill.toUpperCase()} analysis request\n\nText to analyze:\n${text}`;
+
+    const cleanedText = this.cleanAcousticAndPhoneticText(text);
+
+    return `Context: Technical Interview Co-Pilot (${activeSkill.toUpperCase()} mode).
+CRITICAL FAIL-SAFE DIRECTIVE (CLOSEST INDUSTRIAL BET):
+1. The question below was captured via live audio Speech-to-Text. It may contain phonetic errors, missing words, or candidate/interviewer names.
+2. NEVER state that a term is "not a standard acronym" or "unknown". NEVER apologize or hallucinate reasons why a word isn't recognized.
+3. ALWAYS place the closest standard industrial / computer science / software engineering bet dynamically (e.g. "murnstack" → MERN Stack; "coobernetties" → Kubernetes; "postgrass" → PostgreSQL; "rediss" → Redis).
+4. Ignore any names ("Jenil", "interviewer") or conversational filler.
+5. Formulate the normalized, corrected question in "### Question:" and provide the complete authoritative answer following the exact 5-part template.
+
+Text to analyze:
+${cleanedText || text}`;
   }
 
   async executeRequest(geminiRequest) {

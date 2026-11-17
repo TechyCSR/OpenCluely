@@ -30,7 +30,14 @@ class LocalKnowledgeService {
       return this._generateGenericFallback('Technical Interview Question');
     }
 
-    const cleanText = rawText.trim();
+    let cleanText = rawText.trim();
+    // 1. Strip leading speech filler, throat-clearing, and candidate greetings
+    cleanText = cleanText.replace(/^(\s*(at\s+is|what\s+is\s+at\s+is|um+|uh+|ah+|so\s+basically|can\s+you\s+tell\s+me|can\s+you\s+explain|hey\s+jenil|hi\s+jenil|jenil|thanks\s+jenil|tell\s+me\s+about|tell\s+us\s+about)\s+)+/i, '');
+    cleanText = cleanText.replace(/\bmurn\s*stack\b/gi, 'MERN stack');
+    cleanText = cleanText.replace(/\bmern\s*stak\b/gi, 'MERN stack');
+    cleanText = cleanText.replace(/\bcoober\s*netties?\b/gi, 'Kubernetes');
+    cleanText = cleanText.replace(/\bpost\s*grass\b/gi, 'PostgreSQL');
+    cleanText = cleanText.replace(/\bred\s*iss\b/gi, 'Redis');
     const lower = cleanText.toLowerCase();
 
     // 1. Check exact or high-confidence domain match
@@ -146,17 +153,22 @@ class LocalKnowledgeService {
         questionTitle: `Handling ${title}`,
         startWith: `In my project at Vedprada, I faced a situation where we had to deliver high-concurrency video delivery under tight deadlines with zero downtime.`,
         fullResponse: [
-          `❓ Question: Handling ${title}`,
-          `🗣️ Start with: "In my project at Vedprada, I faced a situation where we had to deliver high-concurrency video delivery under tight deadlines with zero downtime."`,
-          `⚡ Talking Points:`,
-          `• I focused on [root-cause communication] and breaking the problem into [actionable technical milestones].`,
-          `• By implementing [automated testing workflows] and prioritizing [core system stability], we eliminated blockers early.`,
-          `• The outcome was achieving [99.9% platform uptime] and reducing operational overhead by [70%].`,
-          `🎯 Architecture & Problem Breakdown:`,
-          `• 🚨 The Problem: Tight project turnaround with high-concurrency video broadcasting requirements and un-tested edge cases.`,
-          `• 💡 Architecture & Fix: Aligned technical priorities, established clear rollback strategies, and automated repetitive deployment steps.`,
-          `• ⚖️ Trade-off / Gotcha: Fast turnaround requires strict scope discipline; avoid adding non-critical features during high-risk rollouts.`,
-          `• 🚀 Project Metric: Delivered the platform on schedule with zero downtime during peak live broadcasts across 100+ content streams.`
+          `### Question:`,
+          `Handling ${title}`,
+          ``,
+          `### Introduction:`,
+          `"In my project at Vedprada, I faced a situation where we had to deliver high-concurrency video delivery under tight deadlines with zero downtime."`,
+          ``,
+          `### Content:`,
+          `• **[Root-Cause Analysis]** → Focused on proactive communication and isolated bottlenecks early`,
+          `• **[Actionable Milestones]** → Implemented automated testing workflows to ensure core system stability`,
+          `• **[Trade-off / Gotcha]** → Fast turnaround requires strict scope discipline; avoid non-critical scope creep`,
+          ``,
+          `### Examples:`,
+          `• **[Vedprada Live Events]** → Delivered the platform on schedule with 99.9% uptime and 70% cut in operational overhead`,
+          ``,
+          `### Conclusion:`,
+          `**[Key Takeaway]** → Break high-stress technical deadlines into decoupled milestones with continuous validation.`
         ].join('\n'),
         matchScore: 1,
         isHighConfidenceMatch: false,
@@ -169,17 +181,22 @@ class LocalKnowledgeService {
         questionTitle: `${capitalizedSubject} Approach`,
         startWith: `The most efficient way to approach this is by evaluating the space-time trade-off, using an auxiliary hash map or two-pointer strategy to avoid brute force.`,
         fullResponse: [
-          `❓ Question: ${capitalizedSubject} Approach`,
-          `🗣️ Start with: "The most efficient way to approach this is by evaluating the space-time trade-off, using an auxiliary hash map or two-pointer strategy to avoid brute force."`,
-          `⚡ Talking Points:`,
-          `• We first analyze the [brute force O(N²) baseline] and optimize it down to [O(N) linear time] or [O(log N) logarithmic].`,
-          `• Using a [hash map for O(1) lookups] enables us to track visited elements and check complements in a single pass.`,
-          `• We handle crucial edge cases such as [empty inputs], [duplicate entries], and [boundary overflow values].`,
-          `🎯 Architecture & Problem Breakdown:`,
-          `• 🚨 The Problem: Brute-force nested loops scale quadratically (O(N²)), crashing execution time on datasets with 100,000+ items.`,
-          `• 💡 Architecture & Fix: Single-pass iteration paired with constant-time hash lookups or two-pointer array partitions.`,
-          `• ⚖️ Trade-off / Gotcha: Trades O(N) auxiliary memory for speed. Edge cases include duplicate keys, negative values, and integer overflow.`,
-          `• 🚀 Project Metric: Applied single-pass hash indexing logic in REC to achieve sub-second facial embedding matching.`
+          `### Question:`,
+          `${capitalizedSubject} Approach`,
+          ``,
+          `### Introduction:`,
+          `"The most efficient way to approach this is by evaluating the space-time trade-off, using an auxiliary hash map or two-pointer strategy to avoid brute force."`,
+          ``,
+          `### Content:`,
+          `• **[Hash Map O(1)]** → Tracks visited complements in single pass to avoid O(N²) nested loops`,
+          `• **[Optimal Complexity]** → Optimal Time O(N) linear time and Space O(N) auxiliary table`,
+          `• **[Edge Case Handling]** → Handles duplicate elements, boundary zeros, and 64-bit integer overflow`,
+          ``,
+          `### Examples:`,
+          `• **[REC Hash Indexing]** → Applied single-pass hash indexing logic in REC to achieve sub-second facial embedding matching`,
+          ``,
+          `### Conclusion:`,
+          `**[Key Takeaway]** → One-pass hash map lookups beat quadratic scans by trading linear space for constant time.`
         ].join('\n'),
         matchScore: 1,
         isHighConfidenceMatch: false,
@@ -192,17 +209,22 @@ class LocalKnowledgeService {
       questionTitle: `${capitalizedSubject}`,
       startWith: `At a high level, ${subject} is designed to solve performance and maintainability bottlenecks by introducing clear abstraction and decoupling.`,
       fullResponse: [
-        `❓ Question: ${capitalizedSubject}`,
-        `🗣️ Start with: "At a high level, ${subject} is designed to solve performance and maintainability bottlenecks by introducing clear abstraction and decoupling."`,
-        `⚡ Talking Points:`,
-        `• The core purpose is providing [scalable, decoupled architecture] while reducing [runtime computational overhead].`,
-        `• In production systems, we balance [throughput and latency] against [operational complexity and storage].`,
-        `• In my ClinicOS and Vedprada platforms, adopting these principles reduced [query latency by over 80%].`,
-        `🎯 Architecture & Problem Breakdown:`,
-        `• 🚨 The Problem: Un-optimized, coupled architectures create severe latency bottlenecks and single points of failure under load.`,
-        `• 💡 Architecture & Fix: Modular decoupling, strict interface contracts, and proactive resource pooling to ensure steady throughput.`,
-        `• ⚖️ Trade-off / Gotcha: Extra abstraction requires disciplined observability and distributed logging to trace failure boundaries.`,
-        `• 🚀 Project Metric: Applied in ClinicOS across 18+ PostgreSQL tables and 100+ endpoints with sub-20ms latency.`
+        `### Question:`,
+        `${capitalizedSubject}`,
+        ``,
+        `### Introduction:`,
+        `"At a high level, ${subject} is designed to solve performance and maintainability bottlenecks by introducing clear abstraction and decoupling."`,
+        ``,
+        `### Content:`,
+        `• **[Core Abstraction]** → Decoupled architecture providing modular interfaces and high throughput`,
+        `• **[Production Trade-off]** → Balances runtime computational overhead against system maintainability`,
+        `• **[Senior Insight]** → Enforce strict observability and distributed logging to trace failure boundaries`,
+        ``,
+        `### Examples:`,
+        `• **[ClinicOS Production]** → Applied these architectural principles across 18+ PostgreSQL tables and 100+ endpoints with sub-20ms latency`,
+        ``,
+        `### Conclusion:`,
+        `**[Key Takeaway]** → Maintain modular decoupling and validate inputs at boundaries to ensure production reliability.`
       ].join('\n'),
       matchScore: 1,
       isHighConfidenceMatch: false,
@@ -215,17 +237,22 @@ class LocalKnowledgeService {
       questionTitle: title,
       startWith: `I approach this by analyzing the problem requirements first, evaluating the architectural trade-offs, and implementing a reliable, scalable solution.`,
       fullResponse: [
-        `❓ Question: ${title}`,
-        `🗣️ Start with: "I approach this by analyzing the problem requirements first, evaluating the architectural trade-offs, and implementing a reliable, scalable solution."`,
-        `⚡ Talking Points:`,
-        `• Focus on [scalability and maintainability] through modular design and strict data validation.`,
-        `• Benchmark [performance trade-offs] using empirical profiling rather than premature optimization.`,
-        `• Ensure [robust error boundaries] and automated testing across all integration points.`,
-        `🎯 Architecture & Problem Breakdown:`,
-        `• 🚨 The Problem: Rushing into code without architectural analysis creates unmaintainable systems and production regressions.`,
-        `• 💡 Architecture & Fix: Modular architecture with strict unit and integration testing boundaries.`,
-        `• ⚖️ Trade-off / Gotcha: Disciplined upfront design takes a few extra hours but eliminates weeks of debugging.`,
-        `• 🚀 Project Metric: Implemented across ClinicOS and Vedprada delivering 99.9% uptime.`
+        `### Question:`,
+        `${title}`,
+        ``,
+        `### Introduction:`,
+        `"I approach this by analyzing the problem requirements first, evaluating the architectural trade-offs, and implementing a reliable, scalable solution."`,
+        ``,
+        `### Content:`,
+        `• **[Modular Architecture]** → Scalability and maintainability through decoupled interfaces`,
+        `• **[Empirical Profiling]** → Benchmark performance trade-offs rather than premature optimization`,
+        `• **[Failure Boundaries]** → Ensure robust error boundaries and automated integration testing`,
+        ``,
+        `### Examples:`,
+        `• **[ClinicOS & Vedprada]** → Implemented strict interface contracts delivering 99.9% uptime in production`,
+        ``,
+        `### Conclusion:`,
+        `**[Key Takeaway]** → Upfront architectural discipline eliminates downstream production regressions.`
       ].join('\n'),
       matchScore: 0,
       isHighConfidenceMatch: false,
@@ -235,6 +262,23 @@ class LocalKnowledgeService {
 
   _initializeKnowledgeBase() {
     return [
+      // ── 0. MERN STACK & MODERN WEB ARCHITECTURE ──
+      {
+        patterns: ['mern', 'murn', 'murnstack', 'mern stack', 'murn stack', 'mongo express react node', 'mean stack'],
+        title: 'MERN Stack Architecture & Production Workflows',
+        startWith: 'The MERN stack unites MongoDB, Express, React, and Node.js into an end-to-end JavaScript ecosystem, enabling unified types and asynchronous non-blocking event handling across the entire architecture.',
+        talkingPoints: [
+          'The client renders a [React single-page application] using [Virtual DOM reconciliation] for instant UI updates.',
+          'The API layer runs [Express.js REST middleware] on [Node.js non-blocking libuv event loop] for high-concurrency requests.',
+          'Data persistence leverages [MongoDB BSON document models] for flexible JSON schemas, cached via [Redis] for sub-millisecond lookups.'
+        ],
+        keyValuePairs: [
+          { key: 'The Problem', value: 'Context switching between multiple languages across frontend and backend slows down development velocity and complicates payload serialization.' },
+          { key: 'Architecture & Fix', value: 'End-to-end JSON data flow from MongoDB BSON to Express REST middleware to React client components with unified validation.' },
+          { key: 'Trade-off / Gotcha', value: 'MongoDB lacks relational foreign key constraints by default; embed documents for 1-to-few, reference for 1-to-many, or use PostgreSQL for ACID transactions.' },
+          { key: 'Project Metric', value: 'Architected ClinicOS and Vedprada utilizing Express.js and React with sub-20ms API response times across 100+ endpoints.' }
+        ]
+      },
       // ── 1. DATABASE INDEXING & POSTGRESQL ──
       {
         patterns: ['index', 'indexing', 'b-tree', 'btree', 'database index', 'database indexing', 'query optimization', 'explain analyze'],

@@ -167,36 +167,40 @@
         }
 
         .nav-arrow-btn {
-            width: 22px;
-            height: 22px;
+            width: 24px;
+            height: 24px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--text-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            cursor: pointer;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            cursor: pointer !important;
             transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
             font-size: 16px;
-            font-weight: 700;
+            font-weight: 800;
             line-height: 1;
             user-select: none;
             -webkit-app-region: no-drag;
         }
 
         .nav-arrow-btn:not(.disabled):hover {
-            background: rgba(16, 185, 129, 0.22);
-            border-color: rgba(16, 185, 129, 0.65);
-            color: #ffffff;
-            transform: scale(1.15);
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+            background: rgba(16, 185, 129, 0.32) !important;
+            border-color: rgba(16, 185, 129, 0.85) !important;
+            color: #ffffff !important;
+            transform: scale(1.15) !important;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.5) !important;
+        }
+
+        .nav-arrow-btn:not(.disabled):active {
+            transform: scale(0.92) !important;
         }
 
         .nav-arrow-btn.disabled {
-            opacity: 0.25;
+            opacity: 0.22;
             pointer-events: none;
-            cursor: default;
+            cursor: default !important;
         }
 
         .q-badge {
@@ -260,26 +264,34 @@
         }
 
         .window-btn {
-            width: 22px;
-            height: 22px;
+            width: 24px;
+            height: 24px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 4px;
+            border-radius: 5px;
             background: rgba(255, 255, 255, 0.08);
-            color: var(--text-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            cursor: pointer;
-            transition: all 0.15s ease;
-            font-size: 13px;
-            font-weight: 600;
+            color: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            cursor: pointer !important;
+            transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+            font-size: 15px;
+            font-weight: 700;
             line-height: 1;
+            user-select: none;
+            -webkit-app-region: no-drag;
         }
 
         .window-btn:hover {
-            background: rgba(255, 255, 255, 0.25);
-            color: #ffffff;
-            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(239, 68, 68, 0.32) !important;
+            color: #ffffff !important;
+            border-color: rgba(239, 68, 68, 0.85) !important;
+            transform: scale(1.15) !important;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.5) !important;
+        }
+
+        .window-btn:active {
+            transform: scale(0.92) !important;
         }
 
         /* ── Main Container ── */
@@ -357,280 +369,187 @@
             40% { transform: scale(1.15); opacity: 1; }
         }
 
-        /* ── Interview Mode Part-Wise Layout ── */
+        /* ── Unified Interview Flow: Zero Waste, Zero Extra Containers, Zero Scroll ── */
         .interview-scroll-wrapper {
-            height: 100%;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding: 12px 16px 20px 16px;
+            height: calc(100vh - 38px);
+            overflow: hidden !important; /* Strict zero scroll */
+            padding: 10px 16px 12px 16px;
             box-sizing: border-box;
-            scroll-behavior: smooth;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+            scrollbar-width: none !important;
+            user-select: text;
         }
 
         .interview-scroll-wrapper::-webkit-scrollbar {
-            width: 5px;
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
         }
 
-        .interview-scroll-wrapper::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-        }
-
-        .interview-cards-container {
+        .interview-flow {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 6px; /* Everything near to each other */
             max-width: 900px;
             margin: 0 auto;
         }
 
-        /* ── Reusable Part Card Styling ── */
-        .interview-card {
-            background: rgba(18, 19, 24, 0.75);
-            border: 1px solid var(--border-subtle);
-            border-radius: 8px;
-            padding: 12px 15px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-            position: relative;
-            transition: border-color 0.15s ease;
-        }
-
-        .interview-card:hover {
-            border-color: rgba(255, 255, 255, 0.16);
-        }
-
-        .card-header-row {
+        .flow-section {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 6px;
-            padding-bottom: 4px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            flex-direction: column;
+            gap: 2px;
+            position: relative;
         }
 
-        /* Title in Green Color */
-        .card-tag.text-green {
-            color: var(--emerald-primary);
+        /* ── Titles in Vibrant Green, Strictly NO GREEN ACTIVE DOT ── */
+        .section-label {
+            color: #10b981 !important;
             font-size: 11px;
             font-weight: 850;
             letter-spacing: 0.8px;
             text-transform: uppercase;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .card-tag.text-green::before {
-            content: '';
+            user-select: none;
             display: inline-block;
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background-color: var(--emerald-primary);
-            box-shadow: 0 0 6px var(--emerald-primary);
+            line-height: 1.2;
+            margin-bottom: 1px;
         }
 
-        .card-hint {
-            font-size: 10.5px;
-            font-weight: 600;
-            color: var(--text-muted);
-            letter-spacing: 0.2px;
+        /* Guarantee NO green active dot pseudo-element before/after any titles */
+        .section-label::before,
+        .section-label::after,
+        .card-tag::before,
+        .card-tag::after {
+            display: none !important;
+            content: none !important;
         }
 
-        /* ── Specific Card Topologies ── */
-
-        /* 1. Question Card */
-        .card-question {
-            background: rgba(24, 25, 32, 0.85);
-            border-color: rgba(255, 255, 255, 0.14);
-            padding: 10px 14px;
-        }
-
-        .question-text.bold-white {
-            font-size: 14.5px;
+        /* 1. Question Section */
+        .question-title-text {
+            font-size: 13.5px;
             font-weight: 800;
             color: #ffffff;
-            line-height: 1.45;
+            line-height: 1.35;
             letter-spacing: -0.1px;
         }
 
-        /* 2. Introduction Spoken Card */
-        .card-intro {
-            background: rgba(16, 185, 129, 0.04);
-            border-color: rgba(16, 185, 129, 0.22);
+        /* 2. Introduction Section */
+        .intro-spoken-text {
+            font-size: 13.5px;
+            font-weight: 750;
+            color: #ffffff;
+            line-height: 1.4;
+            letter-spacing: 0.05px;
         }
 
-        .intro-quote-box {
+        /* 3. Content Section */
+        .content-body-text {
+            font-size: 12.5px;
+            font-weight: 650;
+            color: rgba(255, 255, 255, 0.95);
+            line-height: 1.4;
+        }
+
+        .content-body-text ul,
+        .content-body-text ol {
+            padding-left: 14px;
+            margin: 2px 0;
             display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            background: rgba(16, 185, 129, 0.07);
-            border-left: 3.5px solid var(--emerald-primary);
-            border-top: 1px solid rgba(16, 185, 129, 0.18);
-            border-right: 1px solid rgba(16, 185, 129, 0.12);
-            border-bottom: 1px solid rgba(16, 185, 129, 0.18);
-            border-radius: 0 8px 8px 0;
-            padding: 10px 14px;
-            margin-top: 4px;
+            flex-direction: column;
+            gap: 2.5px;
         }
 
-        .quote-symbol {
-            font-family: Georgia, serif;
-            font-size: 26px;
-            line-height: 1;
-            color: var(--emerald-primary);
-            opacity: 0.9;
-            user-select: none;
-            flex-shrink: 0;
-            font-weight: 900;
+        .content-body-text li {
+            margin: 0;
+            padding: 0;
+            line-height: 1.35;
         }
 
-        .intro-quote-text.bold-white {
-            font-size: 14px;
-            font-weight: 750;
-            color: #ffffff;
-            line-height: 1.5;
-            letter-spacing: 0.1px;
+        .content-body-text p {
+            margin: 1.5px 0;
+            line-height: 1.35;
         }
 
-        /* 3. Content Details Card */
-        .card-content {
-            background: rgba(18, 19, 24, 0.8);
-        }
-
-        .content-body {
-            font-size: 13.5px;
-            line-height: 1.6;
-            color: rgba(255, 255, 255, 0.92);
-            font-weight: 600;
-        }
-
-        .content-body p {
-            margin-bottom: 8px;
-        }
-
-        .content-body p:last-child {
-            margin-bottom: 0;
-        }
-
-        .content-body ul, .content-body ol {
-            padding-left: 1.2rem;
-            margin-bottom: 8px;
-        }
-
-        .content-body li {
-            margin-bottom: 6px;
-            line-height: 1.55;
-        }
-
-        .content-body li::marker {
-            color: var(--emerald-primary);
-            font-size: 11px;
-        }
-
-        /* 4. Examples Card */
-        .card-examples {
-            background: rgba(18, 19, 24, 0.85);
-            border-color: rgba(255, 255, 255, 0.12);
-        }
-
-        .examples-body {
-            font-size: 13.5px;
-            line-height: 1.6;
-            color: rgba(255, 255, 255, 0.92);
-            font-weight: 600;
-        }
-
-        .examples-body ul {
-            padding-left: 1.2rem;
-            margin-bottom: 6px;
-        }
-
-        .examples-body li {
-            margin-bottom: 5px;
-        }
-
-        /* 5. Conclusion Card */
-        .card-conclusion {
-            background: rgba(16, 185, 129, 0.05);
-            border: 1px solid rgba(16, 185, 129, 0.28);
-            border-radius: 8px;
-            padding: 10px 14px;
-        }
-
-        .conclusion-body.bold-white {
-            font-size: 13.5px;
-            font-weight: 750;
-            color: #ffffff;
-            line-height: 1.5;
-            letter-spacing: 0.1px;
-        }
-
-        /* ── Highlight Tokens, Pills & Bold Elements ── */
-        .concept-pill {
-            display: inline-block;
-            background: var(--emerald-bg);
-            border: 1px solid var(--emerald-border);
-            color: var(--emerald-light);
-            font-weight: 750;
-            font-size: 12px;
-            padding: 0 6px;
-            border-radius: 4px;
-            letter-spacing: 0.3px;
-            margin-right: 5px;
-        }
-
-        .metric-pill {
-            display: inline-block;
-            background: rgba(255, 255, 255, 0.12);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            color: #ffffff;
-            font-weight: 800;
-            font-size: 12px;
-            padding: 0 5px;
-            border-radius: 3px;
-            letter-spacing: 0.2px;
-        }
-
-        .complexity-pill {
-            display: inline-block;
-            background: rgba(16, 185, 129, 0.15);
-            border: 1px solid rgba(16, 185, 129, 0.4);
-            color: #ffffff;
-            font-weight: 800;
-            font-size: 12px;
-            padding: 0 6px;
-            border-radius: 3px;
-            font-family: 'JetBrains Mono', 'Courier New', monospace;
-        }
-
+        /* Mechanism Arrow Rows */
         .mech-row {
             display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            margin: 4px 0;
+            align-items: baseline;
+            gap: 6px;
+            line-height: 1.35;
+            margin: 1.5px 0;
         }
 
         .mech-arrow {
-            color: var(--emerald-primary);
+            color: #ff4d4f; /* Vibrant red arrow */
             font-weight: 900;
-            font-size: 14px;
             flex-shrink: 0;
-            user-select: none;
+            font-size: 13px;
         }
 
         .mech-text {
             color: #ffffff;
-            font-weight: 750;
-            font-size: 13.5px;
-            line-height: 1.5;
+            font-weight: 700;
+            font-size: 12.5px;
+            line-height: 1.35;
         }
 
-        .bold-highlight {
-            color: #ffffff;
+        /* ── Important Words Highlighted in RED ── */
+        strong,
+        b,
+        .bold-highlight,
+        .key-word-red {
+            color: #ff4d4f !important; /* Standout red */
+            font-weight: 850 !important;
+            text-shadow: 0 0 10px rgba(255, 77, 79, 0.28);
+        }
+
+        .concept-pill {
+            display: inline-block;
+            background: rgba(239, 68, 68, 0.12) !important;
+            border: 1px solid rgba(239, 68, 68, 0.38) !important;
+            color: #ff5252 !important;
+            padding: 0px 5px;
+            border-radius: 4px;
             font-weight: 800;
+            font-size: 12px;
+            letter-spacing: 0.2px;
+            margin: 0 1px;
+        }
+
+        .metric-pill {
+            display: inline-block;
+            background: rgba(255, 77, 79, 0.10);
+            border: 1px solid rgba(255, 77, 79, 0.32);
+            color: #ff7875;
+            padding: 0 4px;
+            border-radius: 3px;
+            font-weight: 800;
+            font-size: 11.5px;
+        }
+
+        .complexity-pill {
+            display: inline-block;
+            background: rgba(255, 77, 79, 0.12);
+            border: 1px solid rgba(255, 77, 79, 0.38);
+            color: #ff4d4f;
+            padding: 0 5px;
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            font-size: 11.5px;
+        }
+
+        /* 4. Examples Section */
+        .examples-body-text {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.35;
+        }
+
+        /* 5. Conclusion Section */
+        .conclusion-body-text {
+            font-size: 12.5px;
+            font-weight: 750;
+            color: #ffffff;
+            line-height: 1.35;
         }
 
         /* ── Inline Code & Blocks ── */
@@ -1290,7 +1209,7 @@
             if (!htmlContent) return '';
             let processed = htmlContent;
 
-            // 1. Concept anchors: [Concept Name] or <strong>[Concept Name]</strong> -> Styled Emerald Pills
+            // 1. Concept anchors: [Concept Name] or <strong>[Concept Name]</strong> -> Styled Red Pills
             processed = processed.replace(/(?:<strong>\s*)?\[([A-Za-z0-9_.\- /+]{2,35})\](?:\s*<\/strong>)?/g, (_match, token) => {
                 return `<span class="concept-pill">${token.trim()}</span>`;
             });
@@ -1300,14 +1219,27 @@
                 return `<div class="mech-row"><span class="mech-arrow">→</span><span class="mech-text">${stepText.trim()}</span></div>`;
             });
 
-            // 3. Time, latency, percentages, and performance metrics: e.g. 15ms, 99.9%, 420ms, 200k RPS
+            // 3. Time, latency, percentages, and performance metrics in red: e.g. 15ms, 99.9%, 420ms, 200k RPS
             processed = processed.replace(/\b(\d+(?:\.\d+)?(?:ms|s|k|M|GB|MB|RPS|QPS\b|%(?!\w)))/g, (_match, metric) => {
                 return `<span class="metric-pill">${metric}</span>`;
             });
 
-            // 4. Big-O Complexity notation: O(1), O(log N), O(N), O(N^2)
+            // 4. Big-O Complexity notation in red: O(1), O(log N), O(N), O(N^2)
             processed = processed.replace(/\b(O\([1nNkK\s*log\+\^]+\))/g, (_match, oComp) => {
                 return `<span class="complexity-pill">${oComp}</span>`;
+            });
+
+            // 5. High-value industry terms & keywords highlighted in red
+            const keyTechTerms = [
+                'MERN', 'MEAN', 'LAMP', 'MongoDB', 'Express', 'React', 'Node\\.js', 'Node', 'PostgreSQL', 'Postgres',
+                'Redis', 'Kubernetes', 'K8s', 'Docker', 'FastAPI', 'Python', 'TypeScript', 'JavaScript', 'PyTorch',
+                'TensorFlow', 'ONNX', 'YOLO', 'YOLOv8', 'OpenCV', 'MediaPipe', 'REST API', 'GraphQL', 'gRPC',
+                'WebSockets', 'Kafka', 'RabbitMQ', 'ACID', 'B-Tree', 'RBAC', 'ABAC', 'JWT', 'OAuth', 'CI/CD',
+                'ClinicOS', 'Vedprada', 'REC', 'AirSight'
+            ];
+            const termRegex = new RegExp(`(?<![<\\/\\w])(${keyTechTerms.join('|')})(?![\\w>])`, 'g');
+            processed = processed.replace(termRegex, (_match, term) => {
+                return `<span class="key-word-red">${term}</span>`;
             });
 
             return processed;
@@ -1450,69 +1382,55 @@
             if (!container) return;
             container.innerHTML = '';
 
-            // Card 1: Question in Green Title + Bold White Text
+            const flow = document.createElement('div');
+            flow.className = 'interview-flow';
+
+            // 1. Question (Green Title, Bold White Text, NO Green Dot)
             if (parsed.question) {
-                const qCard = document.createElement('section');
-                qCard.className = 'interview-card card-question';
-                qCard.innerHTML = `
-                    <div class="card-header-row">
-                        <span class="card-tag text-green">QUESTION</span>
-                        <span class="card-hint">Summarized Interviewer Query</span>
-                    </div>
-                    <div class="question-text bold-white">${escapeHtml(parsed.question)}</div>
+                const qSec = document.createElement('div');
+                qSec.className = 'flow-section flow-question';
+                qSec.innerHTML = `
+                    <span class="section-label">QUESTION</span>
+                    <div class="question-title-text">${escapeHtml(parsed.question)}</div>
                 `;
-                container.appendChild(qCard);
+                flow.appendChild(qSec);
             }
 
-            // Card 2: Introduction Spoken Opener in Quotes
+            // 2. Introduction (Green Title, Spoken line in quotes, Bold White Text, NO Green Dot)
             if (parsed.intro) {
-                const introCard = document.createElement('section');
-                introCard.className = 'interview-card card-intro';
-                introCard.innerHTML = `
-                    <div class="card-header-row">
-                        <span class="card-tag text-green">INTRODUCTION</span>
-                        <span class="card-hint">Opening Spoken Line</span>
-                    </div>
-                    <div class="intro-quote-box">
-                        <span class="quote-symbol">“</span>
-                        <div class="intro-quote-text bold-white">${renderPartMarkdown(parsed.intro)}</div>
-                        <span class="quote-symbol">”</span>
-                    </div>
+                const introSec = document.createElement('div');
+                introSec.className = 'flow-section flow-intro';
+                introSec.innerHTML = `
+                    <span class="section-label">INTRODUCTION</span>
+                    <div class="intro-spoken-text">“${renderPartMarkdown(parsed.intro)}”</div>
                 `;
-                container.appendChild(introCard);
+                flow.appendChild(introSec);
             }
 
-            // Card 3: Content Core Technical Details
+            // 3. Content (Green Title, Technical Details with Red Highlights, NO Green Dot)
             if (parsed.content) {
-                const contentCard = document.createElement('section');
-                contentCard.className = 'interview-card card-content';
-                contentCard.innerHTML = `
-                    <div class="card-header-row">
-                        <span class="card-tag text-green">CONTENT</span>
-                        <span class="card-hint">Technical Architecture & Mechanisms</span>
-                    </div>
-                    <div class="content-body">${renderPartMarkdown(parsed.content)}</div>
+                const contentSec = document.createElement('div');
+                contentSec.className = 'flow-section flow-content';
+                contentSec.innerHTML = `
+                    <span class="section-label">CONTENT</span>
+                    <div class="content-body-text">${renderPartMarkdown(parsed.content)}</div>
                 `;
-                container.appendChild(contentCard);
+                flow.appendChild(contentSec);
             }
 
-            // Card 4: Examples / Code (Dynamic: rendered only if present)
+            // 4. Examples (Green Title, Code / Production Case, Dynamic, NO Green Dot)
             if (parsed.examples && parsed.examples.trim()) {
-                const exCard = document.createElement('section');
-                exCard.className = 'interview-card card-examples';
+                const exSec = document.createElement('div');
+                exSec.className = 'flow-section flow-examples';
 
                 const codeBlocks = extractCodeBlocks(parsed.examples);
                 if (codeBlocks.length > 0) {
-                    exCard.innerHTML = `
-                        <div class="card-header-row">
-                            <span class="card-tag text-green">EXAMPLES</span>
-                            <span class="card-hint">Implementation / Minimal Code</span>
-                        </div>
-                        <div class="examples-body"></div>
+                    exSec.innerHTML = `
+                        <span class="section-label">EXAMPLES</span>
+                        <div class="examples-body-text"></div>
                     `;
-                    const exBody = exCard.querySelector('.examples-body');
+                    const exBody = exSec.querySelector('.examples-body-text');
 
-                    // Non-code text
                     let nonCodeText = parsed.examples;
                     codeBlocks.forEach(b => { nonCodeText = nonCodeText.replace(b.fullMatch, ''); });
                     if (nonCodeText.trim()) {
@@ -1521,7 +1439,6 @@
                         exBody.appendChild(notes);
                     }
 
-                    // Render code blocks with header & copy button
                     codeBlocks.forEach(block => {
                         const blockDiv = document.createElement('div');
                         blockDiv.className = 'code-block';
@@ -1541,45 +1458,46 @@
                         exBody.appendChild(blockDiv);
                     });
                 } else {
-                    exCard.innerHTML = `
-                        <div class="card-header-row">
-                            <span class="card-tag text-green">EXAMPLES</span>
-                            <span class="card-hint">Production Case & Implementation</span>
-                        </div>
-                        <div class="examples-body">${renderPartMarkdown(parsed.examples)}</div>
+                    exSec.innerHTML = `
+                        <span class="section-label">EXAMPLES</span>
+                        <div class="examples-body-text">${renderPartMarkdown(parsed.examples)}</div>
                     `;
                 }
-                container.appendChild(exCard);
+                flow.appendChild(exSec);
             }
 
-            // Card 5: Conclusion Punchy Takeaway
+            // 5. Conclusion (Green Title, Punchy Takeaway, Dynamic, NO Green Dot)
             if (parsed.conclusion) {
-                const concCard = document.createElement('section');
-                concCard.className = 'interview-card card-conclusion';
-                concCard.innerHTML = `
-                    <div class="card-header-row">
-                        <span class="card-tag text-green">CONCLUSION</span>
-                        <span class="card-hint">Key Takeaway</span>
-                    </div>
-                    <div class="conclusion-body bold-white">${renderPartMarkdown(parsed.conclusion)}</div>
+                const concSec = document.createElement('div');
+                concSec.className = 'flow-section flow-conclusion';
+                concSec.innerHTML = `
+                    <span class="section-label">CONCLUSION</span>
+                    <div class="conclusion-body-text">${renderPartMarkdown(parsed.conclusion)}</div>
                 `;
-                container.appendChild(concCard);
+                flow.appendChild(concSec);
             }
+
+            container.appendChild(flow);
 
             // Render math expressions if KaTeX / mathrender is present
             if (window.renderMathInElement) {
                 window.renderMathInElement(container);
             }
 
-            // Window sizing notification
-            if (window.electronAPI && window.electronAPI.resizeLlmWindowForContent) {
-                const totalLines = raw.split('\n').length;
-                window.electronAPI.resizeLlmWindowForContent({
-                    lineCount: totalLines,
-                    hasCode: !!(parsed.examples && parsed.examples.includes('```')),
-                    complexity: 'medium'
-                }).catch(() => {});
-            }
+            // Exact dynamic height sizing: zero scrolling strictly!
+            requestAnimationFrame(() => {
+                const headerEl = document.querySelector('.window-header');
+                const headerH = headerEl ? headerEl.offsetHeight : 34;
+                const flowH = flow.scrollHeight || container.scrollHeight;
+                const totalMeasured = headerH + flowH + 22;
+
+                if (window.electronAPI && window.electronAPI.resizeLlmWindowForContent) {
+                    window.electronAPI.resizeLlmWindowForContent({
+                        measuredHeight: totalMeasured,
+                        hasCode: !!(parsed.examples && parsed.examples.includes('```'))
+                    }).catch(() => {});
+                }
+            });
         }
 
         // ── Keyboard Navigation (Esc, Alt+Left/Right, Arrow Scroll) ──
