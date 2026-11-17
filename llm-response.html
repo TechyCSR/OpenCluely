@@ -185,30 +185,58 @@
             color: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.18);
             cursor: pointer !important;
-            transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
             font-size: 16px;
             font-weight: 800;
             line-height: 1;
             user-select: none;
             -webkit-app-region: no-drag;
+            position: relative;
+            overflow: hidden;
+            transform: none !important; /* STRICTLY NO SCALE - DOES NOT GROW BIGGER ON HOVER */
+        }
+
+        .nav-arrow-glyph {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 1;
+            line-height: 1;
+            pointer-events: none;
+            transform: none !important;
+        }
+
+        .nav-arrow-btn .nav-dwell-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 2.5px;
+            background: var(--emerald-primary);
+            box-shadow: 0 0 6px var(--emerald-primary);
+            width: 0%;
+            pointer-events: none;
+            z-index: 2;
         }
 
         .nav-arrow-btn:not(.disabled):hover {
-            background: rgba(16, 185, 129, 0.32) !important;
-            border-color: rgba(16, 185, 129, 0.85) !important;
+            background: rgba(16, 185, 129, 0.24) !important;
+            border-color: rgba(16, 185, 129, 0.80) !important;
             color: #ffffff !important;
-            transform: scale(1.15) !important;
-            box-shadow: 0 0 12px rgba(16, 185, 129, 0.5) !important;
+            transform: none !important; /* DO NOT GROW BIGGER ON HOVER */
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.35) !important;
         }
 
         .nav-arrow-btn:not(.disabled):active {
-            transform: scale(0.92) !important;
+            transform: none !important;
+            background: rgba(16, 185, 129, 0.42) !important;
         }
 
         .nav-arrow-btn.disabled {
             opacity: 0.22;
             pointer-events: none;
             cursor: default !important;
+            transform: none !important;
         }
 
         .q-badge {
@@ -294,12 +322,13 @@
             background: rgba(239, 68, 68, 0.32) !important;
             color: #ffffff !important;
             border-color: rgba(239, 68, 68, 0.85) !important;
-            transform: scale(1.15) !important;
-            box-shadow: 0 0 12px rgba(239, 68, 68, 0.5) !important;
+            transform: none !important; /* Strictly no scale */
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.45) !important;
         }
 
         .window-btn:active {
-            transform: scale(0.92) !important;
+            transform: none !important;
+            background: rgba(239, 68, 68, 0.50) !important;
         }
 
         /* ── Main Container ── */
@@ -381,7 +410,7 @@
         .interview-scroll-wrapper {
             height: calc(100vh - 38px);
             overflow: hidden !important; /* Strict zero scroll */
-            padding: 10px 16px 12px 16px;
+            padding: 8px 18px 10px 18px;
             box-sizing: border-box;
             scrollbar-width: none !important;
             user-select: text;
@@ -396,7 +425,7 @@
         .interview-flow {
             display: flex;
             flex-direction: column;
-            gap: 6px; /* Everything near to each other */
+            gap: 7px; /* Clean rhythm between flow sections */
             max-width: 900px;
             margin: 0 auto;
         }
@@ -404,21 +433,21 @@
         .flow-section {
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            gap: 2.5px;
             position: relative;
         }
 
         /* ── Titles in Vibrant Green, Strictly NO GREEN ACTIVE DOT ── */
         .section-label {
             color: #10b981 !important;
-            font-size: 11px;
+            font-size: 10.5px;
             font-weight: 850;
-            letter-spacing: 0.8px;
+            letter-spacing: 0.85px;
             text-transform: uppercase;
             user-select: none;
             display: inline-block;
             line-height: 1.2;
-            margin-bottom: 1px;
+            margin-bottom: 1.5px;
         }
 
         /* Guarantee NO green active dot pseudo-element before/after any titles */
@@ -432,7 +461,7 @@
 
         /* 1. Question Section */
         .question-title-text {
-            font-size: 13.5px;
+            font-size: 13px;
             font-weight: 800;
             color: #ffffff;
             line-height: 1.35;
@@ -441,11 +470,14 @@
 
         /* 2. Introduction Section */
         .intro-spoken-text {
-            font-size: 13.5px;
-            font-weight: 750;
+            font-size: 13px;
+            font-weight: 700;
             color: #ffffff;
             line-height: 1.4;
             letter-spacing: 0.05px;
+            border-left: 2.5px solid rgba(16, 185, 129, 0.55);
+            padding-left: 8px;
+            margin-left: 1px;
         }
 
         /* 3. Content Section */
@@ -453,7 +485,7 @@
             font-size: 12.5px;
             font-weight: 650;
             color: rgba(255, 255, 255, 0.95);
-            line-height: 1.4;
+            line-height: 1.45;
         }
 
         .content-body-text ul,
@@ -462,7 +494,7 @@
             margin: 2px 0;
             display: flex;
             flex-direction: column;
-            gap: 2.5px;
+            gap: 2px;
         }
 
         .content-body-text li {
@@ -472,8 +504,8 @@
         }
 
         .content-body-text p {
-            margin: 1.5px 0;
-            line-height: 1.35;
+            margin: 2px 0;
+            line-height: 1.4;
         }
 
         /* Mechanism Arrow Rows */
@@ -482,7 +514,7 @@
             align-items: baseline;
             gap: 6px;
             line-height: 1.35;
-            margin: 1.5px 0;
+            margin: 2px 0;
         }
 
         .mech-arrow {
@@ -548,8 +580,8 @@
         /* 4. Examples Section */
         .examples-body-text {
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.9);
-            line-height: 1.35;
+            color: rgba(255, 255, 255, 0.92);
+            line-height: 1.38;
         }
 
         /* 5. Conclusion Section */
@@ -558,6 +590,11 @@
             font-weight: 750;
             color: #ffffff;
             line-height: 1.35;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.22);
+            border-radius: 6px;
+            padding: 5px 9px;
+            margin-top: 1px;
         }
 
         /* ── Inline Code & Blocks ── */
@@ -717,9 +754,15 @@
             <!-- Center: Question Badge, Left/Right Navigation & Latency Ribbon -->
             <div class="header-center">
                 <div class="question-nav-container">
-                    <button id="history-prev-btn" class="nav-arrow-btn disabled" title="Previous Question (Alt+Left)" aria-label="Previous Question">‹</button>
+                    <button id="history-prev-btn" class="nav-arrow-btn disabled" title="Previous Question (Alt+Left)" aria-label="Previous Question">
+                        <span class="nav-arrow-glyph">‹</span>
+                        <span class="nav-dwell-progress"></span>
+                    </button>
                     <span class="q-badge" id="qBadge">Q1</span>
-                    <button id="history-next-btn" class="nav-arrow-btn disabled" title="Next Question (Alt+Right)" aria-label="Next Question">›</button>
+                    <button id="history-next-btn" class="nav-arrow-btn disabled" title="Next Question (Alt+Right)" aria-label="Next Question">
+                        <span class="nav-arrow-glyph">›</span>
+                        <span class="nav-dwell-progress"></span>
+                    </button>
                 </div>
 
                 <div class="time-ribbon" id="timeRibbon" title="Response Generation Latency">
@@ -771,23 +814,74 @@
             setTimeout(initInterviewWindow, 0);
         }
 
+        // ── 1-Second Hover-Dwell Auto-Click Helper for Navigation Arrows ──
+        function attachNavDwell(btn, delta) {
+            if (!btn) return;
+
+            let dwellTimer = null;
+            const progress = btn.querySelector('.nav-dwell-progress');
+
+            const cancelDwell = () => {
+                if (dwellTimer) {
+                    clearTimeout(dwellTimer);
+                    dwellTimer = null;
+                }
+                btn.classList.remove('dwelling');
+                if (progress) {
+                    progress.style.transition = 'none';
+                    progress.style.width = '0%';
+                    void progress.offsetWidth; // Force synchronous reflow
+                    progress.style.transition = '';
+                }
+            };
+
+            btn._cancelDwell = cancelDwell;
+
+            btn.addEventListener('mouseenter', () => {
+                if (btn.classList.contains('disabled')) return;
+                cancelDwell();
+
+                btn.classList.add('dwelling');
+                if (progress) {
+                    progress.style.transition = 'width 1000ms linear';
+                    progress.style.width = '100%';
+                }
+
+                dwellTimer = setTimeout(() => {
+                    dwellTimer = null;
+                    cancelDwell();
+                    if (!btn.classList.contains('disabled')) {
+                        navigateHistory(delta);
+                    }
+                }, 1000);
+            });
+
+            btn.addEventListener('mouseleave', () => {
+                cancelDwell();
+            });
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                cancelDwell();
+                if (!btn.classList.contains('disabled')) {
+                    navigateHistory(delta);
+                }
+            });
+        }
+
         function initInterviewWindow() {
             if (initialized) return;
             initialized = true;
 
             const api = window.electronAPI;
-            if (!api) {
-                console.warn('[INTERVIEW-UI] electronAPI not detected');
-                return;
-            }
 
             // Window Close button
             const closeBtn = document.getElementById('close-window-btn');
             if (closeBtn) {
                 closeBtn.addEventListener('click', () => {
                     try {
-                        if (api.hideLLMResponse) api.hideLLMResponse();
-                        else if (api.closeWindow) api.closeWindow();
+                        if (api && api.hideLLMResponse) api.hideLLMResponse();
+                        else if (api && api.closeWindow) api.closeWindow();
                         else if (window.api && window.api.send) window.api.send('quit-app');
                         else window.close();
                     } catch (_) {
@@ -796,21 +890,20 @@
                 });
             }
 
-            // Navigation buttons
+            // Navigation buttons with 1-Second Hover Dwell Auto-Click & Instant Click
             const prevBtn = document.getElementById('history-prev-btn');
             if (prevBtn) {
-                prevBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    navigateHistory(-1);
-                });
+                attachNavDwell(prevBtn, -1);
             }
 
             const nextBtn = document.getElementById('history-next-btn');
             if (nextBtn) {
-                nextBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    navigateHistory(1);
-                });
+                attachNavDwell(nextBtn, 1);
+            }
+
+            if (!api) {
+                console.warn('[INTERVIEW-UI] electronAPI not detected');
+                return;
             }
 
             // 4-Corner Hover-Dwell Drag & Drop
@@ -1118,11 +1211,17 @@
             if (prevBtn) {
                 const canPrev = currentHistoryIndex > 0;
                 prevBtn.classList.toggle('disabled', !canPrev);
+                if (!canPrev && typeof prevBtn._cancelDwell === 'function') {
+                    prevBtn._cancelDwell();
+                }
             }
 
             if (nextBtn) {
                 const canNext = currentHistoryIndex < total - 1;
                 nextBtn.classList.toggle('disabled', !canNext);
+                if (!canNext && typeof nextBtn._cancelDwell === 'function') {
+                    nextBtn._cancelDwell();
+                }
             }
         }
 
