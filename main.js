@@ -2528,13 +2528,14 @@ class ApplicationController {
     const isPreambleOnly = isInterviewQuestion && this._isRecruiterPreambleOnly(this._utteranceBuffer);
 
     // Conversational debounce:
-    // Ultra-low-latency interview dispatch backed by multi-turn pronoun resolution:
-    // - If question ends with '?', flush immediately at 150ms
-    // - If ending in '.' or '!', flush at 220ms
-    // - If mid-sentence, flush at 350ms
-    // - If pure preamble acknowledgment, wait 450ms
+    // Natural human pause before sending to LLM:
+    // Prevents premature dispatching of half-sentences and clause splits.
+    // - If question ends with '?', allow 500ms human pause
+    // - If ending in '.' or '!', allow 550ms natural breathing room
+    // - If mid-sentence (no terminal punctuation), allow 600ms
+    // - If pure preamble acknowledgment, wait 500ms
     const coalesceDelay = isInterviewQuestion 
-      ? (isPreambleOnly ? 450 : (isQuestionMark ? 150 : (isOtherPunctuation ? 220 : 350))) 
+      ? (isPreambleOnly ? 500 : (isQuestionMark ? 500 : (isOtherPunctuation ? 550 : 600))) 
       : this._utteranceCoalesceMs;
 
     this._utteranceTimer = setTimeout(() => {
@@ -2835,9 +2836,9 @@ class ApplicationController {
         abortSignal.addEventListener('abort', () => combinedAbort(abortSignal.reason || 'Preempted'), { once: true });
       }
 
-      // 5-second watchdog for "Analyzing..." phase:
-      // If no chunks are received within 5 seconds, restart generation immediately with the same question!
-      const WATCHDOG_MS = 5000;
+      // 8.5-second watchdog for "Analyzing..." phase:
+      // Allows realistic model inference initiation without premature abortion.
+      const WATCHDOG_MS = 8500;
       analyzeTimeout = setTimeout(() => {
         if (!hasReceivedChunk && !internalAbort.signal.aborted) {
           logger.warn(`Watchdog: question stuck on analyzing for >${WATCHDOG_MS}ms, restarting generation...`, {
@@ -2856,7 +2857,7 @@ class ApplicationController {
           (sessionHistory && sessionHistory.recent) || [],
           needsProgrammingLanguage ? this.codingLanguage : null,
           (delta) => {
-            if (internalAbort.signal.aborted || (abortSignal && abortSignal.aborted)) return;
+            if (internalAbort.signal.aborted || (abortSignal && abortSignal.aborted) || this._currentLlmRequestId !== requestId) return;
             hasReceivedChunk = true;
             if (analyzeTimeout) {
               clearTimeout(analyzeTimeout);
@@ -2875,8 +2876,8 @@ class ApplicationController {
           analyzeTimeout = null;
         }
 
-        if (abortSignal && abortSignal.aborted) {
-          logger.info("Dropping finished LLM result because request was aborted for newer question", { requestId });
+        if (this._currentLlmRequestId !== requestId || (abortSignal && abortSignal.aborted)) {
+          logger.info("Dropping finished LLM result because request was aborted for newer question", { requestId, currentRequestId: this._currentLlmRequestId });
           return;
         }
 
@@ -2924,17 +2925,15 @@ class ApplicationController {
           analyzeTimeout = null;
         }
 
-        // If user preempted or newer question arrived, do not retry
-        if (abortSignal && (abortSignal.aborted || streamError.message === 'ABORTED' || streamError.name === 'AbortError')) {
-          if (streamError.message !== 'ANALYZE_TIMEOUT' && internalAbort.signal.reason !== 'ANALYZE_TIMEOUT') {
-            logger.debug("Suppressed error/retry for aborted transcription LLM request", { requestId });
-            return;
-          }
+        // If user preempted, newer question arrived, or request was cancelled, do not retry
+        if (this._currentLlmRequestId !== requestId || (abortSignal && abortSignal.aborted) || streamError.message === 'ABORTED' || streamError.name === 'AbortError') {
+          logger.debug("Suppressed error/retry for stale or aborted transcription LLM request", { requestId, currentRequestId: this._currentLlmRequestId });
+          return;
         }
 
-        // Auto-retry with same question if timed out or failed and attempts remain
-        if (attempt < maxAttempts && (!abortSignal || !abortSignal.aborted)) {
-          logger.warn(`Stuck on analyzing or stream error (attempt ${attempt}/${maxAttempts}). Instantly restarting with same question...`, {
+        // Auto-retry once with same question if timed out or failed and attempts remain
+        if (attempt < 2 && this._currentLlmRequestId === requestId && (!abortSignal || !abortSignal.aborted)) {
+          logger.warn(`Stuck on analyzing or stream error (attempt ${attempt}/2). Instantly restarting with same question...`, {
             requestId,
             attempt,
             reason: streamError.message,
@@ -2945,7 +2944,7 @@ class ApplicationController {
           this.sendToVoiceResponseWindows("transcription-llm-retry", {
             messageId,
             attempt: attempt + 1,
-            maxAttempts,
+            maxAttempts: 2,
             questionPreview: cleanText.substring(0, 80)
           });
 
@@ -2957,7 +2956,7 @@ class ApplicationController {
             requestId,
             messageId,
             attempt + 1,
-            maxAttempts
+            2
           );
         }
 

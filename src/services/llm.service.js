@@ -1158,12 +1158,16 @@ CRITICAL CODE GENERATION RULES (STRICT COMPLIANCE REQUIRED):
                typeof event.content === 'string' && 
                event.content.trim().length > 0;
       })
-      .slice(-10) // Keep recent 5 exchanges (10 turns) for rich conversational context
+      .slice(-6) // Keep recent 3 exchanges (6 turns) for ultra-fast TTFT and accurate pronoun resolution
       .map(event => {
-        const content = event.content.trim();
+        let content = event.content.trim();
         if (!content) {
           logger.warn('Empty content found in conversation history', { event });
           return null;
+        }
+        // Truncate previous model answers to first 600 chars to keep prompt lightweight and prevent latency stalls
+        if (event.role === 'model' && content.length > 600) {
+          content = content.substring(0, 600) + '...';
         }
         return {
           role: event.role === 'model' ? 'model' : 'user',
@@ -1267,11 +1271,11 @@ Assume you are in an interview and you need to perform at the highest profession
 Always respond directly to the point. Do not repeat the question or produce unnecessary filler.
 
 ## CANDIDATE REAL-WORLD PROJECT CONTEXT (Jenil Soni):
-Always ground architectural and production examples in Jenil's real flagship projects:
-1. ClinicOS: Node.js/Express, PostgreSQL normalized across 18+ tables, RBAC/ABAC healthcare data isolation, 100+ secure REST endpoints, B-Tree index dropping query latency from 420ms to 18ms.
-2. Vedprada Consultancy: Full-stack spiritual learning platform, Redis clustering, 99.9% uptime during high-concurrency broadcasts, 70% reduction in manual operational overhead.
-3. REC — Realtime Event Capturing: 512-d AuraFace-v1 face embeddings matched via cosine similarity, Redis caching, FastAPI/PostgreSQL sub-second photo retrieval.
-4. AI CCTV Surveillance System: 6 ONNX models orchestrated with YOLOv8, <100ms latency per frame, 95%+ detection accuracy, 15+ automated security rules.
+Always ground architectural and production examples in Jenil's real flagship projects (Cloud Stack: Serverless PostgreSQL on Neon DB, Render, Vercel — NEVER EC2):
+1. ClinicOS: Node.js/Express, Serverless PostgreSQL on Neon DB with pgBouncer pooling, normalized schema across 18+ tables, RBAC/ABAC healthcare data isolation, 100+ secure REST endpoints, B-Tree index dropping query latency from 420ms to 18ms.
+2. Vedprada Consultancy: Full-stack spiritual learning platform, Node.js/Express with Redis cluster caching and Serverless Neon DB PostgreSQL, 99.9% uptime during high-concurrency broadcasts, 70% reduction in manual operational overhead.
+3. REC — Realtime Event Capturing: 512-d AuraFace-v1 face embeddings matched via cosine similarity, Redis caching, FastAPI/PostgreSQL on Neon DB sub-second photo retrieval.
+4. AI CCTV Surveillance System: 6 ONNX models orchestrated with YOLOv8, <80ms latency per frame, 95%+ detection accuracy, 15+ automated security rules.
 5. AirSight — Environmental Intelligence: NASA Space Apps Hackathon, NASA TEMPO satellite atmospheric observations + terrestrial sensors, XGBoost, 20% higher prediction accuracy.
 6. Manjushri Jewellers: Production inventory management, automated GST billing reducing processing time by 80%, 3x customer engagement.
 7. Brainy Beam Technologies: ML Intern, YOLO, ResNet, PyTorch, 92% validation accuracy.

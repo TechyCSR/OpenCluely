@@ -1111,7 +1111,7 @@
                                 setAlertText('Streaming answer…');
                                 displayStructuredAnswer({ content: streamAccumulator, metadata: payload.metadata });
                             }
-                        }, 40);
+                        }, 100);
                     }
                 });
             }
@@ -1728,19 +1728,23 @@
             }
 
             // Exact dynamic height sizing: zero scrolling strictly!
-            requestAnimationFrame(() => {
-                const headerEl = document.querySelector('.window-header');
-                const headerH = headerEl ? headerEl.offsetHeight : 34;
-                const flowH = flow.scrollHeight || container.scrollHeight;
-                const totalMeasured = headerH + flowH + 22;
+            // Only resize OS window bounds when generation is finalized (!isStreaming).
+            // Calling setBounds during active streaming causes severe macOS window frame jitter/shaking!
+            if (!isStreaming) {
+                requestAnimationFrame(() => {
+                    const headerEl = document.querySelector('.window-header');
+                    const headerH = headerEl ? headerEl.offsetHeight : 34;
+                    const flowH = flow.scrollHeight || container.scrollHeight;
+                    const totalMeasured = headerH + flowH + 22;
 
-                if (window.electronAPI && window.electronAPI.resizeLlmWindowForContent) {
-                    window.electronAPI.resizeLlmWindowForContent({
-                        measuredHeight: totalMeasured,
-                        hasCode: !!(parsed.examples && parsed.examples.includes('```'))
-                    }).catch(() => {});
-                }
-            });
+                    if (window.electronAPI && window.electronAPI.resizeLlmWindowForContent) {
+                        window.electronAPI.resizeLlmWindowForContent({
+                            measuredHeight: totalMeasured,
+                            hasCode: !!(parsed.examples && parsed.examples.includes('```'))
+                        }).catch(() => {});
+                    }
+                });
+            }
         }
 
         // ── Keyboard Navigation (Esc, Alt+Left/Right, Arrow Scroll) ──

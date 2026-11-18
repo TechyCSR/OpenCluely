@@ -640,6 +640,7 @@ class WindowManager {
     
     // Track user window repositioning to preserve exact user-placed positions
     window.on('move', () => {
+      if (this._isProgrammaticMoving) return;
       if (!window.isDestroyed()) {
         const pos = window.getPosition();
         this.userPositions[type] = { x: pos[0], y: pos[1] };
@@ -856,7 +857,12 @@ class WindowManager {
     // 8px below workArea bounds (right beneath MacBook notch / webcam bezel)
     const y = Math.round(displayY + 8);
 
-    llmWindow.setPosition(x, y);
+    this._isProgrammaticMoving = true;
+    try {
+      llmWindow.setPosition(x, y);
+    } finally {
+      setTimeout(() => { this._isProgrammaticMoving = false; }, 120);
+    }
     this.userPositions['llmResponse'] = { x, y };
     this.checkAndResolveWindowOverlap();
     logger.debug('Positioned LLM response window directly near webcam', { x, y, width: targetW, height: targetH });
@@ -1991,23 +1997,34 @@ class WindowManager {
 
     const optimalSize = this.calculateOptimalWindowSize(contentMetrics);
     
-    const width = Math.round(Number(optimalSize.width)) || 680;
-    const height = Math.round(Number(optimalSize.height)) || 320;
+    const width = Math.round(Number(optimalSize.width)) || 780;
+    const height = Math.round(Number(optimalSize.height)) || 360;
     
     const display = this.currentDisplay || screen.getPrimaryDisplay();
     const { x: displayX, y: displayY, width: screenWidth } = display.workArea;
 
-    // Anchor near webcam at the top center
-    const x = Math.round(displayX + (screenWidth - width) / 2);
-    const y = Math.round(displayY + 8);
+    // Anchor near webcam at the top center unless user specifically moved it
+    const x = (this.hasUserMovedLLMWindow && this.userPositions['llmResponse'])
+      ? this.userPositions['llmResponse'].x
+      : Math.round(displayX + (screenWidth - width) / 2);
+    const y = (this.hasUserMovedLLMWindow && this.userPositions['llmResponse'])
+      ? this.userPositions['llmResponse'].y
+      : Math.round(displayY + 8);
 
     const [currentX, currentY] = llmWindow.getPosition();
     const [currentW, currentH] = llmWindow.getSize();
 
-    // Atomic setBounds with hysteresis: prevents double-redraw and eliminates window jitter/flicker
-    if (Math.abs(currentW - width) >= 2 || Math.abs(currentH - height) >= 2 || Math.abs(currentX - x) >= 2 || Math.abs(currentY - y) >= 2) {
-      llmWindow.setBounds({ x, y, width, height });
-      this.userPositions['llmResponse'] = { x, y };
+    // Atomic setBounds with hysteresis: threshold of 25px prevents micro-fluctuations and eliminates jitter
+    if (Math.abs(currentW - width) >= 20 || Math.abs(currentH - height) >= 25 || Math.abs(currentX - x) >= 15 || Math.abs(currentY - y) >= 15) {
+      this._isProgrammaticMoving = true;
+      try {
+        llmWindow.setBounds({ x, y, width, height });
+      } finally {
+        setTimeout(() => { this._isProgrammaticMoving = false; }, 120);
+      }
+      if (!this.hasUserMovedLLMWindow) {
+        this.userPositions['llmResponse'] = { x, y };
+      }
       this.checkAndResolveWindowOverlap();
       
       logger.debug('LLM window resized atomically', { 

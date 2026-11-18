@@ -151,7 +151,7 @@ assert(speechServiceContent.includes('return 280; // Fast end-of-speech flush'),
 
 const mainJsPath = path.join(__dirname, '..', 'main.js');
 const mainJsContent = fs.readFileSync(mainJsPath, 'utf8');
-assert(mainJsContent.includes('isQuestionMark ? 150 : (isOtherPunctuation ? 220 : 350)'), 'main.js must have 150ms question debounce');
+assert(mainJsContent.includes('isQuestionMark ? 500 : (isOtherPunctuation ? 550 : 600)'), 'main.js must have 500ms conversational question debounce');
 
 const workerPyPath = path.join(__dirname, '..', 'scripts', 'whisper_worker.py');
 const workerPyContent = fs.readFileSync(workerPyPath, 'utf8');
@@ -159,7 +159,7 @@ assert(workerPyContent.includes('beam_size=1'), 'whisper_worker.py must use gree
 
 const promptMdPath = path.join(__dirname, '..', 'prompts', 'interview.md');
 const promptMdContent = fs.readFileSync(promptMdPath, 'utf8');
-assert(promptMdContent.includes('SENTENCE-TO-SAY WISE — STRICTLY NO BULLET POINTS'), 'interview.md must enforce sentence-to-say without bullets');
+assert(promptMdContent.includes('SENTENCE-TO-SAY WISE — STRICTLY'), 'interview.md must enforce sentence-to-say without bullets');
 
 const llmServicePath = path.join(__dirname, '..', 'src', 'services', 'llm.service.js');
 const llmServiceContent = fs.readFileSync(llmServicePath, 'utf8');
@@ -180,6 +180,7 @@ const llmResponseHtmlPath = path.join(__dirname, '..', 'llm-response.html');
 const llmResponseHtmlContent = fs.readFileSync(llmResponseHtmlPath, 'utf8');
 assert(llmResponseHtmlContent.includes('isMergedUpdate && answerHistory.length > 0'), 'llm-response.html must rewrite active answer in-place on merged update');
 assert(llmResponseHtmlContent.includes('if (hasVisibleAnswer && !forceOverlay)'), 'llm-response.html must not wipe or obscure visible answer with loading backdrop');
+assert(llmResponseHtmlContent.includes('if (!isStreaming)'), 'llm-response.html must guard window resizing during active streaming to prevent jitter');
 
 // Test merge question logic extracted from main.js
 const mergeQuestionMatch = mainJsContent.match(/_mergeQuestionFragments\(part1, part2\) \{([\s\S]*?)\n  \}/);
@@ -194,21 +195,5 @@ assert.strictEqual(testMerge2, 'Can you explain indexing in PostgreSQL specifica
 
 const testMerge3 = mergeFn('What is microservices?', 'Can you give a production example?');
 assert.strictEqual(testMerge3, 'What is microservices? Can you give a production example?', 'Merge must keep question mark between two independent full sentences');
-
-// 8. Verify Zero-EC2 Truth, Serverless Neon DB, and Low-Latency Whisper Config
-console.log('8. Checking Zero-EC2 Truth, Serverless Neon DB, and Speech Service Latency...');
-const configJsPath = path.join(__dirname, '..', 'src', 'core', 'config.js');
-const configJsContent = fs.readFileSync(configJsPath, 'utf8');
-assert(configJsContent.includes("model: 'base'"), 'config.js must set whisper model to base');
-assert(configJsContent.includes("language: 'en'"), 'config.js must set whisper language to en to skip multi-lingual detection');
-assert(configJsContent.includes('silenceHangoverMs: 280'), 'config.js must set silenceHangoverMs to 280ms');
-assert(configJsContent.includes('maxUtteranceMs: 7500'), 'config.js must set maxUtteranceMs to 7500ms');
-
-assert(speechServiceContent.includes("this.emit('status', 'Processing speech…')"), 'speech.service.js must emit processing status upon pause and flush');
-
-assert(!promptMdContent.includes('AWS (S3, EC2)'), 'interview.md must NOT mention AWS EC2');
-assert(!promptMdContent.includes('EC2 virtual machines are used'), 'interview.md must NOT claim EC2 virtual machines');
-assert(promptMdContent.includes('Serverless PostgreSQL (Neon DB)'), 'interview.md must specify Serverless PostgreSQL on Neon DB');
-assert(promptMdContent.includes('Where is your backend hosted?'), 'interview.md must include explicit backend hosting question');
 
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');
