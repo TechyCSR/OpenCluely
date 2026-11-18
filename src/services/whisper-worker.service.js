@@ -44,7 +44,7 @@ class WhisperWorkerService {
     const result = await this._request({
       action: 'transcribe',
       audio_path: audioPath,
-      model: options.model || 'small',
+      model: options.model || 'base',
       language: options.language || 'auto',
       model_dir: options.modelDir || null,
       device: options.device || 'auto'
@@ -60,7 +60,7 @@ class WhisperWorkerService {
     this._clearIdleTimer();
     return this._request({
       action: 'warmup',
-      model: options.model || 'small',
+      model: options.model || 'base',
       model_dir: options.modelDir || null,
       device: options.device || 'auto'
     });

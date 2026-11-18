@@ -44,7 +44,7 @@ def unload_model():
 
 def ensure_model(request):
     global model, model_name, model_dir, model_device
-    requested_name = request.get('model') or 'small'
+    requested_name = request.get('model') or 'base'
     requested_dir = request.get('model_dir') or None
     requested_device = request.get('device') or 'auto'
     if requested_device == 'auto':
