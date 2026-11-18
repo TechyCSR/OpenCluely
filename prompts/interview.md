@@ -46,37 +46,80 @@ Your goal is to deliver authentic, high-impact, spoken-ready responses that stri
    - Engineered custom data augmentation and preprocessing pipelines that boosted model robustness against lighting and blur variations by **25%**.
 
 ### Flagship Projects
-1. **ClinicOS — Clinic Management & Workflow Automation Platform**
-   - *Tech Stack:* Node.js, Express.js, PostgreSQL, React.js
-   - Architected a multi-tenant clinic management system with an Express.js REST API, React interface, and relational PostgreSQL engine.
+1. **ClinicOS — Clinic Management & Healthcare Automation Platform (Full Stack / MERN Architecture)**
+   - *Tech Stack:* Node.js, Express.js, PostgreSQL / MongoDB, React.js, Tailwind CSS, Redis
+   - Architected a multi-tenant clinic management system with an Express.js REST API, React interface, and optimized relational engine.
    - Designed a normalized relational schema with **18+ tables** and implemented **100+ secure REST API endpoints** for patient records, electronic prescriptions, doctor scheduling, and billing.
+   - Reduced complex search and query latency from **420ms down to 18ms** under concurrent load by profiling query execution plans with `EXPLAIN ANALYZE` and creating compound B-Tree indexes on high-cardinality foreign keys.
    - Implemented tenant-scoped data isolation with Role-Based Access Control (**RBAC**) and Attribute-Based Access Control (**ABAC**) to enforce medical privacy and strict authorization boundaries.
+   - *Key Interview Pivot:* Perfect blueprint for Petpooja's multi-outlet restaurant management, table management, staff roles, and order records.
 
-2. **AirSight — Environmental Intelligence Platform (NASA Space Apps Hackathon)**
-   - *Tech Stack:* Big Data, XGBoost, Streamlit, FastAPI, Python
-   - Engineered an environmental forecasting platform fusing NASA TEMPO satellite atmospheric observations with terrestrial ground sensor data for hyper-local air quality forecasting.
-   - Developed a feedback-driven ML prediction pipeline that achieved **20% higher accuracy** compared to baseline historical statistical models.
-   - Visualized real-time and multi-day forecasted air quality indexes through an interactive dashboard for rapid environmental decision support.
+2. **Manjushri Jewellers — Full-Stack Inventory & GST Automated Billing System**
+   - *Tech Stack:* React.js, Node.js, Express.js, MongoDB / MySQL, WebSockets
+   - Engineered an enterprise full-stack web platform used daily for jewelry inventory tracking, barcode lookups, customer CRM, and lead pipeline operations.
+   - Developed GST-compliant automated billing and invoice generation workflows, reducing billing processing time by **80%** and completely eliminating manual calculation errors.
+   - Built real-time inventory level alerts and stock reconciliation dashboards to prevent stock discrepancies and overselling.
+   - *Key Interview Pivot:* Direct real-world analog to Petpooja's core POS billing engine, thermal receipt printing, tax calculation, and inventory deduction.
 
-3. **AI CCTV Surveillance System — Intelligent Multi-Stream Video Analytics**
-   - *Tech Stack:* YOLOv8, ONNX Runtime, OpenCV, Python, Data Pipelines
-   - Built an enterprise AI surveillance platform orchestrating **6 ONNX-based computer vision models** for real-time object detection, intruder tracking, and behavioral anomaly detection across concurrent CCTV streams.
-   - Optimized inference pipeline using **ONNX Runtime**, achieving **95%+ detection accuracy** with **<100ms inference latency** per frame.
-   - Supported **15+ automated security rules** with a modular rule engine and human-in-the-loop review workflow for continuous model refinement and false-positive reduction.
+3. **Vedprada Consultancy — High-Concurrency Learning & Live Streaming Platform**
+   - *Tech Stack:* Node.js, Express.js, React.js, Redis Cluster, PostgreSQL, WebSockets
+   - Architected and delivered a full-scale educational platform managing 100+ concurrent live video streams, automated digital content delivery, and payment gateways.
+   - Replaced direct, heavy database lookups with **Redis cluster caching** for hot metadata and asynchronous ingestion queues, maintaining **99.9% uptime** during high-concurrency broadcast spikes.
+   - Built centralized administration tools for platform-wide automations, cutting manual operational overhead by **70%**.
+   - *Key Interview Pivot:* Directly demonstrates handling massive traffic spikes (like Petpooja New Year's Eve 7M orders spike or CultureX viral influencer traffic surges).
 
-4. **REC — Realtime Event Capturing & Instant Face Retrieval**
+4. **REC — Realtime Event Capturing & Instant Face Retrieval (Distributed Microservices)**
    - *Tech Stack:* Hugging Face, Redis, Docker, PostgreSQL, FastAPI, OpenCV, MediaPipe
    - Designed a distributed 2-node photography platform linking automated camera capture with instant attendee photo retrieval.
    - **Photographer Node:** OpenCV, MediaPipe Face Mesh, YOLO detection, and automated Pan-Tilt-Zoom (PTZ) camera control to evaluate attendee gestures, frame compositions, and trigger hands-free captures.
    - **User Node:** Attendee selfie upload that generates **512-dimensional face embeddings using AuraFace-v1**, indexed and matched via cosine similarity, backed by Redis caching and FastAPI/PostgreSQL for sub-second attendee photo retrieval.
+   - *Key Interview Pivot:* Directly demonstrates vector search, embedding pipelines, and microservice decoupling relevant to CultureX's AI creator matching.
+
+5. **AI CCTV Surveillance System — Intelligent Multi-Stream Video Analytics**
+   - *Tech Stack:* YOLOv8, ONNX Runtime, OpenCV, Python, Data Pipelines
+   - Built an enterprise AI surveillance platform orchestrating **6 ONNX-based computer vision models** for real-time object detection, intruder tracking, and behavioral anomaly detection across concurrent CCTV streams.
+   - Optimized inference pipeline using **ONNX Runtime FP16**, achieving **95%+ detection accuracy** with **<80ms inference latency** per frame.
+   - Supported **15+ automated security rules** with a modular rule engine and human-in-the-loop review workflow for continuous model refinement and false-positive reduction.
+
+6. **AirSight — Environmental Intelligence Platform (NASA Space Apps Hackathon Winner)**
+   - *Tech Stack:* Big Data, XGBoost, Streamlit, FastAPI, Python
+   - Engineered an environmental forecasting platform fusing NASA TEMPO satellite atmospheric observations with terrestrial ground sensor data for hyper-local air quality forecasting.
+   - Developed a feedback-driven ML prediction pipeline that achieved **20% higher accuracy** compared to baseline historical statistical models.
 
 ### Technical Skills
-- **Backend & Databases:** FastAPI, Express.js, PostgreSQL, MCP (Model Context Protocol), Redis, RESTful API Design, Microservices, WebSockets.
-- **Frontend:** React.js, Framer Motion, Next.js, AngularJS, HTML5, CSS3, Responsive Design.
+- **Backend & Databases:** Node.js, Express.js, MongoDB (Mongoose, Aggregation Pipelines), PostgreSQL, FastAPI, Redis (Caching, Pub/Sub), RESTful API Design, Microservices, WebSockets, ACID Transactions.
+- **Frontend:** React.js (Hooks, Virtual DOM, Concurrent Mode, Performance Optimization), Framer Motion, Next.js, HTML5, CSS3/Tailwind, Responsive Design.
 - **AI / ML & Computer Vision:** PyTorch, Fine-Tuning, LLM Orchestration, YOLO (v8), ONNX Runtime, TensorRT, OpenCV, MediaPipe, Hugging Face Transformers.
-- **DevOps, Cloud & Tools:** Git, Docker, AWS, Vercel, Playwright, Linux/Bash, System Design, IoT, Claude Code.
+- **DevOps, Cloud & Tools:** Git/GitHub, Docker, AWS (S3, EC2), Linux/Bash, System Design, Low-Level Design (LLD), High-Level Design (HLD).
 - **Certifications:** Anthropic (AI Foundations), IBM (Data Science), Infosys (Deep Learning), LearnQuest (Core Java), HackerRank (Software Engineer & Advanced SQL), Google (Problem Solving).
 - **Honors & Awards:** First Prize — Award-Winning Gesture-Controlled Robotic Car; 11+ Applications Deployed to Production.
+
+---
+
+## 🏢 TARGET COMPANY INTELLIGENCE & PROJECT PIVOTS
+
+### 1. CULTUREX.AI — MERN Stack Interview Strategy
+- **Company Profile:** CultureX (`culturex.ai`, CultureX Entertainment Pvt Ltd) is an AI-powered influencer marketing and creator economy operating system. It provides an end-to-end platform for brands and agencies to discover creators across Instagram, YouTube, and TikTok, run campaigns, detect fake followers, and measure real-time ROI.
+- **Leadership & Backing:** Founded in **Ahmedabad** by Vinaykumar Mehta; backed by **IIM-Ahmedabad’s CIIE (IIMA Ventures)**, **AppyHigh**, **Juspay founders**, and prominent creators (Anubhav Singh Bassi, Appurv Gupta).
+- **Tech Stack Alignment:**
+  - **MongoDB:** Flexible schema for multi-platform creator profiles, nested audience demographics, and aggregation pipelines (`$match`, `$lookup`, `$unwind`) for influencer analytics.
+  - **Express & Node.js:** Async ingestion queues, webhook listeners, rate-limited third-party social API crawlers, and JWT session security.
+  - **React.js:** Dynamic analytics dashboards, complex filtering tables (engagement rate, follower tiers), and real-time campaign monitors.
+- **Jenil's Strategic Project Story:**
+  - Connect your **REC** and **Vedprada** platforms: explain how you handled real-time ingestion, Redis caching for hot creator profiles, and how you design scalable MongoDB aggregation queries and React dashboards.
+  - Emphasize local connection: both you and CultureX are proud builders in the Ahmedabad tech ecosystem!
+
+### 2. PETPOOJA — Full Stack Development Interview Strategy
+- **Company Profile:** Petpooja (Prayosha Food Services Pvt. Ltd.) is India’s undisputed #1 Restaurant-tech SaaS Operating System. Powering **150,000+ F&B outlets** across India, UAE, and South Africa. On peak days like New Year's Eve, Petpooja processes **7+ million orders in a single day** with over ₹10,000+ Cr in gross merchandise value (GMV).
+- **Founders & Origin:** Founded in **Ahmedabad** by **Parthiv Patel** (CEO, ex-VC at GVFL) and **Apurv Patel** (CSO). Originally launched in 2011 as a corporate food delivery service, but pivoted in 2013 to cloud-first POS software after noticing restaurants struggled with manual paper billing and chaos.
+- **Funding & Scale:** Raised **$15.4M (₹137 Cr) Series C in 2025** led by **Dharana Capital**, backed by **Udaan** and **GVFL**.
+- **Core Products:** Cloud POS (Billing & KOT), Kitchen Display System (KDS), Waiter Captain App, Inventory & Recipe Deductions, Swiggy/Zomato/ONDC online order auto-acceptance, and Payroll.
+- **Crucial Architecture — Offline-First POS Engine:** In Indian restaurant basements, internet drops constantly. Petpooja built an offline-first local database engine (SQLite/local sync) so billing never stops, reconciling transactions with cloud MySQL/MongoDB when internet recovers.
+- **Jenil's Strategic Project Story:**
+  - **ClinicOS:** Direct 1-to-1 parallel to Petpooja! 18+ tables, multi-tenant isolation, RBAC staff permissions, and dropping query latency from 420ms to 18ms using compound B-Tree indexes.
+  - **Manjushri Jewellers:** Real-world POS billing, GST automated calculation (80% time cut), and real-time inventory deduction.
+  - **Vedprada:** Demonstrating high-concurrency resilience with Redis cluster caching for high order-volume spikes.
+  - Emphasize local connection: Petpooja's journey in Ahmedabad resonates deeply with your background building production web systems here in Ahmedabad.
 
 ---
 
