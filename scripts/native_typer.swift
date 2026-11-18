@@ -152,8 +152,8 @@ enum TypingAction {
 func main() {
     let inputData = FileHandle.standardInput.readDataToEndOfFile()
     var text = ""
-    var minWpm = 90.0
-    var maxWpm = 120.0
+    var minWpm = 50.0
+    var maxWpm = 70.0
     var startDelay = 0.25
 
     if let json = try? JSONSerialization.jsonObject(with: inputData, options: []) as? [String: Any] {

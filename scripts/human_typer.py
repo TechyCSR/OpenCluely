@@ -277,8 +277,8 @@ def get_typer_drivers():
     else:
         return setup_linux_typer()
 
-def calculate_delay(char, prev_char, min_wpm=90.0, max_wpm=120.0):
-    """Calculate organic human delay per keystroke (90 - 120 WPM)"""
+def calculate_delay(char, prev_char, min_wpm=50.0, max_wpm=70.0):
+    """Calculate organic human delay per keystroke (default 50 - 70 WPM)"""
     current_wpm = random.uniform(min_wpm, max_wpm)
     base_delay = 60.0 / (current_wpm * 5.0)
 
@@ -349,8 +349,8 @@ def main():
     global IS_CANCELLED
 
     text = ""
-    min_wpm = 90.0
-    max_wpm = 120.0
+    min_wpm = 50.0
+    max_wpm = 70.0
     start_delay = 0.25
     enable_mistakes = True
 
@@ -361,8 +361,8 @@ def main():
                 raw = sys.stdin.read()
                 data = json.loads(raw)
                 text = data.get('text', '')
-                min_wpm = float(data.get('min_wpm', 90.0))
-                max_wpm = float(data.get('max_wpm', 120.0))
+                min_wpm = float(data.get('min_wpm', 50.0))
+                max_wpm = float(data.get('max_wpm', 70.0))
                 start_delay = float(data.get('start_delay', 0.25))
                 enable_mistakes = bool(data.get('enable_mistakes', True))
             except Exception as e:

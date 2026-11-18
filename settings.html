@@ -418,6 +418,49 @@
 
             <div class="settings-section">
                 <div class="settings-section-title">
+                    <i class="fas fa-keyboard"></i>
+                    Auto-Typing Speed
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Typing Cadence</div>
+                            <div class="settings-item-description">Keystroke pace when stealth-typing into external editors</div>
+                        </div>
+                        <select class="input-field" id="typingSpeed">
+                            <option value="slow">Slow & Deliberate (35 - 50 WPM)</option>
+                            <option value="natural" selected>Natural / Human (50 - 70 WPM) [Recommended]</option>
+                            <option value="fast">Fast (75 - 95 WPM)</option>
+                            <option value="turbo">Turbo (95 - 120 WPM)</option>
+                            <option value="custom">Custom WPM Range</option>
+                        </select>
+                    </div>
+
+                    <div id="customWpmGroup" class="settings-group" style="display: none;">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Minimum Speed (WPM)</div>
+                                <div class="settings-item-description">Lower speed boundary with human jitter</div>
+                            </div>
+                            <input type="number" class="input-field" id="typingMinWpm" placeholder="50" min="15" max="200" step="5">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Maximum Speed (WPM)</div>
+                                <div class="settings-item-description">Upper speed boundary for keystroke bursts</div>
+                            </div>
+                            <input type="number" class="input-field" id="typingMaxWpm" placeholder="70" min="20" max="250" step="5">
+                        </div>
+                    </div>
+
+                    <div class="settings-note">
+                        Auto-typing generates authentic human keystrokes with natural cognitive pauses, punctuation timing, and smart indentation without modifier keys. Natural (50–70 WPM) is recommended for realistic technical interviews and coding assessments.
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">
                     <i class="fas fa-icons"></i>
                     App Icon
                 </div>

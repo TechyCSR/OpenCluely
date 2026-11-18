@@ -22,7 +22,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
+    const typingSpeedSelect = document.getElementById('typingSpeed');
+    const customWpmGroup = document.getElementById('customWpmGroup');
+    const typingMinWpmInput = document.getElementById('typingMinWpm');
+    const typingMaxWpmInput = document.getElementById('typingMaxWpm');
     const iconGrid = document.getElementById('iconGrid');
+
+    const SPEED_PRESETS = {
+        slow: { min: 35, max: 50 },
+        natural: { min: 50, max: 70 },
+        fast: { min: 75, max: 95 },
+        turbo: { min: 95, max: 120 }
+    };
+
+    const updateTypingSpeedFieldStates = () => {
+        const speed = typingSpeedSelect ? typingSpeedSelect.value : 'natural';
+        if (customWpmGroup) {
+            customWpmGroup.style.display = speed === 'custom' ? '' : 'none';
+        }
+        if (speed !== 'custom' && SPEED_PRESETS[speed]) {
+            if (typingMinWpmInput) typingMinWpmInput.value = SPEED_PRESETS[speed].min;
+            if (typingMaxWpmInput) typingMaxWpmInput.value = SPEED_PRESETS[speed].max;
+        }
+    };
 
     // Check if window.api exists
     if (!window.api) {
@@ -165,6 +187,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
 
+        if (typingSpeedSelect) typingSpeedSelect.value = settings.typingSpeed || 'natural';
+        if (typingMinWpmInput) typingMinWpmInput.value = settings.typingMinWpm !== undefined ? settings.typingMinWpm : 50;
+        if (typingMaxWpmInput) typingMaxWpmInput.value = settings.typingMaxWpm !== undefined ? settings.typingMaxWpm : 70;
+        updateTypingSpeedFieldStates();
+
         // Handle icon selection
         const selectedIcon = settings.selectedIcon || settings.appIcon;
         if (selectedIcon && iconGrid) {
@@ -220,6 +247,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
+        if (typingSpeedSelect) settings.typingSpeed = typingSpeedSelect.value;
+        if (typingMinWpmInput) settings.typingMinWpm = typingMinWpmInput.value;
+        if (typingMaxWpmInput) settings.typingMaxWpm = typingMaxWpmInput.value;
         
         window.api.send('save-settings', settings);
     };
@@ -268,7 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
         geminiKeyInput,
         geminiKeySecondaryInput,
         windowGapInput,
-        audioSourceModeSelect
+        audioSourceModeSelect,
+        typingMinWpmInput,
+        typingMaxWpmInput
     ];
 
     inputs.forEach(input => {
@@ -277,6 +309,13 @@ document.addEventListener('DOMContentLoaded', () => {
             input.addEventListener('blur', saveSettings);
         }
     });
+
+    if (typingSpeedSelect) {
+        typingSpeedSelect.addEventListener('change', () => {
+            updateTypingSpeedFieldStates();
+            saveSettings();
+        });
+    }
 
     if (speechProviderSelect) {
         speechProviderSelect.addEventListener('change', () => {

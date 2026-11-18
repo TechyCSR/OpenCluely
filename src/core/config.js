@@ -38,6 +38,12 @@ class ConfigManager {
         cleanupDelay: 5000
       },
 
+      autotype: {
+        speed: 'natural',
+        minWpm: 50,
+        maxWpm: 70
+      },
+
       llm: {
         gemini: {
           model: 'gemini-3.5-flash-lite',

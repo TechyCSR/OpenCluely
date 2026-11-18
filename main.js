@@ -159,6 +159,14 @@ class ApplicationController {
       speechService.updateSettings({ audioSourceMode: this.audioSourceMode });
     }
 
+    // Auto-typing speed settings (lowered default: natural 50-70 WPM)
+    this.typingSpeed = process.env.AUTOTYPE_SPEED || "natural";
+    this.typingMinWpm = process.env.AUTOTYPE_MIN_WPM ? Number(process.env.AUTOTYPE_MIN_WPM) : 50;
+    this.typingMaxWpm = process.env.AUTOTYPE_MAX_WPM ? Number(process.env.AUTOTYPE_MAX_WPM) : 70;
+    if (typeof autoTypeService.setSpeed === 'function') {
+      autoTypeService.setSpeed(this.typingSpeed, this.typingMinWpm, this.typingMaxWpm);
+    }
+
     // Rubic mode state (stealth MCQ assessment features)
     this.rubicMode = false;
     this.rubicSingleSelect = true; // true = single answer, false = multi-select
@@ -1500,7 +1508,13 @@ class ApplicationController {
             }
             // 350 ms is enough for NSRunningApplication to complete activation
             setTimeout(() => {
-              resolve(autoTypeService.typeClipboard({ startDelay: 0.1, ...options }));
+              resolve(autoTypeService.typeClipboard({
+                speed: this.typingSpeed,
+                minWpm: this.typingMinWpm,
+                maxWpm: this.typingMaxWpm,
+                startDelay: 0.1,
+                ...options
+              }));
             }, 350);
           }
         );
@@ -1516,7 +1530,13 @@ class ApplicationController {
     } catch (e) {
       logger.warn('Could not blur windows before auto-type', { error: e.message });
     }
-    return autoTypeService.typeClipboard({ startDelay: 0.6, ...options });
+    return autoTypeService.typeClipboard({
+      speed: this.typingSpeed,
+      minWpm: this.typingMinWpm,
+      maxWpm: this.typingMaxWpm,
+      startDelay: 0.6,
+      ...options
+    });
   }
 
   toggleMcqMode() {
@@ -3258,7 +3278,11 @@ class ApplicationController {
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
       speechAvailable: this.speechAvailable,
       isMcqMode: this.isMcqMode,
-      audioSourceMode: this.audioSourceMode || "system"
+      audioSourceMode: this.audioSourceMode || "system",
+
+      typingSpeed: this.typingSpeed || process.env.AUTOTYPE_SPEED || "natural",
+      typingMinWpm: this.typingMinWpm || (process.env.AUTOTYPE_MIN_WPM ? Number(process.env.AUTOTYPE_MIN_WPM) : 50),
+      typingMaxWpm: this.typingMaxWpm || (process.env.AUTOTYPE_MAX_WPM ? Number(process.env.AUTOTYPE_MAX_WPM) : 70)
     };
   }
 
@@ -3300,12 +3324,36 @@ class ApplicationController {
         const gap = Number(settings.windowGap);
         if (Number.isFinite(gap)) windowManager.setWindowGap(gap);
       }
+      if (settings.typingSpeed !== undefined) {
+        this.typingSpeed = settings.typingSpeed;
+        if (settings.typingMinWpm !== undefined && settings.typingMinWpm !== '') {
+          const min = Number(settings.typingMinWpm);
+          if (Number.isFinite(min) && min > 0) this.typingMinWpm = min;
+        }
+        if (settings.typingMaxWpm !== undefined && settings.typingMaxWpm !== '') {
+          const max = Number(settings.typingMaxWpm);
+          if (Number.isFinite(max) && max > 0) this.typingMaxWpm = max;
+        }
+        if (typeof autoTypeService.setSpeed === 'function') {
+          autoTypeService.setSpeed(this.typingSpeed, this.typingMinWpm, this.typingMaxWpm);
+        }
+        windowManager.broadcastToAllWindows("autotype-settings-changed", {
+          speed: this.typingSpeed,
+          minWpm: this.typingMinWpm,
+          maxWpm: this.typingMaxWpm
+        });
+      }
 
       // ── Persist provider / API-key fields back to .env ──
       // The settings UI is now the source of truth for these values.
       // Writing to .env ensures they survive app restarts and are picked
       // up the next time the app boots.
       const envUpdates = {};
+      if (settings.typingSpeed !== undefined) {
+        envUpdates.AUTOTYPE_SPEED = this.typingSpeed;
+        envUpdates.AUTOTYPE_MIN_WPM = String(this.typingMinWpm);
+        envUpdates.AUTOTYPE_MAX_WPM = String(this.typingMaxWpm);
+      }
       if (settings.speechProvider === "azure" || settings.speechProvider === "whisper") {
         envUpdates.SPEECH_PROVIDER = settings.speechProvider;
       }

@@ -5,6 +5,13 @@ const { EventEmitter } = require('events');
 const { clipboard } = require('electron');
 const logger = require('../core/logger').createServiceLogger('AUTOTYPE');
 
+const SPEED_PRESETS = {
+  slow: { minWpm: 35.0, maxWpm: 50.0 },
+  natural: { minWpm: 50.0, maxWpm: 70.0 },
+  fast: { minWpm: 75.0, maxWpm: 95.0 },
+  turbo: { minWpm: 95.0, maxWpm: 120.0 }
+};
+
 class AutoTypeService extends EventEmitter {
   constructor() {
     super();
@@ -15,6 +22,43 @@ class AutoTypeService extends EventEmitter {
       ? '/opt/homebrew/bin/python3'
       : (process.platform === 'win32' ? 'python' : 'python3');
     this.lastCode = '';
+    
+    // Configurable typing cadence defaults (lowered to natural 50-70 WPM)
+    this.speed = process.env.AUTOTYPE_SPEED || 'natural';
+    const preset = SPEED_PRESETS[this.speed] || SPEED_PRESETS.natural;
+    this.minWpm = process.env.AUTOTYPE_MIN_WPM ? parseFloat(process.env.AUTOTYPE_MIN_WPM) : preset.minWpm;
+    this.maxWpm = process.env.AUTOTYPE_MAX_WPM ? parseFloat(process.env.AUTOTYPE_MAX_WPM) : preset.maxWpm;
+  }
+
+  setSpeed(speed, minWpm = null, maxWpm = null) {
+    if (SPEED_PRESETS[speed]) {
+      this.speed = speed;
+      this.minWpm = SPEED_PRESETS[speed].minWpm;
+      this.maxWpm = SPEED_PRESETS[speed].maxWpm;
+    } else if (speed === 'custom') {
+      this.speed = 'custom';
+      if (minWpm !== null && minWpm !== undefined && !isNaN(parseFloat(minWpm))) {
+        this.minWpm = Math.max(15, parseFloat(minWpm));
+      }
+      if (maxWpm !== null && maxWpm !== undefined && !isNaN(parseFloat(maxWpm))) {
+        this.maxWpm = Math.max(this.minWpm, parseFloat(maxWpm));
+      }
+    }
+    logger.info('AutoType speed updated', { speed: this.speed, minWpm: this.minWpm, maxWpm: this.maxWpm });
+  }
+
+  getWpmRange(options = {}) {
+    if (options.minWpm !== undefined && options.maxWpm !== undefined && !isNaN(parseFloat(options.minWpm)) && !isNaN(parseFloat(options.maxWpm))) {
+      const min = Math.max(15, parseFloat(options.minWpm));
+      const max = Math.max(min, parseFloat(options.maxWpm));
+      return { minWpm: min, maxWpm: max };
+    }
+    const speed = options.speed || this.speed || 'natural';
+    if (speed === 'custom') {
+      return { minWpm: this.minWpm, maxWpm: this.maxWpm };
+    }
+    const preset = SPEED_PRESETS[speed] || SPEED_PRESETS.natural;
+    return { minWpm: preset.minWpm, maxWpm: preset.maxWpm };
   }
 
   setLastCode(code) {
@@ -38,7 +82,7 @@ class AutoTypeService extends EventEmitter {
   }
 
   /**
-   * Type arbitrary text character-by-character at human speed (90-120 WPM)
+   * Type arbitrary text character-by-character at human speed (configurable, default 50-70 WPM)
    * @param {string} text 
    * @param {Object} options 
    * @returns {Promise<Object>}
@@ -54,11 +98,8 @@ class AutoTypeService extends EventEmitter {
       await new Promise(r => setTimeout(r, 100));
     }
 
-    const {
-      minWpm = 90.0,
-      maxWpm = 120.0,
-      startDelay = 0.6 // Must be ≥0.6 s — OS needs time to shift focus back to target app after we blur
-    } = options;
+    const { minWpm, maxWpm } = this.getWpmRange(options);
+    const startDelay = options.startDelay !== undefined ? options.startDelay : 0.6; // Must be ≥0.6 s — OS needs time to shift focus back to target app after we blur
 
     return new Promise((resolve) => {
       this._isTyping = true;

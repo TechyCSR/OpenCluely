@@ -205,4 +205,27 @@ assert(speechServiceContent.includes("this.emit('status', 'Waiting for speech…
 assert(speechServiceContent.includes('configured (userData resolved)'), 'speech.service.js must resolve relative commands to absolute userData paths');
 assert(workerPyContent.includes('already_warm'), 'whisper_worker.py must return immediately if model is already warm in RAM');
 
+// 9. Verify Lowered Typing Speed & Settings Configuration
+console.log('9. Checking Lowered Typing Speed & Settings Configuration...');
+const settingsHtmlPath = path.join(__dirname, '..', 'settings.html');
+const settingsHtmlContent = fs.readFileSync(settingsHtmlPath, 'utf8');
+assert(settingsHtmlContent.includes('id="typingSpeed"'), 'settings.html must contain typingSpeed select');
+assert(settingsHtmlContent.includes('id="typingMinWpm"'), 'settings.html must contain typingMinWpm input');
+assert(settingsHtmlContent.includes('id="typingMaxWpm"'), 'settings.html must contain typingMaxWpm input');
+assert(settingsHtmlContent.includes('value="natural" selected'), 'settings.html must default typingSpeed to natural (50-70 WPM)');
+
+const settingsJsPath = path.join(__dirname, '..', 'src', 'ui', 'settings-window.js');
+const settingsJsContent = fs.readFileSync(settingsJsPath, 'utf8');
+assert(settingsJsContent.includes("document.getElementById('typingSpeed')"), 'settings-window.js must bind typingSpeed');
+assert(settingsJsContent.includes('settings.typingSpeed = typingSpeedSelect.value'), 'settings-window.js must save typingSpeed');
+
+const autotypeService = require('../src/services/autotype.service');
+const defaultRange = autotypeService.getWpmRange();
+assert(defaultRange.minWpm === 50 && defaultRange.maxWpm === 70, `Default typing speed must be lowered to 50-70 WPM (actual: ${defaultRange.minWpm}-${defaultRange.maxWpm})`);
+const slowRange = autotypeService.getWpmRange({ speed: 'slow' });
+assert(slowRange.minWpm === 35 && slowRange.maxWpm === 50, 'Slow preset must be 35-50 WPM');
+
+assert(mainJsContent.includes('this.typingSpeed = process.env.AUTOTYPE_SPEED || "natural"'), 'main.js must initialize typingSpeed default');
+assert(mainJsContent.includes('envUpdates.AUTOTYPE_SPEED = this.typingSpeed'), 'main.js must persist AUTOTYPE_SPEED to env');
+
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');
