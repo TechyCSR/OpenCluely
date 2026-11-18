@@ -165,4 +165,34 @@ const llmServicePath = path.join(__dirname, '..', 'src', 'services', 'llm.servic
 const llmServiceContent = fs.readFileSync(llmServicePath, 'utf8');
 assert(llmServiceContent.includes('SENTENCE-TO-SAY WISE: Strictly NO bullet points'), 'llm.service.js must enforce sentence-to-say without bullets');
 
+// 7. Verify Parallel Speculative Pipeline, Multi-Turn Question Merging, and Non-Wiping UI
+console.log('7. Checking Parallel Speculative Pipeline & Non-Wiping Multi-Turn UI...');
+assert(mainJsContent.includes('this._speculativeGraceMs = 3200'), 'main.js must define speculative continuation grace window');
+assert(mainJsContent.includes('_mergeQuestionFragments'), 'main.js must define _mergeQuestionFragments helper');
+assert(mainJsContent.includes('sessionManager.replaceLastUserInput'), 'main.js must replace last user input on merged question');
+
+const sessionManagerPath = path.join(__dirname, '..', 'src', 'managers', 'session.manager.js');
+const sessionManagerContent = fs.readFileSync(sessionManagerPath, 'utf8');
+assert(sessionManagerContent.includes('replaceLastUserInput(text)'), 'session.manager.js must implement replaceLastUserInput');
+assert(sessionManagerContent.includes('replaceOrRemoveLastModelResponse'), 'session.manager.js must implement replaceOrRemoveLastModelResponse');
+
+const llmResponseHtmlPath = path.join(__dirname, '..', 'llm-response.html');
+const llmResponseHtmlContent = fs.readFileSync(llmResponseHtmlPath, 'utf8');
+assert(llmResponseHtmlContent.includes('isMergedUpdate && answerHistory.length > 0'), 'llm-response.html must rewrite active answer in-place on merged update');
+assert(llmResponseHtmlContent.includes('if (hasVisibleAnswer && !forceOverlay)'), 'llm-response.html must not wipe or obscure visible answer with loading backdrop');
+
+// Test merge question logic extracted from main.js
+const mergeQuestionMatch = mainJsContent.match(/_mergeQuestionFragments\(part1, part2\) \{([\s\S]*?)\n  \}/);
+assert(mergeQuestionMatch, 'Must find _mergeQuestionFragments function body');
+const mergeFn = new Function('part1', 'part2', mergeQuestionMatch[1]);
+
+const testMerge1 = mergeFn('What is Docker containerization?', 'and how does it differ from a virtual machine?');
+assert.strictEqual(testMerge1, 'What is Docker containerization and how does it differ from a virtual machine?', 'Merge must strip trailing question mark when followed by conjunction clause');
+
+const testMerge2 = mergeFn('Can you explain indexing in PostgreSQL?', 'specifically B-tree and GiST?');
+assert.strictEqual(testMerge2, 'Can you explain indexing in PostgreSQL specifically B-tree and GiST?', 'Merge must strip trailing punctuation when followed by lowercase or continuation clause');
+
+const testMerge3 = mergeFn('What is microservices?', 'Can you give a production example?');
+assert.strictEqual(testMerge3, 'What is microservices? Can you give a production example?', 'Merge must keep question mark between two independent full sentences');
+
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');

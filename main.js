@@ -182,6 +182,12 @@ class ApplicationController {
     this._currentLlmRequestId = 0;
     this._hasActiveAnswer = false;
 
+    // Speculative Parallel Pipeline & Grace Window
+    this._speculativeState = null;
+    this._speculativeGraceMs = 3200; // 3.2s continuation window for mid-question breathing pauses
+    this._speculativeGraceTimer = null;
+    this._isMergedContinuation = false;
+
     // First-run onboarding: detects missing .env / API key and triggers
     // a settings-window prompt on first launch so users don't have to
     // dig through docs to figure out they need a Gemini API key.
@@ -357,6 +363,12 @@ class ApplicationController {
       // Reset session memory and question counts on every fresh startup
       sessionManager.clear();
       this._utteranceBuffer = "";
+      this._speculativeState = null;
+      if (this._speculativeGraceTimer) {
+        clearTimeout(this._speculativeGraceTimer);
+        this._speculativeGraceTimer = null;
+      }
+      this._isMergedContinuation = false;
 
       await windowManager.initializeWindows({ showMainWindow: !isFirstRun });
       this.setupGlobalShortcuts();
@@ -1010,6 +1022,7 @@ class ApplicationController {
     ipcMain.handle("clear-session-memory", () => {
       sessionManager.clear();
       this._hasActiveAnswer = false;
+      this._resetSpeculativeState();
       windowManager.broadcastToAllWindows("session-cleared");
       return { success: true };
     });
@@ -1793,11 +1806,21 @@ class ApplicationController {
     try {
       sessionManager.clear();
       this._hasActiveAnswer = false;
+      this._resetSpeculativeState();
       windowManager.broadcastToAllWindows("session-cleared");
       logger.info("Session memory cleared via global shortcut");
     } catch (error) {
       logger.error("Error clearing session memory:", error);
     }
+  }
+
+  _resetSpeculativeState() {
+    this._speculativeState = null;
+    if (this._speculativeGraceTimer) {
+      clearTimeout(this._speculativeGraceTimer);
+      this._speculativeGraceTimer = null;
+    }
+    this._isMergedContinuation = false;
   }
 
   handleUpArrow() {
@@ -2396,10 +2419,36 @@ class ApplicationController {
   }
 
   /**
+   * Intelligently merge Part 1 and Part 2 of a multi-turn question
+   * when speech resumes during a breathing room gap or pause.
+   */
+  _mergeQuestionFragments(part1, part2) {
+    const p1 = (part1 || "").trim();
+    const p2 = (part2 || "").trim();
+    if (!p1) return p2;
+    if (!p2) return p1;
+
+    // If part 2 starts with a conjunction or lowercase continuation word, strip trailing question mark / punctuation
+    const isContinuationClause = /^(and|or|but|while|whereas|as well as|also|with|in terms of|specifically)\b/i.test(p2) || /^[a-z]/.test(p2);
+    if (isContinuationClause) {
+      const cleanP1 = p1.replace(/[?.,!;:]+$/, '').trim();
+      return `${cleanP1} ${p2}`;
+    }
+
+    const separator = /[.?!]$/.test(p1) ? ' ' : '. ';
+    return `${p1}${separator}${p2}`;
+  }
+
+  /**
    * Buffer a transcribed fragment and (re)arm the coalesce debounce. Fragments
    * are shown in the UI immediately so speech feels live, but the LLM is only
    * asked once the speaker has actually paused — this is what stops one spoken
    * line from producing two separate, slow answers.
+   *
+   * Speculative Parallel Pipeline:
+   * If a new fragment arrives within the continuation grace window after Part 1,
+   * it is seamlessly merged with Part 1 and dispatched with top priority while
+   * keeping the already visible screen stable.
    */
   handleTranscriptionFragment(text) {
     const fragment = (text || "").trim();
@@ -2415,9 +2464,50 @@ class ApplicationController {
     // Route speech UI events immediately so hearing bar reflects live speech
     this.sendToVoiceResponseWindows("transcription-received", { text: fragment });
 
-    this._utteranceBuffer = this._utteranceBuffer
-      ? `${this._utteranceBuffer} ${fragment}`
-      : fragment;
+    // Check if we are inside an active continuation grace window of a speculative Part 1
+    const now = Date.now();
+    const hasActiveSpeculativePart1 = Boolean(
+      this._speculativeState && 
+      (now - this._speculativeState.dispatchedAt) <= this._speculativeGraceMs
+    );
+
+    if (hasActiveSpeculativePart1) {
+      // PART 2 DETECTED! Speaker resumed speech within the continuation window!
+      logger.info("Part 2 speech detected within grace window; merging with Part 1", {
+        part1: this._speculativeState.part1Text,
+        part2Fragment: fragment,
+        elapsedMs: now - this._speculativeState.dispatchedAt
+      });
+
+      if (this._speculativeGraceTimer) {
+        clearTimeout(this._speculativeGraceTimer);
+        this._speculativeGraceTimer = null;
+      }
+
+      // Preempt/Abort the in-flight speculative Part 1 LLM request immediately
+      if (this._speculativeState.abortController && !this._speculativeState.isCompleted) {
+        try {
+          this._speculativeState.abortController.abort('Preempted by Part 2 continuation');
+        } catch (_) {}
+      }
+
+      // Merge Part 1 and Part 2
+      if (!this._utteranceBuffer) {
+        this._utteranceBuffer = this._mergeQuestionFragments(this._speculativeState.part1Text, fragment);
+      } else {
+        this._utteranceBuffer = `${this._utteranceBuffer} ${fragment}`;
+      }
+
+      // Mark that this is a merged update so UI preserves visible answer screen
+      this._isMergedContinuation = true;
+
+      // Reset speculative state now that it's absorbed into the merged buffer
+      this._speculativeState = null;
+    } else {
+      this._utteranceBuffer = this._utteranceBuffer
+        ? `${this._utteranceBuffer} ${fragment}`
+        : fragment;
+    }
 
     if (this._utteranceTimer) {
       clearTimeout(this._utteranceTimer);
@@ -2466,6 +2556,9 @@ class ApplicationController {
       return;
     }
 
+    const isMergedUpdate = Boolean(this._isMergedContinuation);
+    this._isMergedContinuation = false;
+
     // Suppress dispatch if the buffer is solely an isolated acknowledgment filler
     if (this._isRecruiterPreambleOnly(combined)) {
       logger.debug("Suppressing dispatch for pure recruiter acknowledgment", { text: combined });
@@ -2498,7 +2591,8 @@ class ApplicationController {
     // If a previous LLM generation or analysis is currently running, ABORT IT IMMEDIATELY!
     if (this._activeLlmAbortController) {
       logger.info("Preempting in-flight LLM question with new incoming question", {
-        newQuestionPreview: targetQuestion.substring(0, 80)
+        newQuestionPreview: targetQuestion.substring(0, 80),
+        isMergedUpdate
       });
       try {
         this._activeLlmAbortController.abort('Preempted by newer question');
@@ -2515,6 +2609,32 @@ class ApplicationController {
     this._responseSeq = (this._responseSeq || 0) + 1;
     const messageId = `tr-${Date.now()}-${this._responseSeq}`;
 
+    // If this is a fresh Part 1 question, arm the speculative parallel state & grace window
+    if (!isMergedUpdate) {
+      this._speculativeState = {
+        part1Text: targetQuestion,
+        dispatchedAt: Date.now(),
+        requestId: currentRequestId,
+        abortController: abortController,
+        messageId: messageId,
+        isCompleted: false,
+        result: null
+      };
+
+      if (this._speculativeGraceTimer) {
+        clearTimeout(this._speculativeGraceTimer);
+      }
+      this._speculativeGraceTimer = setTimeout(() => {
+        this._speculativeGraceTimer = null;
+        if (this._speculativeState && this._speculativeState.requestId === currentRequestId) {
+          logger.info("Speculative grace window elapsed without Part 2; question finalized", {
+            question: targetQuestion.substring(0, 60)
+          });
+          this._speculativeState = null;
+        }
+      }, this._speculativeGraceMs);
+    }
+
     // 2. IMMEDIATE LINEAR UI NOTIFICATION:
     // Instantly transition the UI state to "PROCESSING" with question preview
     this.sendToVoiceResponseWindows("transcription-llm-response-start", {
@@ -2522,14 +2642,21 @@ class ApplicationController {
       skill: this.activeSkill,
       questionPreview: targetQuestion.substring(0, 80),
       status: 'PROCESSING',
-      isAnalyzing: true
+      isAnalyzing: true,
+      isMergedUpdate,
+      keepActiveView: isMergedUpdate || this._hasActiveAnswer
     });
-    if (this.shouldShowVoiceOverlay()) {
+    if (this.shouldShowVoiceOverlay() && !isMergedUpdate && !this._hasActiveAnswer) {
       windowManager.showLLMLoading(targetQuestion.substring(0, 80));
     }
 
-    // 3. Record the full, coalesced question once in session history
-    sessionManager.addUserInput(targetQuestion, 'speech');
+    // 3. Record or update question in session history
+    if (isMergedUpdate) {
+      sessionManager.replaceLastUserInput(targetQuestion);
+      sessionManager.replaceOrRemoveLastModelResponse();
+    } else {
+      sessionManager.addUserInput(targetQuestion, 'speech');
+    }
 
     try {
       const finalQuestion = targetQuestion || combined;
@@ -2539,7 +2666,10 @@ class ApplicationController {
         sessionHistory,
         abortController.signal,
         currentRequestId,
-        messageId
+        messageId,
+        1,
+        3,
+        isMergedUpdate
       );
     } catch (error) {
       if (abortController.signal.aborted || error.message === 'ABORTED' || error.name === 'AbortError') {
@@ -2567,7 +2697,7 @@ class ApplicationController {
     }
   }
 
-  async processTranscriptionWithLLM(text, sessionHistory, abortSignal = null, requestId = 0, messageId = null, attempt = 1, maxAttempts = 3) {
+  async processTranscriptionWithLLM(text, sessionHistory, abortSignal = null, requestId = 0, messageId = null, attempt = 1, maxAttempts = 3, isMergedUpdate = false) {
     if (abortSignal && abortSignal.aborted) {
       return;
     }
@@ -2750,12 +2880,19 @@ class ApplicationController {
           return;
         }
 
+        llmResult.isMergedUpdate = isMergedUpdate;
         llmResult.metadata = { 
           ...llmResult.metadata, 
           messageId,
           question: cleanText,
+          isMergedUpdate,
           processingTime: llmResult.metadata && llmResult.metadata.processingTime ? llmResult.metadata.processingTime : (Date.now() - startTime)
         };
+
+        if (this._speculativeState && this._speculativeState.requestId === requestId) {
+          this._speculativeState.isCompleted = true;
+          this._speculativeState.result = llmResult;
+        }
 
         // Add LLM response to session memory
         sessionManager.addModelResponse(llmResult.response, {
@@ -2964,13 +3101,15 @@ class ApplicationController {
   sendTranscriptionLLMResponseToVoiceTargets(llmResult) {
     this._hasActiveAnswer = true;
     const messageId = (llmResult.metadata && llmResult.metadata.messageId) || null;
+    const isMergedUpdate = Boolean(llmResult.isMergedUpdate || (llmResult.metadata && llmResult.metadata.isMergedUpdate));
     const data = {
       response: llmResult.response,
       content: llmResult.response,
       metadata: llmResult.metadata,
       messageId,
       skill: this.activeSkill,
-      isTranscriptionResponse: true
+      isTranscriptionResponse: true,
+      isMergedUpdate
     };
     if (this.shouldShowVoiceOverlay()) {
       windowManager.showLLMResponse(llmResult.response, {
@@ -2980,7 +3119,8 @@ class ApplicationController {
         isLocked: llmResult.metadata && llmResult.metadata.isLocked,
         processingTime: llmResult.metadata && llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata && llmResult.metadata.usedFallback,
-        isTranscriptionResponse: true
+        isTranscriptionResponse: true,
+        isMergedUpdate
       });
     }
     this.sendToVoiceResponseWindows("transcription-llm-response", data);

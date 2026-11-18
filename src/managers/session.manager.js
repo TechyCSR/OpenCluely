@@ -121,6 +121,43 @@ class SessionManager {
   }
 
   /**
+   * Replace the last user question in session memory with a merged multi-part question
+   */
+  replaceLastUserInput(text) {
+    for (let i = this.sessionMemory.length - 1; i >= 0; i--) {
+      if (this.sessionMemory[i].role === 'user') {
+        this.sessionMemory[i].content = text;
+        if (this.sessionMemory[i].metadata) {
+          this.sessionMemory[i].metadata.textLength = text.length;
+          this.sessionMemory[i].metadata.isMerged = true;
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Replace or remove the last model response (e.g. when updating speculative response)
+   */
+  replaceOrRemoveLastModelResponse(newText = null) {
+    for (let i = this.sessionMemory.length - 1; i >= 0; i--) {
+      if (this.sessionMemory[i].role === 'model') {
+        if (newText) {
+          this.sessionMemory[i].content = newText;
+          if (this.sessionMemory[i].metadata) {
+            this.sessionMemory[i].metadata.responseLength = newText.length;
+          }
+        } else {
+          this.sessionMemory.splice(i, 1);
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Add LLM/model response
    */
   addModelResponse(text, metadata = {}) {

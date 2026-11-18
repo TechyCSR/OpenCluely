@@ -1069,9 +1069,16 @@
                     streamAccumulator = '';
                     isStreaming = true;
                     setStatus('PROCESSING');
+                    const isMerged = Boolean(data && (data.isMergedUpdate || data.keepActiveView));
                     const qPreview = data && data.questionPreview ? data.questionPreview.substring(0, 32) : '';
-                    setAlertText(qPreview ? `Processing: "${qPreview}…"` : 'Processing question…');
-                    showLoadingState('Processing');
+
+                    if (isMerged) {
+                        setAlertText(qPreview ? `Updating: "${qPreview}…"` : 'Updating combined question…');
+                        // DO NOT wipe or cover active answer screen!
+                    } else {
+                        setAlertText(qPreview ? `Processing: "${qPreview}…"` : 'Processing question…');
+                        showLoadingState('Processing');
+                    }
                 });
             }
 
@@ -1083,6 +1090,17 @@
                     const chunk = payload.delta || payload.chunk || payload.text || (typeof payload === 'string' ? payload : '');
                     if (!chunk) return;
                     streamAccumulator += chunk;
+
+                    const hasVisibleAnswer = Boolean(
+                        (answerHistory.length > 0 && currentHistoryIndex >= 0) ||
+                        document.getElementById('interviewCards')?.children?.length > 0
+                    );
+
+                    // When updating an already generated answer, do not overwrite the full card
+                    // with tiny partial chunk fragments (< 160 chars) that would flash an incomplete card
+                    if (hasVisibleAnswer && streamAccumulator.length < 160) {
+                        return;
+                    }
 
                     if (!streamTimer) {
                         streamTimer = setTimeout(() => {
@@ -1217,6 +1235,15 @@
             const text = (data && (data.content || data.response)) || (typeof data === 'string' ? data : '');
             if (!text || !text.trim()) return;
 
+            const isMergedUpdate = Boolean(data && (data.isMergedUpdate || (data.metadata && data.metadata.isMergedUpdate)));
+            if (isMergedUpdate && answerHistory.length > 0 && currentHistoryIndex >= 0) {
+                // In-place rewrite of the active answer for merged Part 1 + Part 2
+                answerHistory[currentHistoryIndex] = data;
+                updateNavigationUI();
+                displayStructuredAnswer(data);
+                return;
+            }
+
             const lastItem = answerHistory[answerHistory.length - 1];
             const isDuplicate = lastItem && ((lastItem.content || lastItem.response) === text);
             if (!isDuplicate) {
@@ -1277,7 +1304,18 @@
         }
 
         // ── Loading Controls ──
-        function showLoadingState(statusText = 'Analyzing') {
+        function showLoadingState(statusText = 'Analyzing', forceOverlay = false) {
+            const hasVisibleAnswer = Boolean(
+                (answerHistory.length > 0 && currentHistoryIndex >= 0) ||
+                document.getElementById('interviewCards')?.children?.length > 0
+            );
+
+            // If an answer is ALREADY generated and visible on screen, DO NOT cover or wipe it out!
+            // Keep the answer completely visible and readable; simply update the status ribbon & header alert.
+            if (hasVisibleAnswer && !forceOverlay) {
+                return;
+            }
+
             const loading = document.getElementById('loading');
             const loadingText = document.getElementById('loadingText');
             if (loadingText) loadingText.textContent = statusText;
