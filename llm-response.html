@@ -691,7 +691,7 @@
             border: none;
         }
 
-        /* ── 3-Second Hover / Instant Click Copy Button ── */
+        /* ── 1-Second Hover / Instant Click Copy Button ── */
         .copy-btn {
             background: rgba(24, 24, 27, 0.85);
             color: rgba(255, 255, 255, 0.75);
@@ -1042,7 +1042,6 @@
                     } else if (lower.includes('waiting') || lower.includes('stopped') || lower.includes('idle')) {
                         clearSpeechProcessingWatchdog();
                         if (!isStreaming && !readyToIdleTimer) {
-                            hideLoadingState();
                             setStatus('IDLE');
                             setAlertText('Waiting for speech…');
                         }
@@ -1074,6 +1073,7 @@
                     setStatus('RETRYING');
                     setAlertText(`Retrying (${attempt}/${maxAttempts})…`);
                     showLoadingState(`Retrying (${attempt}/${maxAttempts})`);
+                    armSpeechProcessingWatchdog(8000);
                 });
             }
 
@@ -1387,17 +1387,12 @@
 
             if (loadingWatchdogTimer) clearTimeout(loadingWatchdogTimer);
             loadingWatchdogTimer = setTimeout(() => {
-                console.warn('[INTERVIEW-UI] Loading watchdog timeout triggered; exiting loading state');
-                hideLoadingState();
                 if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
+                    console.warn('[INTERVIEW-UI] Loading watchdog timeout; restoring active answer');
+                    hideLoadingState();
                     displayStructuredAnswer(answerHistory[currentHistoryIndex]);
-                    setStatus('READY');
-                    setAlertText('Answer ready');
-                } else {
-                    setStatus('IDLE');
-                    setAlertText('Waiting for speech…');
                 }
-            }, 8500);
+            }, 7500);
         }
 
         function hideLoadingState() {
@@ -1569,7 +1564,7 @@
             return blocks;
         }
 
-        // ── 3-Second Hover & Click Copy Button Helper ──
+        // ── 1-Second Hover & Click Copy Button Helper ──
         function attachCopyHandler(btn, text) {
             btn.innerHTML = '<span class="copy-progress-fill"></span><span class="copy-label">Copy</span>';
             const fill = btn.querySelector('.copy-progress-fill');
@@ -1578,7 +1573,7 @@
             let dwellTimer = null;
             let dwellStart = null;
             let dwellAnimFrame = null;
-            const DWELL_MS = 3000;
+            const DWELL_MS = 1000; // 1-second hover dwell auto-copy
 
             const performCopy = async (e) => {
                 if (e) e.stopPropagation();
@@ -1603,7 +1598,7 @@
                     }
                     if (ok) {
                         btn.classList.add('copied');
-                        label.innerHTML = '✓ Copied';
+                        label.innerHTML = '✓ Copied!';
                         setTimeout(() => {
                             btn.classList.remove('copied');
                             label.innerHTML = 'Copy';
@@ -1639,9 +1634,8 @@
                     const elapsed = Date.now() - dwellStart;
                     const pct = Math.min(100, (elapsed / DWELL_MS) * 100);
                     if (fill) fill.style.width = `${pct}%`;
-                    const remSec = Math.max(1, Math.ceil((DWELL_MS - elapsed) / 1000));
                     if (!btn.classList.contains('copied')) {
-                        label.innerHTML = `Copy (${remSec}s)`;
+                        label.innerHTML = 'Copying…';
                     }
                     if (elapsed < DWELL_MS) {
                         dwellAnimFrame = requestAnimationFrame(updateProgress);
@@ -1736,14 +1730,7 @@
                     `;
                     const exBody = exSec.querySelector('.examples-body-text');
 
-                    let nonCodeText = parsed.examples;
-                    codeBlocks.forEach(b => { nonCodeText = nonCodeText.replace(b.fullMatch, ''); });
-                    if (nonCodeText.trim()) {
-                        const notes = document.createElement('div');
-                        notes.innerHTML = renderPartMarkdown(nonCodeText.trim());
-                        exBody.appendChild(notes);
-                    }
-
+                    // 1. Render Code Blocks FIRST with 1s Hover Copy Button
                     codeBlocks.forEach(block => {
                         const blockDiv = document.createElement('div');
                         blockDiv.className = 'code-block';
@@ -1762,6 +1749,17 @@
                         header.appendChild(copyBtn);
                         exBody.appendChild(blockDiv);
                     });
+
+                    // 2. Render Easy Code Explanation directly BELOW code snippet
+                    let nonCodeText = parsed.examples;
+                    codeBlocks.forEach(b => { nonCodeText = nonCodeText.replace(b.fullMatch, ''); });
+                    if (nonCodeText.trim()) {
+                        const notes = document.createElement('div');
+                        notes.className = 'code-explanation-text';
+                        notes.style.marginTop = '10px';
+                        notes.innerHTML = renderPartMarkdown(nonCodeText.trim());
+                        exBody.appendChild(notes);
+                    }
                 } else {
                     exSec.innerHTML = `
                         <div class="speech-step-badge">
@@ -1790,6 +1788,21 @@
             }
 
             container.appendChild(flow);
+
+            // Attach 1-second hover copy buttons to any additional pre code blocks across all sections
+            container.querySelectorAll('pre code').forEach((codeEl) => {
+                const pre = codeEl.closest('pre');
+                if (pre && !pre.closest('.code-block') && !pre.querySelector('.copy-btn')) {
+                    pre.style.position = 'relative';
+                    const copyBtn = document.createElement('button');
+                    copyBtn.className = 'copy-btn';
+                    copyBtn.style.position = 'absolute';
+                    copyBtn.style.top = '6px';
+                    copyBtn.style.right = '6px';
+                    attachCopyHandler(copyBtn, codeEl.textContent);
+                    pre.appendChild(copyBtn);
+                }
+            });
 
             // Render math expressions if KaTeX / mathrender is present
             if (window.renderMathInElement) {

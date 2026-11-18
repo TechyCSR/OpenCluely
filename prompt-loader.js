@@ -109,9 +109,13 @@ STRICT MCQ RULES:
   injectProgrammingLanguage(promptContent, programmingLanguage, skillName) {
     const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
     const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
-    const norm = (programmingLanguage || '').toLowerCase();
-    const languageTitle = languageMap[norm] || (programmingLanguage.charAt(0).toUpperCase() + programmingLanguage.slice(1));
-    const fenceTag = fenceTagMap[norm] || norm || 'text';
+    let norm = (programmingLanguage || 'python').toLowerCase();
+    // Strictly default to Python; never use Java unless user explicitly requested Java
+    if (norm === 'default' || !norm) {
+      norm = 'python';
+    }
+    const languageTitle = languageMap[norm] || (programmingLanguage ? (programmingLanguage.charAt(0).toUpperCase() + programmingLanguage.slice(1)) : 'Python');
+    const fenceTag = fenceTagMap[norm] || norm || 'python';
     const languageUpper = (languageMap[norm] || languageTitle).toUpperCase();
     
     let languageInjection = '';
@@ -120,15 +124,18 @@ STRICT MCQ RULES:
       case 'dsa':
       case 'interview':
         languageInjection = `\n\n## IMPLEMENTATION LANGUAGE: ${languageUpper}
-STRICT REQUIREMENTS:
-- Respond ONLY in ${languageTitle}. Do not include any snippets or alternatives in other languages.
+STRICT CODING REQUIREMENTS:
+- If the interviewer specifies a programming language directly or indirectly, use that requested language. Otherwise, default strictly to Python. NEVER use Java unless Java is explicitly and directly demanded by the interviewer.
 - All code blocks must use triple backticks with the exact language tag: \`\`\`${fenceTag}\`\`\`.
-- SIMPLEST & BASIC WAY: Implement the solution in the most simple, direct, and basic way possible while meeting the time complexity requirements. Avoid over-engineering, complex abstractions, or obscure syntax.
-- MINIMUM IMPORTS ONLY IF NEEDED: Include only the bare minimum imports strictly necessary for the code to compile and run. Never include unused imports.
-- PASS 100% OF TEST CASES: Ensure the code explicitly handles edge cases (empty inputs, single element, negative numbers, extreme boundary constraints, and 64-bit integer overflow) to guarantee passing 100% of test cases.
-- Provide: brief approach, then final comment-free ${languageTitle} implementation, followed by time/space complexity.
-- If the user's input is a problem statement (and does not include code), produce a complete, runnable ${languageTitle} solution without asking for clarification.
-- Avoid unnecessary verbosity; focus on correctness, clarity, and efficiency.`;
+- VARIABLE NAMES: Keep variable names very basic, short, and intuitive (e.g. nums, target, n, left, right, res, seen, curr).
+- ZERO EXTERNAL IMPORTS: Do not import any external libraries. Solve purely with built-in language primitives as a clean DSA problem.
+- OPTIMAL COMPLEXITY: Always deliver the most optimal time and space complexity solution.
+- LOGIC-FIRST: For logic-based questions, do not write long ceremonial code; show only the crisp core logic what the interviewer actually wants.
+- BIG DATABASE DESIGN: For database questions, ensure queries and schemas are designed for high-scale databases (indexes, no table scans).
+- NO UNSTATED EDGE CASES: Do not bloat code with defenses for undescribed or unstated edge cases.
+- STRICTLY ZERO COMMENTS: Absolutely no comments (#, //, /* */) inside code snippets. Indentation and syntax must be perfect.
+- EXPLANATION: Directly below the code snippet, provide a simple, easy-to-understand explanation of how each code block works in conversational English.
+- If the user's input is a problem statement, produce a complete, runnable ${languageTitle} solution without asking for clarification.`;
         break;
       default:
         languageInjection = `\n\n## PROGRAMMING LANGUAGE: ${languageUpper}\nAll code and examples must be in ${languageTitle}. Use code fences with tag: \`\`\`${fenceTag}\`\`\`.`;

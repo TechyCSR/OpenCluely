@@ -170,7 +170,7 @@ assert(llmServiceContent.includes('SENTENCE-TO-SAY WISE: Strictly NO bullet poin
 console.log('7. Checking Parallel Speculative Pipeline & Non-Wiping Multi-Turn UI...');
 const llmResponseHtmlPath = path.join(__dirname, '..', 'llm-response.html');
 const llmResponseHtmlContent = fs.readFileSync(llmResponseHtmlPath, 'utf8');
-assert(mainJsContent.includes('this._speculativeGraceMs = 6500'), 'main.js must define 6.5s speculative continuation grace window');
+assert(mainJsContent.includes('this._speculativeGraceMs = 3000'), 'main.js must define 3.0s speculative continuation grace window');
 assert(llmResponseHtmlContent.includes('loadingWatchdogTimer = setTimeout'), 'llm-response.html must have failsafe watchdog preventing stuck processing state');
 assert(mainJsContent.includes('_mergeQuestionFragments'), 'main.js must define _mergeQuestionFragments helper');
 assert(mainJsContent.includes('sessionManager.replaceLastUserInput'), 'main.js must replace last user input on merged question');
@@ -227,5 +227,20 @@ assert(slowRange.minWpm === 35 && slowRange.maxWpm === 50, 'Slow preset must be 
 
 assert(mainJsContent.includes('this.typingSpeed = process.env.AUTOTYPE_SPEED || "natural"'), 'main.js must initialize typingSpeed default');
 assert(mainJsContent.includes('envUpdates.AUTOTYPE_SPEED = this.typingSpeed'), 'main.js must persist AUTOTYPE_SPEED to env');
+
+// 10. Verify Python Default, Never Java, Optimal DSA, 1s Snippet Copy Dwell, and Snippet-First Rendering
+console.log('10. Checking Python Default, Optimal DSA Rules & 1s Snippet Copy...');
+assert(mainJsContent.includes('this.codingLanguage = "python"'), 'main.js must initialize codingLanguage default to python');
+assert(promptMdContent.includes('ALWAYS USE PYTHON'), 'prompts/interview.md must enforce Python default');
+assert(promptMdContent.includes('NEVER USE JAVA'), 'prompts/interview.md must enforce Never Java');
+assert(promptMdContent.includes('STRICTLY ZERO COMMENTS'), 'prompts/interview.md must enforce comment-free snippets');
+assert(llmServiceContent.includes('ALWAYS USE PYTHON. NEVER USE JAVA'), 'llm.service.js must enforce Python default and ban Java');
+assert(llmResponseHtmlContent.includes('const DWELL_MS = 1000;'), 'llm-response.html must define 1000ms hover dwell auto-copy for code snippets');
+assert(llmResponseHtmlContent.includes('// 1. Render Code Blocks FIRST with 1s Hover Copy Button'), 'llm-response.html must render code blocks first before explanation notes');
+
+const promptLoaderPath = path.join(__dirname, '..', 'prompt-loader.js');
+const promptLoaderContent = fs.readFileSync(promptLoaderPath, 'utf8');
+assert(promptLoaderContent.includes("let norm = (programmingLanguage || 'python').toLowerCase();"), 'prompt-loader.js must default programmingLanguage to python');
+assert(promptLoaderContent.includes('NEVER use Java'), 'prompt-loader.js must instruct to never use Java');
 
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');

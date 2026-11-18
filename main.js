@@ -149,8 +149,8 @@ class ApplicationController {
     this.isReady = false;
     this.starting = false;
     this.activeSkill = "interview"; // Default to Interview (Jenil Soni resume co-pilot)
-    // Default to C++ so language is enforced from first run
-    this.codingLanguage = "cpp";
+    // Default to Python (Never use Java unless explicitly asked)
+    this.codingLanguage = "python";
     this.speechAvailable = false;
     this.isMcqMode = false;
     this.isAutoHideMode = false;
@@ -192,7 +192,7 @@ class ApplicationController {
 
     // Speculative Parallel Pipeline & Grace Window
     this._speculativeState = null;
-    this._speculativeGraceMs = 6500; // 6.5s continuation window for mid-question breathing pauses
+    this._speculativeGraceMs = 3000; // 3.0s continuation window for mid-question breathing pauses
     this._speculativeGraceTimer = null;
     this._isMergedContinuation = false;
     this._lastDispatchedQuestion = null;
@@ -1968,7 +1968,7 @@ class ApplicationController {
       const sessionHistory = sessionManager.getOptimizedHistory();
 
       const imageSkill = (this.activeSkill === 'interview' || !this.activeSkill) ? 'dsa' : this.activeSkill;
-      const codingLanguage = this.codingLanguage || 'cpp';
+      const codingLanguage = this.codingLanguage || 'python';
 
       this._responseSeq = (this._responseSeq || 0) + 1;
       const messageId = `img-${Date.now()}-${this._responseSeq}`;
@@ -2497,11 +2497,10 @@ class ApplicationController {
 
     // Check if we are inside an active continuation grace window of a speculative Part 1
     const now = Date.now();
-    const isContinuationClause = /^(and|or|but|while|whereas|as well as|also|with|in terms of|specifically|how about|what about|why)\b/i.test(fragment.trim()) || /^[a-z]/.test(fragment.trim());
-    
+    // Strict 3-second grace window: treat speech as a continuation ONLY if within 3000ms.
+    // If >3 seconds pass, treat it strictly as a brand new question with top priority!
     const hasActiveSpeculativePart1 = Boolean(
-      (this._speculativeState && (now - this._speculativeState.dispatchedAt) <= this._speculativeGraceMs) ||
-      (this._lastDispatchedQuestion && (now - this._lastDispatchedQuestion.at) <= 8000 && isContinuationClause)
+      this._speculativeState && (now - this._speculativeState.dispatchedAt) <= this._speculativeGraceMs
     );
 
     if (hasActiveSpeculativePart1) {
@@ -3255,7 +3254,7 @@ class ApplicationController {
     // using. Empty strings are returned rather than skipped so the UI can
     // distinguish "unset" from "stale value from a previous load".
     return {
-      codingLanguage: this.codingLanguage || "cpp",
+      codingLanguage: this.codingLanguage || "python",
       activeSkill: this.activeSkill || "interview",
       appIcon: this.appIcon || "settings",
       selectedIcon: this.appIcon || "settings",

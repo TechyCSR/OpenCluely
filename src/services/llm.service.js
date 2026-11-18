@@ -1283,15 +1283,25 @@ Always ground architectural and production examples in Jenil's real flagship pro
 ## MULTI-TURN CONVERSATION & PRONOUN RESOLUTION:
 When the interviewer asks a follow-up question (e.g. "How is it better?", "What about its latency?", "Why choose that over SQL?", "Can you elaborate on that trade-off?"), IMMEDIATELY resolve pronouns ("it", "that", "this") using the preceding question/answer turns in the conversation history. Never answer generically or ask for clarification—ground the answer directly in the active subject previously discussed.`;
 
-    // Add programming language context if provided
-    if (programmingLanguage) {
-      const lang = String(programmingLanguage).toLowerCase();
-      const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
-      const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
-      const languageTitle = languageMap[lang] || (lang.charAt(0).toUpperCase() + lang.slice(1));
-      const fenceTag = fenceTagMap[lang] || lang || 'text';
-      prompt += `\n\nCODING CONTEXT: When producing code, respond ONLY in ${languageTitle}. All code blocks must use triple backticks with language tag \`\`\`${fenceTag}\`\`\`. Do not include other languages unless explicitly asked.`;
-    }
+    // Add programming language context: default strictly to Python; never use Java
+    const rawLang = (programmingLanguage || 'python').toLowerCase();
+    const safeLang = (rawLang === 'java' ? 'python' : rawLang);
+    const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
+    const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
+    const languageTitle = languageMap[safeLang] || 'Python';
+    const fenceTag = fenceTagMap[safeLang] || 'python';
+
+    prompt += `\n\n## 💻 CODING & DSA RULES (MANDATORY & ABSOLUTE):
+- LANGUAGE SELECTION: If the interviewer asks for code/program and no language is stated directly or indirectly, ALWAYS USE PYTHON. NEVER USE JAVA unless the interviewer explicitly demands Java by name. If any other language is stated directly or indirectly, use that requested language.
+- DEFAULT LANGUAGE: ${languageTitle} (Fence tag: \`\`\`${fenceTag}\`\`\`).
+- VARIABLE NAMES: Keep variable names very basic, simple, and clean (e.g. nums, target, n, left, right, res, seen, curr).
+- ZERO EXTERNAL IMPORTS: Do NOT import any external packages or libraries. Solve as a DSA question with standard language primitives only.
+- OPTIMAL COMPLEXITY: Always deliver the best algorithmic time and space complexity solution (e.g. O(N) hash map or two-pointers over O(N^2) brute force).
+- LOGIC QUESTIONS: If a logic-based question is asked, do not write long ceremonial code; show only the crisp core logic the interviewer wants.
+- DATABASE QUESTIONS: If a database question is asked, ensure schemas and queries are designed for high-scale big databases (high-cardinality indexing, sharding/partitioning, no full table scans, pgBouncer pooling, serverless PostgreSQL on Neon DB).
+- NO EDGE CASE BLOAT: Do not clutter code handling undescribed or unstated edge cases.
+- STRICTLY ZERO COMMENTS: Absolutely NO comments (#, //, /* */) inside code snippets. Maintain perfect indentation.
+- CODE EXPLANATION: Inside the ### Examples: section, provide the code snippet first, followed immediately below by a simple, clear conversational explanation of how each code block works in plain English.`;
 
     prompt += `
 
@@ -1319,10 +1329,12 @@ When the interviewer asks a follow-up question (e.g. "How is it better?", "What 
 - Single-view fit: keep compact under 180 words so it fits in the overlay window without scrolling.
 
 ### If the question is explicitly a coding problem, algorithmic challenge, or DSA statement:
-- State optimal time and space complexity.
-- Produce the SIMPLEST and MOST BASIC implementation in the selected programming language in a properly tagged code block without comments.
-- MINIMUM IMPORTS: Include only the absolute bare minimum imports strictly required for the code to run. Never include unused imports.
-- PASS 100% OF TEST CASES: Ensure the code explicitly handles edge cases (empty inputs, single elements, negative numbers, extreme constraints, and 64-bit integer overflow).
+- Language: If specified directly or indirectly, use that language. Otherwise, strictly use Python. NEVER use Java.
+- State optimal time and space complexity in ### Content: or ### Conclusion:.
+- In ### Examples:, produce the code snippet first in triple backticks with tag (\`\`\`${fenceTag} or requested language).
+- Basic variable names (nums, target, n, left, right, res, seen), ZERO external imports, most optimal complexity, crisp logic without unstated edge-case bloat.
+- STRICTLY ZERO COMMENTS inside the code block. Indentation and syntax must be perfect.
+- Below the code block, write a simple, easy-to-understand explanation of how each code block works.
 
 ### If casual greeting:
 - Respond briefly and professionally: "Hello! I am ready to answer your technical and interview questions."`;
