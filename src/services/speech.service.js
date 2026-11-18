@@ -1366,14 +1366,18 @@ class SpeechService extends EventEmitter {
 
   _getWhisperModelDir() {
     const configured = this._getSetting('whisperModelDir') || process.env.WHISPER_MODEL_DIR || '';
-    // Honor an absolute configured dir. Empty or relative values (the old
-    // `.whisper-models` default resolved against an unstable cwd) are replaced
-    // with the stable userData location the installer downloads weights into,
-    // so --model_dir and download_root always agree.
-    if (configured && path.isAbsolute(configured)) {
+    if (configured && path.isAbsolute(configured) && fs.existsSync(configured)) {
       return configured;
     }
-    return this._getUserDataModelDir() || configured;
+    const userDataDir = this._getUserDataModelDir();
+    if (userDataDir && fs.existsSync(userDataDir)) {
+      return userDataDir;
+    }
+    const projectDir = path.resolve(__dirname, '..', '..', '.whisper-models');
+    if (fs.existsSync(projectDir)) {
+      return projectDir;
+    }
+    return configured;
   }
 
   /**
@@ -2108,9 +2112,15 @@ class SpeechService extends EventEmitter {
       }
     }
 
+    if (!this.whisperCommand || !this.whisperCommand.command) {
+      logger.warn('No Whisper CLI fallback configured; returning empty transcript');
+      return '';
+    }
+
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sys-audio-out-'));
+    const baseArgs = Array.isArray(this.whisperCommand.baseArgs) ? this.whisperCommand.baseArgs : [];
     const args = [
-      ...this.whisperCommand.baseArgs,
+      ...baseArgs,
       audioFilePath,
       '--model', this._getWhisperModel(),
       '--task', 'transcribe',

@@ -1042,6 +1042,7 @@
                     } else if (lower.includes('waiting') || lower.includes('stopped') || lower.includes('idle')) {
                         clearSpeechProcessingWatchdog();
                         if (!isStreaming && !readyToIdleTimer) {
+                            hideLoadingState();
                             setStatus('IDLE');
                             setAlertText('Waiting for speech…');
                         }
@@ -1386,12 +1387,17 @@
 
             if (loadingWatchdogTimer) clearTimeout(loadingWatchdogTimer);
             loadingWatchdogTimer = setTimeout(() => {
+                console.warn('[INTERVIEW-UI] Loading watchdog timeout triggered; exiting loading state');
+                hideLoadingState();
                 if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
-                    console.warn('[INTERVIEW-UI] Loading watchdog timeout; restoring active answer');
-                    hideLoadingState();
                     displayStructuredAnswer(answerHistory[currentHistoryIndex]);
+                    setStatus('READY');
+                    setAlertText('Answer ready');
+                } else {
+                    setStatus('IDLE');
+                    setAlertText('Waiting for speech…');
                 }
-            }, 7500);
+            }, 8500);
         }
 
         function hideLoadingState() {
