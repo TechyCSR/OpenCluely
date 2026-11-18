@@ -30,7 +30,7 @@ signal.signal(signal.SIGTERM, sig_handler)
 
 SYSTEM = platform.system().lower()
 
-# Keyboard adjacency map for realistic QWERTY typos
+# Keyboard adjacency map for realistic QWERTY letter typos
 KEYBOARD_ADJACENT = {
     'q': 'wa', 'w': 'qes', 'e': 'wrd', 'r': 'etf', 't': 'ryg',
     'y': 'tuh', 'u': 'yij', 'i': 'uok', 'o': 'ipl', 'p': 'ol',
@@ -40,11 +40,50 @@ KEYBOARD_ADJACENT = {
     'n': 'bhjm', 'm': 'njk'
 }
 
+# Symbol & punctuation slip map (e.g. : vs ;, , vs ., bracket slips, shift slips)
+SYMBOL_TYPOS = {
+    ':': ';',
+    ';': ':',
+    ',': '.',
+    '.': ',',
+    "'": '"',
+    '"': "'",
+    '[': '{',
+    '{': '[',
+    ']': '}',
+    '}': ']',
+    '(': ')',
+    ')': '(',
+    '-': '_',
+    '_': '-',
+    '=': '+',
+    '+': '=',
+    '/': '?',
+    '?': '/',
+    '<': '>',
+    '>': '<',
+    '!': '@',
+    '@': '!',
+    '#': '$',
+    '$': '%',
+    '*': '&',
+    '&': '*'
+}
+
+DIGIT_ADJACENT = {
+    '0': '9', '1': '2', '2': '13', '3': '24', '4': '35',
+    '5': '46', '6': '57', '7': '68', '8': '79', '9': '80'
+}
+
 def get_typo_char(char):
+    if char in SYMBOL_TYPOS:
+        return SYMBOL_TYPOS[char]
     lower = char.lower()
     if lower in KEYBOARD_ADJACENT:
         typo = random.choice(KEYBOARD_ADJACENT[lower])
         return typo.upper() if char.isupper() else typo
+    if char in DIGIT_ADJACENT:
+        return random.choice(DIGIT_ADJACENT[char])
     return None
 
 def setup_macos_typer():
@@ -316,33 +355,27 @@ def get_leading_indent(line):
             break
     return count
 
-def is_safe_for_mistake(text, index, total_chars, chars_since_last_mistake, mistake_count, max_mistakes):
+def is_safe_for_mistake(action_idx, total_actions, chars_since_last_mistake, mistake_count, max_mistakes, char):
     """
     Strict safety criteria:
-    1. NEVER in final 35% or last 60 chars.
-    2. NEVER in first 10 chars.
-    3. Maximum capped (1-3 max).
-    4. At least 35 chars between mistakes.
-    5. ONLY on alphabetic letters inside a word (>=4 chars).
+    1. NEVER in final 15% or last 20 characters (ensures 100% clean, error-free finish).
+    2. NEVER in first 8 characters.
+    3. Maximum capped by dynamic budget based on text size.
+    4. At least 28 characters between mistakes (not too many mistakes).
+    5. ONLY on valid typo characters (letters, :, ;, brackets, symbols), never on whitespace.
     """
-    if index >= int(total_chars * 0.65) or (total_chars - index) <= 60:
+    if action_idx >= int(total_actions * 0.85) or (total_actions - action_idx) <= 20:
         return False
-    if index < 10:
+    if action_idx < 8:
         return False
     if mistake_count >= max_mistakes:
         return False
-    if chars_since_last_mistake < 35:
+    if chars_since_last_mistake < 28:
         return False
-
-    char = text[index]
-    if not char.isalpha() or ord(char) > 127:
+    if char in ' \t\r\n':
         return False
-
-    prev_c = text[index - 1] if index > 0 else ' '
-    next_c = text[index + 1] if index < total_chars - 1 else ' '
-    if not prev_c.isalpha() or not next_c.isalpha():
+    if get_typo_char(char) is None:
         return False
-
     return True
 
 def main():
@@ -458,56 +491,149 @@ def main():
     prev_char = ''
     chars_since_last_mistake = 25
     chars_since_last_pause = 0
+    chars_since_last_long_pause = 20
     mistake_count = 0
-    max_mistakes = min(3, max(1, total_chars // 300))
-    action_index = 0
 
-    for action_type, payload in typing_actions:
+    # Dynamic mistake budget according to size:
+    # "not too much. and randomly. dynamic randomness according to size."
+    if total_chars < 40:
+        max_mistakes = 0
+    elif total_chars < 120:
+        max_mistakes = 1
+    elif total_chars < 280:
+        max_mistakes = random.choice([1, 2])
+    else:
+        max_mistakes = min(4, max(2, total_chars // 180))
+
+    # Dynamic random word pause budget (max 6 seconds, dynamic randomness by size, no too many pauses)
+    if total_chars < 80:
+        pause_budget = 0
+    elif total_chars < 220:
+        pause_budget = 1
+    elif total_chars < 450:
+        pause_budget = random.choice([1, 2])
+    else:
+        pause_budget = random.choice([2, 3])
+
+    action_idx = 0
+
+    while action_idx < total_actions:
         if IS_CANCELLED:
             sys.stdout.write(json.dumps({
                 "event": "stopped",
-                "index": action_index,
+                "index": action_idx,
                 "total": total_actions
             }) + "\n")
             sys.stdout.flush()
             return
 
-        action_index += 1
+        action_type, payload = typing_actions[action_idx]
 
         if action_type == 'UNINDENT':
             # Payload is backspace count (pure keycode 51, flags = 0)
             for _ in range(payload):
                 press_backspace(1)
                 time.sleep(0.035)
+            action_idx += 1
             continue
 
         if action_type == 'NEWLINE':
             type_char('\n')
             time.sleep(random.uniform(0.12, 0.22))
             prev_char = '\n'
+            action_idx += 1
+            chars_since_last_pause += 1
+            chars_since_last_long_pause += 1
+
+            # Check for random pause after words / lines (max 6 seconds)
+            if pause_budget > 0 and chars_since_last_long_pause >= 40 and action_idx < (total_actions - 15):
+                if random.random() < 0.12:
+                    pause_sec = random.uniform(1.5, 5.8)  # max 6 seconds
+                    time.sleep(pause_sec)
+                    pause_budget -= 1
+                    chars_since_last_long_pause = 0
             continue
 
         # Single character typing
         char = payload
         chars_since_last_mistake += 1
         chars_since_last_pause += 1
+        chars_since_last_long_pause += 1
 
-        # ── Realistic Controlled Mistake (middle body only, never in final 35%) ──
-        if enable_mistakes and is_safe_for_mistake(text, action_index, total_actions, chars_since_last_mistake, mistake_count, max_mistakes):
-            if random.random() < 0.022:
+        # ── Realistic Controlled Mistake (letter, symbol :, ;, brackets, etc.) ──
+        if enable_mistakes and is_safe_for_mistake(action_idx, total_actions, chars_since_last_mistake, mistake_count, max_mistakes, char):
+            if random.random() < 0.045:
                 typo_char = get_typo_char(char)
                 if typo_char and typo_char != char:
-                    try:
-                        type_char(typo_char)
-                        time.sleep(random.uniform(0.15, 0.26))
-                        press_backspace(1)
-                        time.sleep(random.uniform(0.08, 0.16))
-                        chars_since_last_mistake = 0
-                        mistake_count += 1
-                    except Exception as e:
-                        sys.stderr.write(f"Mistake simulation error: {e}\n")
+                    mistake_count += 1
+                    chars_since_last_mistake = 0
 
-        # Type character
+                    # Decide whether to correct immediately (~50%) or continue writing 1-3 letters then backtrack (~50%)
+                    subsequent_chars = []
+                    k_cand = random.choice([1, 2, 3])
+                    can_continue = True
+                    for offset in range(1, k_cand + 1):
+                        look_idx = action_idx + offset
+                        if look_idx < total_actions and typing_actions[look_idx][0] == 'CHAR':
+                            subsequent_chars.append(typing_actions[look_idx][1])
+                        else:
+                            can_continue = False
+                            break
+
+                    if can_continue and len(subsequent_chars) > 0 and (action_idx + len(subsequent_chars)) < (total_actions - 10) and random.random() < 0.50:
+                        # ── Mode B: Continue writing 1-3 letters, then go back, correct and rewrite ──
+                        try:
+                            # 1. Type the typo character
+                            type_char(typo_char)
+                            time.sleep(random.uniform(0.06, 0.14))
+
+                            # 2. Continue typing 1-3 subsequent characters as if unaware of typo
+                            for sub_c in subsequent_chars:
+                                type_char(sub_c)
+                                d, _ = calculate_delay(sub_c, prev_char, min_wpm, max_wpm)
+                                time.sleep(d)
+
+                            # 3. Realization pause: user notices the typo
+                            time.sleep(random.uniform(0.24, 0.52))
+
+                            # 4. Backspace all subsequent characters PLUS the typo
+                            total_to_erase = len(subsequent_chars) + 1
+                            for _ in range(total_to_erase):
+                                press_backspace(1)
+                                time.sleep(random.uniform(0.035, 0.065))
+
+                            # 5. Brief recovery pause before retyping correctly
+                            time.sleep(random.uniform(0.12, 0.24))
+
+                            # 6. Type the original intended character correctly
+                            type_char(char)
+                            d, cur_wpm = calculate_delay(char, prev_char, min_wpm, max_wpm)
+                            time.sleep(d)
+
+                            # 7. Retype the subsequent characters correctly
+                            retype_prev = char
+                            for sub_c in subsequent_chars:
+                                type_char(sub_c)
+                                d, cur_wpm = calculate_delay(sub_c, retype_prev, min_wpm, max_wpm)
+                                time.sleep(d)
+                                retype_prev = sub_c
+
+                            prev_char = subsequent_chars[-1]
+                            action_idx += (1 + len(subsequent_chars))
+                            continue
+                        except Exception as e:
+                            sys.stderr.write(f"Delayed mistake simulation error: {e}\n")
+                    else:
+                        # ── Mode A: Immediate correction ──
+                        try:
+                            type_char(typo_char)
+                            time.sleep(random.uniform(0.14, 0.26))
+                            press_backspace(1)
+                            time.sleep(random.uniform(0.08, 0.16))
+                        except Exception as e:
+                            sys.stderr.write(f"Immediate mistake simulation error: {e}\n")
+
+        # Type character normally
         try:
             type_char(char)
         except Exception as e:
@@ -515,32 +641,37 @@ def main():
 
         delay, current_wpm = calculate_delay(char, prev_char, min_wpm, max_wpm)
 
-        # ── Cognitive Pauses ──
-        if char in '.!?\n' and chars_since_last_pause > 12:
+        # ── Random Pause after words (max 6 seconds, dynamic randomness by size, no too many pauses) ──
+        if char == ' ' and pause_budget > 0 and chars_since_last_long_pause >= 45 and action_idx >= 15 and action_idx < (total_actions - 20):
+            if random.random() < 0.08:
+                pause_sec = random.uniform(1.5, 5.8)  # max 6 seconds randomly
+                delay += pause_sec
+                pause_budget -= 1
+                chars_since_last_long_pause = 0
+        elif char in '.!?\n' and chars_since_last_pause > 12:
             if random.random() < 0.15:
-                delay += random.uniform(0.30, 0.60)
+                delay += random.uniform(0.25, 0.50)
                 chars_since_last_pause = 0
-        elif chars_since_last_pause > 40 and random.random() < 0.02:
-            delay += random.uniform(0.35, 0.65)
-            chars_since_last_pause = 0
+
+        action_idx += 1
 
         # ── Live ETA & Progress ──
         elapsed = time.time() - start_time
-        percent = int(round((action_index / float(total_actions)) * 100))
-        remaining = total_actions - action_index
+        percent = int(round((action_idx / float(total_actions)) * 100))
+        remaining = total_actions - action_idx
 
-        if action_index > 0 and elapsed > 0:
-            cps = action_index / elapsed
+        if action_idx > 0 and elapsed > 0:
+            cps = action_idx / elapsed
             eta_seconds = max(0, int(math.ceil(remaining / cps))) if cps > 0 else 0
         else:
             eta_seconds = max(0, initial_eta_sec - int(elapsed))
 
         eta_text = format_eta(eta_seconds)
 
-        if action_index % 3 == 0 or action_index == total_actions:
+        if action_idx % 3 == 0 or action_idx == total_actions:
             sys.stdout.write(json.dumps({
                 "event": "progress",
-                "index": action_index,
+                "index": action_idx,
                 "total": total_actions,
                 "percent": percent,
                 "wpm": round(current_wpm, 1),

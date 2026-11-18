@@ -243,4 +243,29 @@ const promptLoaderContent = fs.readFileSync(promptLoaderPath, 'utf8');
 assert(promptLoaderContent.includes("let norm = (programmingLanguage || 'python').toLowerCase();"), 'prompt-loader.js must default programmingLanguage to python');
 assert(promptLoaderContent.includes('NEVER use Java'), 'prompt-loader.js must instruct to never use Java');
 
+// 11. Verify Human Typer Mistakes, Symbol Slips, Continued-Writing Backtrack, Word Pauses & Window Collision Resolution
+console.log('11. Checking Human Typer Mistakes, Word Pauses & Window Collision Resolution...');
+const typerPyPath = path.join(__dirname, '..', 'scripts', 'human_typer.py');
+const typerPyContent = fs.readFileSync(typerPyPath, 'utf8');
+assert(typerPyContent.includes('SYMBOL_TYPOS = {'), 'human_typer.py must define SYMBOL_TYPOS for :, ;, and symbol mistakes');
+assert(typerPyContent.includes("':': ';'"), 'human_typer.py must include : vs ; typo');
+assert(typerPyContent.includes('subsequent_chars = []'), 'human_typer.py must implement continue writing lookahead');
+assert(typerPyContent.includes('total_to_erase = len(subsequent_chars) + 1'), 'human_typer.py must backtrack and erase subsequent chars plus typo');
+assert(typerPyContent.includes('pause_sec = random.uniform(1.5, 5.8)'), 'human_typer.py must take random word pauses up to 6 seconds');
+
+const typerSwiftPath = path.join(__dirname, '..', 'scripts', 'native_typer.swift');
+const typerSwiftContent = fs.readFileSync(typerSwiftPath, 'utf8');
+assert(typerSwiftContent.includes('let symbolTypos: [Character: Character] = ['), 'native_typer.swift must define symbolTypos');
+assert(typerSwiftContent.includes('":": ";"'), 'native_typer.swift must include : vs ; typo');
+assert(typerSwiftContent.includes('var subsequentChars: [Character] = []'), 'native_typer.swift must implement continue writing lookahead');
+assert(typerSwiftContent.includes('let pauseSec = Double.random(in: 1.5...5.8)'), 'native_typer.swift must implement random word pauses up to 6s');
+
+const windowManagerPath = path.join(__dirname, '..', 'src', 'managers', 'window.manager.js');
+const windowManagerContent = fs.readFileSync(windowManagerPath, 'utf8');
+assert(windowManagerContent.includes('// 8px below workArea bounds (right beneath MacBook notch / webcam bezel)'), 'window.manager.js must position LLM window right below webcam');
+assert(windowManagerContent.includes('Math.round(displayX + (screenWidth - targetW) / 2)'), 'window.manager.js must center LLM window horizontally');
+assert(windowManagerContent.includes('// Check collision / overlap between LLM response window and Cluely bar'), 'window.manager.js must check collision between Cluely bar and interview window');
+assert(windowManagerContent.includes('moving Cluely bar down below interview window'), 'window.manager.js must log moving Cluely bar down when resolving overlap');
+assert(windowManagerContent.includes('mainWindow.setPosition(mainBounds.x, safeMainY)'), 'window.manager.js must set Cluely bar position cleanly below interview window');
+
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');

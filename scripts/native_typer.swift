@@ -24,11 +24,30 @@ let keyboardAdjacent: [Character: String] = [
     "n": "bhjm", "m": "njk"
 ]
 
+let symbolTypos: [Character: Character] = [
+    ":": ";", ";": ":", ",": ".", ".": ",", "'": "\"", "\"": "'",
+    "[": "{", "{": "[", "]": "}", "}": "]", "(": ")", ")": "(",
+    "-": "_", "_": "-", "=": "+", "+": "=", "/": "?", "?": "/",
+    "<": ">", ">": "<", "!": "@", "@": "!", "#": "$", "$": "%",
+    "*": "&", "&": "*"
+]
+
+let digitAdjacent: [Character: String] = [
+    "0": "9", "1": "2", "2": "13", "3": "24", "4": "35",
+    "5": "46", "6": "57", "7": "68", "8": "79", "9": "80"
+]
+
 func getTypoChar(_ char: Character) -> Character? {
+    if let sym = symbolTypos[char] {
+        return sym
+    }
     let lower = Character(char.lowercased())
     if let adj = keyboardAdjacent[lower], !adj.isEmpty {
         let randChar = adj.randomElement()!
         return char.isUppercase ? Character(randChar.uppercased()) : randChar
+    }
+    if let dig = digitAdjacent[char], !dig.isEmpty {
+        return dig.randomElement()!
     }
     return nil
 }
@@ -236,25 +255,142 @@ func main() {
     let totalActions = typingActions.count
     var prevChar: Character = " "
     var actionIndex = 0
+    var charsSinceLastMistake = 25
+    var charsSinceLastLongPause = 20
+    var mistakeCount = 0
 
-    for action in typingActions {
+    let maxMistakes: Int
+    if totalChars < 40 { maxMistakes = 0 }
+    else if totalChars < 120 { maxMistakes = 1 }
+    else if totalChars < 280 { maxMistakes = Int.random(in: 1...2) }
+    else { maxMistakes = min(4, max(2, totalChars / 180)) }
+
+    var pauseBudget: Int
+    if totalChars < 80 { pauseBudget = 0 }
+    else if totalChars < 220 { pauseBudget = 1 }
+    else if totalChars < 450 { pauseBudget = Int.random(in: 1...2) }
+    else { pauseBudget = Int.random(in: 2...3) }
+
+    while actionIndex < totalActions {
         if isCancelled {
             print("{\"event\":\"stopped\",\"index\":\(actionIndex),\"total\":\(totalActions)}")
             return
         }
 
-        actionIndex += 1
+        let action = typingActions[actionIndex]
 
         switch action {
         case .unindent(let count):
             pressBackspace(count)
+            actionIndex += 1
         case .newline:
             typeChar("\n")
             Thread.sleep(forTimeInterval: Double.random(in: 0.12...0.22))
             prevChar = "\n"
+            actionIndex += 1
+            charsSinceLastLongPause += 1
+            if pauseBudget > 0 && charsSinceLastLongPause >= 40 && actionIndex < (totalActions - 15) {
+                if Double.random(in: 0...1) < 0.12 {
+                    let pauseSec = Double.random(in: 1.5...5.8)
+                    Thread.sleep(forTimeInterval: pauseSec)
+                    pauseBudget -= 1
+                    charsSinceLastLongPause = 0
+                }
+            }
         case .char(let char):
+            charsSinceLastMistake += 1
+            charsSinceLastLongPause += 1
+
+            let canMistake = (
+                mistakeCount < maxMistakes &&
+                charsSinceLastMistake >= 28 &&
+                actionIndex >= 8 &&
+                actionIndex < (totalActions - 20) &&
+                char != " " && char != "\t" && char != "\n"
+            )
+
+            let typoChar = canMistake ? getTypoChar(char) : nil
+
+            if let typo = typoChar, typo != char, Double.random(in: 0...1) < 0.045 {
+                mistakeCount += 1
+                charsSinceLastMistake = 0
+
+                var subsequentChars: [Character] = []
+                let kCand = Int.random(in: 1...3)
+                var canContinue = true
+                for offset in 1...kCand {
+                    let lookIdx = actionIndex + offset
+                    if lookIdx < totalActions {
+                        if case .char(let subC) = typingActions[lookIdx] {
+                            subsequentChars.append(subC)
+                        } else {
+                            canContinue = false
+                            break
+                        }
+                    } else {
+                        canContinue = false
+                        break
+                    }
+                }
+
+                if canContinue && !subsequentChars.isEmpty && (actionIndex + subsequentChars.count) < (totalActions - 10) && Double.random(in: 0...1) < 0.50 {
+                    // Mode B: Continue writing then backtrack and rewrite
+                    typeChar(typo)
+                    Thread.sleep(forTimeInterval: Double.random(in: 0.06...0.14))
+
+                    for subC in subsequentChars {
+                        typeChar(subC)
+                        let (d, _) = calculateDelay(char: subC, prevChar: prevChar, minWpm: minWpm, maxWpm: maxWpm)
+                        Thread.sleep(forTimeInterval: d)
+                    }
+
+                    Thread.sleep(forTimeInterval: Double.random(in: 0.24...0.52))
+
+                    let totalToErase = subsequentChars.count + 1
+                    for _ in 0..<totalToErase {
+                        pressBackspace(1)
+                        Thread.sleep(forTimeInterval: Double.random(in: 0.035...0.065))
+                    }
+
+                    Thread.sleep(forTimeInterval: Double.random(in: 0.12...0.24))
+
+                    typeChar(char)
+                    let (dCorrect, _) = calculateDelay(char: char, prevChar: prevChar, minWpm: minWpm, maxWpm: maxWpm)
+                    Thread.sleep(forTimeInterval: dCorrect)
+
+                    var retypePrev = char
+                    for subC in subsequentChars {
+                        typeChar(subC)
+                        let (dSub, _) = calculateDelay(char: subC, prevChar: retypePrev, minWpm: minWpm, maxWpm: maxWpm)
+                        Thread.sleep(forTimeInterval: dSub)
+                        retypePrev = subC
+                    }
+
+                    prevChar = subsequentChars.last ?? char
+                    actionIndex += (1 + subsequentChars.count)
+                    continue
+                } else {
+                    // Mode A: Immediate correction
+                    typeChar(typo)
+                    Thread.sleep(forTimeInterval: Double.random(in: 0.14...0.26))
+                    pressBackspace(1)
+                    Thread.sleep(forTimeInterval: Double.random(in: 0.08...0.16))
+                }
+            }
+
             typeChar(char)
-            let (delay, currentWpm) = calculateDelay(char: char, prevChar: prevChar, minWpm: minWpm, maxWpm: maxWpm)
+            var (delay, currentWpm) = calculateDelay(char: char, prevChar: prevChar, minWpm: minWpm, maxWpm: maxWpm)
+
+            if char == " " && pauseBudget > 0 && charsSinceLastLongPause >= 45 && actionIndex >= 15 && actionIndex < (totalActions - 20) {
+                if Double.random(in: 0...1) < 0.08 {
+                    let pauseSec = Double.random(in: 1.5...5.8)
+                    delay += pauseSec
+                    pauseBudget -= 1
+                    charsSinceLastLongPause = 0
+                }
+            }
+
+            actionIndex += 1
 
             let elapsed = Date().timeIntervalSince(startTime)
             let percent = Int(round((Double(actionIndex) / Double(totalActions)) * 100))

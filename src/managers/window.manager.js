@@ -220,6 +220,7 @@ class WindowManager {
     
     this.isVisible = true;
     logger.info('Main window displayed');
+    this.checkAndResolveWindowOverlap();
     // Notify renderer to refresh speech availability
     mainWindow.webContents.send('main-window-shown', {});
   }
@@ -836,10 +837,11 @@ class WindowManager {
     const llmWindow = this.windows.get('llmResponse');
     if (!llmWindow || llmWindow.isDestroyed()) return;
 
-    // Respect custom drag-and-drop location if user placed the window
+    // Respect custom drag-and-drop location if user explicitly placed the window during active interaction
     if (this.hasUserMovedLLMWindow && this.userPositions['llmResponse']) {
       const { x, y } = this.userPositions['llmResponse'];
       try { llmWindow.setPosition(x, y); } catch (_) {}
+      this.checkAndResolveWindowOverlap();
       return;
     }
 
@@ -886,9 +888,11 @@ class WindowManager {
     }
 
     let startX, startY;
+    const [llmWidth, llmHeight] = (llmWindow && !llmWindow.isDestroyed()) ? llmWindow.getSize() : [780, 360];
+    const llmBottom = displayY + 8 + llmHeight;
     
     if (this.hasUserMovedBoundWindows && this.boundWindowsPosition && typeof this.boundWindowsPosition.x === 'number') {
-      // Respect user's custom placed position!
+      // Respect user's custom placed position
       startX = this.boundWindowsPosition.x;
       startY = this.boundWindowsPosition.y;
     } else if (this.userPositions['main']) {
@@ -897,12 +901,18 @@ class WindowManager {
       this.hasUserMovedBoundWindows = true;
       this.boundWindowsPosition = { x: startX, y: startY };
     } else {
-      // Default main toolbar placed neatly below the response window at center
-      const [llmWidth, llmHeight] = llmWindow && !llmWindow.isDestroyed() ? llmWindow.getSize() : [760, 280];
+      // Default Cluely bar placed neatly below the response window at center
       startX = displayX + Math.round((screenWidth - mainWidth) / 2);
-      startY = displayY + 8 + llmHeight + 10;
+      startY = llmBottom + 12;
       this.boundWindowsPosition = { x: startX, y: startY };
       this.userPositions['main'] = { x: startX, y: startY };
+    }
+
+    // Crucial: Cluely bar and interview window must not overlap! Move Cluely bar down if it does
+    if (llmWindow && !llmWindow.isDestroyed() && (llmWindow.isVisible() || this.isLLMWindowOpen)) {
+      if (startY < llmBottom + 12) {
+        startY = llmBottom + 12;
+      }
     }
     
     const mainX = Math.round(startX);
@@ -910,7 +920,9 @@ class WindowManager {
     mainWindow.setPosition(mainX, mainY);
     
     this.userPositions['main'] = { x: mainX, y: mainY };
+    this.boundWindowsPosition = { x: mainX, y: mainY };
     this.debouncedSaveWindowState();
+    this.checkAndResolveWindowOverlap();
     
     logger.debug('Positioned bound windows', {
       mainPosition: `${mainX},${mainY}`,
@@ -1824,7 +1836,7 @@ class WindowManager {
     const llmWindow = this.windows.get('llmResponse');
     if (!mainWindow || mainWindow.isDestroyed() || !llmWindow || llmWindow.isDestroyed()) return;
 
-    if (!llmWindow.isVisible()) {
+    if (!llmWindow.isVisible() && !this.isLLMWindowOpen) {
       if (this._mainWasHiddenByOverlap) {
         mainWindow.setOpacity(this.currentOpacity !== undefined ? this.currentOpacity : 0.95);
         this._mainWasHiddenByOverlap = false;
@@ -1834,34 +1846,41 @@ class WindowManager {
 
     const mainBounds = mainWindow.getBounds();
     const llmBounds = llmWindow.getBounds();
+    const display = screen.getDisplayMatching(llmBounds) || this.currentDisplay || screen.getPrimaryDisplay();
+    const { x: displayX, y: displayY, width: screenWidth, height: screenHeight } = display.workArea;
 
     // Check collision / overlap between LLM response window and Cluely bar
-    const overlaps = (
-      mainBounds.x < llmBounds.x + llmBounds.width &&
-      mainBounds.x + mainBounds.width > llmBounds.x &&
-      mainBounds.y < llmBounds.y + llmBounds.height &&
-      mainBounds.y + mainBounds.height > llmBounds.y
+    const horizontalOverlap = (
+      mainBounds.x < (llmBounds.x + llmBounds.width) &&
+      (mainBounds.x + mainBounds.width) > llmBounds.x
     );
 
-    if (overlaps) {
-      const display = this.currentDisplay || screen.getPrimaryDisplay();
-      const { y: displayY, height: screenHeight } = display.workArea;
-      const targetMainY = llmBounds.y + llmBounds.height + 10;
+    // Target Y: neatly positioned directly below the interview window with clean 12px margin
+    const targetMainY = Math.round(llmBounds.y + llmBounds.height + 12);
+    const verticalConflict = (mainBounds.y < targetMainY && (mainBounds.y + mainBounds.height) > llmBounds.y);
 
-      if (targetMainY + mainBounds.height <= displayY + screenHeight) {
-        // Sufficient vertical screen space: adjust Cluely bar position cleanly below
-        mainWindow.setPosition(mainBounds.x, targetMainY);
-        this.boundWindowsPosition = { x: mainBounds.x, y: targetMainY };
-        this.userPositions['main'] = { x: mainBounds.x, y: targetMainY };
+    if (horizontalOverlap && verticalConflict) {
+      logger.info('Resolving window overlap: moving Cluely bar down below interview window', {
+        llmBottom: llmBounds.y + llmBounds.height,
+        oldMainY: mainBounds.y,
+        newMainY: targetMainY
+      });
+
+      // Ensure the Cluely bar stays within screen workArea bounds at the bottom
+      const safeMainY = Math.min(targetMainY, displayY + screenHeight - mainBounds.height - 6);
+      
+      this._isProgrammaticMoving = true;
+      try {
+        mainWindow.setPosition(mainBounds.x, safeMainY);
         if (this._mainWasHiddenByOverlap) {
           mainWindow.setOpacity(this.currentOpacity !== undefined ? this.currentOpacity : 0.95);
           this._mainWasHiddenByOverlap = false;
         }
-      } else {
-        // In tight vertical screen space: make Cluely bar invisible while answer window is open
-        mainWindow.setOpacity(0);
-        this._mainWasHiddenByOverlap = true;
+      } finally {
+        setTimeout(() => { this._isProgrammaticMoving = false; }, 120);
       }
+      this.boundWindowsPosition = { x: mainBounds.x, y: safeMainY };
+      this.userPositions['main'] = { x: mainBounds.x, y: safeMainY };
     } else if (this._mainWasHiddenByOverlap) {
       mainWindow.setOpacity(this.currentOpacity !== undefined ? this.currentOpacity : 0.95);
       this._mainWasHiddenByOverlap = false;
