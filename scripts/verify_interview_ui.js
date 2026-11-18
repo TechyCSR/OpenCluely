@@ -151,7 +151,11 @@ assert(speechServiceContent.includes('return 280; // Fast end-of-speech flush'),
 
 const mainJsPath = path.join(__dirname, '..', 'main.js');
 const mainJsContent = fs.readFileSync(mainJsPath, 'utf8');
-assert(mainJsContent.includes('isQuestionMark ? 220 : (isOtherPunctuation ? 300 : 420)'), 'main.js must have 220ms question debounce');
+assert(mainJsContent.includes('isQuestionMark ? 150 : (isOtherPunctuation ? 220 : 350)'), 'main.js must have 150ms question debounce');
+
+const workerPyPath = path.join(__dirname, '..', 'scripts', 'whisper_worker.py');
+const workerPyContent = fs.readFileSync(workerPyPath, 'utf8');
+assert(workerPyContent.includes('beam_size=1'), 'whisper_worker.py must use greedy beam_size=1 decoding');
 
 const promptMdPath = path.join(__dirname, '..', 'prompts', 'interview.md');
 const promptMdContent = fs.readFileSync(promptMdPath, 'utf8');

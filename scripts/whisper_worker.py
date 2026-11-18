@@ -9,20 +9,13 @@ import numpy as np
 import torch
 import whisper
 
-# Resource Governance: Cap CPU thread usage to avoid starving video conference,
-# camera encoding, or interview browser audio/video pipelines.
+# Resource Governance: Cap CPU thread usage to up to 4 performance cores
+# for sub-second Whisper inference without starving browser/system audio.
 try:
-    num_threads = min(4, max(2, (os.cpu_count() or 4) // 2))
+    num_threads = min(4, os.cpu_count() or 4)
     torch.set_num_threads(num_threads)
     if hasattr(torch, 'set_num_interop_threads'):
         torch.set_num_interop_threads(1)
-except Exception:
-    pass
-
-# Lower process priority so interview/browser always gets priority scheduling
-try:
-    if hasattr(os, 'nice'):
-        os.nice(10)
 except Exception:
     pass
 
@@ -120,11 +113,14 @@ def transcribe(request):
     if language in ('auto', 'detect'):
         language = None
 
+    # Ultra-low latency transcription: beam_size=1 and best_of=1 for greedy decoding
     result = loaded_model.transcribe(
         load_audio_input(request['audio_path']),
         language=language,
         task='transcribe',
         fp16=device == 'cuda',
+        beam_size=1,
+        best_of=1,
         verbose=None,
         temperature=0,
         condition_on_previous_text=False,
@@ -162,7 +158,19 @@ for raw_line in sys.stdin:
         if action == 'transcribe':
             send({'id': request_id, 'ok': True, **transcribe(request)})
         elif action == 'warmup':
-            _, device = ensure_model(request)
+            loaded_model, device = ensure_model(request)
+            # Run a brief 1-second dummy warmup pass so PyTorch JIT kernels and buffers are pre-compiled in RAM
+            try:
+                loaded_model.transcribe(
+                    np.zeros(16000, dtype=np.float32),
+                    language='en',
+                    fp16=device == 'cuda',
+                    beam_size=1,
+                    best_of=1,
+                    condition_on_previous_text=False
+                )
+            except Exception:
+                pass
             send({
                 'id': request_id,
                 'ok': True,

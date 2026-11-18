@@ -961,17 +961,17 @@ class SpeechService extends EventEmitter {
     const floor = this._getVadEnergyFloor();
     // Seed / adapt the background noise floor while not actively speaking so
     // the threshold tracks the room rather than a hard-coded constant.
-    // Clamp to a strict ceiling so loud speech or system audio NEVER drives
-    // the noise floor up and permanently blinds VAD on subsequent questions.
-    const maxNoiseCeiling = Math.max(floor * 1.5, 0.0035);
+    const maxNoiseCeiling = Math.max(floor * 1.5, 0.005);
     if (!this.vadNoiseInit) {
       this.vadNoiseFloor = Math.min(energy, maxNoiseCeiling);
       this.vadNoiseInit = true;
     }
-    // Hysteresis with bounded enter threshold:
-    // Ensure enterThreshold NEVER exceeds 0.005 so normal speech always triggers onset
-    const enterThreshold = Math.min(0.005, Math.max(floor, this.vadNoiseFloor * 1.8));
-    const exitThreshold = Math.max(floor * 0.5, this.vadNoiseFloor * 1.2);
+    // Dynamic hysteresis:
+    // enterThreshold: onset triggers when energy exceeds noise floor by 50% and meets calibrated floor
+    const enterThreshold = Math.min(0.006, Math.max(floor, this.vadNoiseFloor * 1.5));
+    // exitThreshold: silence detected when energy drops toward noise floor or below calibrated floor
+    // This ensures ambient hiss / speaker noise (0.0015-0.0028) is immediately recognized as silence!
+    const exitThreshold = Math.max(floor * 0.85, this.vadNoiseFloor * 1.2);
     const isVoiced = this.vadSpeaking ? energy >= exitThreshold : energy >= enterThreshold;
 
     if (!this.vadSpeaking) {
@@ -1356,7 +1356,7 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperModel() {
-    return this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'small';
+    return this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'base';
   }
 
   _getWhisperModelDir() {
@@ -1425,7 +1425,7 @@ class SpeechService extends EventEmitter {
   }
 
   _getMaxUtteranceMs() {
-    return this._vadNumber('whisperMaxUtteranceMs', 'WHISPER_MAX_UTTERANCE_MS', 'speech.whisper.maxUtteranceMs', 15000, 2000);
+    return this._vadNumber('whisperMaxUtteranceMs', 'WHISPER_MAX_UTTERANCE_MS', 'speech.whisper.maxUtteranceMs', 7500, 2000);
   }
 
   _getPreRollMs() {
@@ -1434,9 +1434,9 @@ class SpeechService extends EventEmitter {
 
   _getVadEnergyFloor() {
     if (this.runtimeSettings.audioSourceMode === 'system') {
-      return 0.0015; // Ultra-sensitive floor for internal device audio capture
+      return 0.0035; // Calibrated floor for system audio stream (eliminates false continuous speech)
     }
-    return this._vadNumber('whisperVadEnergyFloor', 'WHISPER_VAD_ENERGY_FLOOR', 'speech.whisper.vadEnergyFloor', 0.004, 0.0005);
+    return this._vadNumber('whisperVadEnergyFloor', 'WHISPER_VAD_ENERGY_FLOOR', 'speech.whisper.vadEnergyFloor', 0.0045, 0.001);
   }
 
   _getSetting(key) {
@@ -2031,7 +2031,7 @@ class SpeechService extends EventEmitter {
           device: this._getWhisperDevice()
         });
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Whisper worker transcription timed out after 10000ms')), 10000);
+          setTimeout(() => reject(new Error('Whisper worker transcription timed out after 25000ms')), 25000);
         });
         const result = await Promise.race([transcribePromise, timeoutPromise]);
         logger.info('Persistent Whisper transcription completed', {
