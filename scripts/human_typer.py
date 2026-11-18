@@ -316,8 +316,8 @@ def get_typer_drivers():
     else:
         return setup_linux_typer()
 
-def calculate_delay(char, prev_char, min_wpm=50.0, max_wpm=70.0):
-    """Calculate organic human delay per keystroke (default 50 - 70 WPM)"""
+def calculate_delay(char, prev_char, min_wpm=20.0, max_wpm=50.0):
+    """Calculate organic human delay per keystroke (default 20 - 50 WPM)"""
     current_wpm = random.uniform(min_wpm, max_wpm)
     base_delay = 60.0 / (current_wpm * 5.0)
 
@@ -382,8 +382,9 @@ def main():
     global IS_CANCELLED
 
     text = ""
-    min_wpm = 50.0
-    max_wpm = 70.0
+    speed_mode = "super_slow_mix"
+    min_wpm = 20.0
+    max_wpm = 50.0
     start_delay = 0.25
     enable_mistakes = True
 
@@ -394,8 +395,9 @@ def main():
                 raw = sys.stdin.read()
                 data = json.loads(raw)
                 text = data.get('text', '')
-                min_wpm = float(data.get('min_wpm', 50.0))
-                max_wpm = float(data.get('max_wpm', 70.0))
+                speed_mode = str(data.get('speed_mode', 'super_slow_mix')).lower()
+                min_wpm = float(data.get('min_wpm', 20.0))
+                max_wpm = float(data.get('max_wpm', 50.0))
                 start_delay = float(data.get('start_delay', 0.25))
                 enable_mistakes = bool(data.get('enable_mistakes', True))
             except Exception as e:
@@ -404,7 +406,10 @@ def main():
         else:
             text = arg
             if len(sys.argv) > 2:
-                min_wpm = float(sys.argv[2])
+                try:
+                    min_wpm = float(sys.argv[2])
+                except ValueError:
+                    speed_mode = sys.argv[2].lower()
             if len(sys.argv) > 3:
                 max_wpm = float(sys.argv[3])
 
@@ -515,6 +520,16 @@ def main():
     else:
         pause_budget = random.choice([2, 3])
 
+    is_super_slow_mix = (
+        speed_mode in ['super_slow_mix', 'dynamic_slow', 'mixed_slow'] or
+        (min_wpm <= 22.0 and max_wpm >= 48.0)
+    )
+    # Regime definitions:
+    # 1. Super Slow: 20.0 - 32.0 WPM (new, slower than Slow & Deliberate)
+    # 2. Slow & Deliberate: 35.0 - 50.0 WPM
+    active_regime = random.choice(['super_slow', 'slow_deliberate'])
+    regime_chars_left = random.randint(12, 28)
+
     action_idx = 0
 
     while action_idx < total_actions:
@@ -560,6 +575,19 @@ def main():
         chars_since_last_pause += 1
         chars_since_last_long_pause += 1
 
+        # Dynamic regime switching between Super Slow (20-32 WPM) and Slow & Deliberate (35-50 WPM)
+        if is_super_slow_mix:
+            regime_chars_left -= 1
+            if regime_chars_left <= 0 or (char in ' \t\n' and random.random() < 0.35):
+                active_regime = 'slow_deliberate' if active_regime == 'super_slow' else 'super_slow'
+                regime_chars_left = random.randint(14, 32)
+            if active_regime == 'super_slow':
+                curr_min_wpm, curr_max_wpm = 20.0, 32.0
+            else:
+                curr_min_wpm, curr_max_wpm = 35.0, 50.0
+        else:
+            curr_min_wpm, curr_max_wpm = min_wpm, max_wpm
+
         # ── Realistic Controlled Mistake (letter, symbol :, ;, brackets, etc.) ──
         if enable_mistakes and is_safe_for_mistake(action_idx, total_actions, chars_since_last_mistake, mistake_count, max_mistakes, char):
             if random.random() < 0.045:
@@ -590,7 +618,7 @@ def main():
                             # 2. Continue typing 1-3 subsequent characters as if unaware of typo
                             for sub_c in subsequent_chars:
                                 type_char(sub_c)
-                                d, _ = calculate_delay(sub_c, prev_char, min_wpm, max_wpm)
+                                d, _ = calculate_delay(sub_c, prev_char, curr_min_wpm, curr_max_wpm)
                                 time.sleep(d)
 
                             # 3. Realization pause: user notices the typo
@@ -607,14 +635,14 @@ def main():
 
                             # 6. Type the original intended character correctly
                             type_char(char)
-                            d, cur_wpm = calculate_delay(char, prev_char, min_wpm, max_wpm)
+                            d, cur_wpm = calculate_delay(char, prev_char, curr_min_wpm, curr_max_wpm)
                             time.sleep(d)
 
                             # 7. Retype the subsequent characters correctly
                             retype_prev = char
                             for sub_c in subsequent_chars:
                                 type_char(sub_c)
-                                d, cur_wpm = calculate_delay(sub_c, retype_prev, min_wpm, max_wpm)
+                                d, cur_wpm = calculate_delay(sub_c, retype_prev, curr_min_wpm, curr_max_wpm)
                                 time.sleep(d)
                                 retype_prev = sub_c
 
@@ -639,7 +667,7 @@ def main():
         except Exception as e:
             sys.stderr.write(f"Typing error on char '{char}': {e}\n")
 
-        delay, current_wpm = calculate_delay(char, prev_char, min_wpm, max_wpm)
+        delay, current_wpm = calculate_delay(char, prev_char, curr_min_wpm, curr_max_wpm)
 
         # ── Random Pause after words (max 6 seconds, dynamic randomness by size, no too many pauses) ──
         if char == ' ' and pause_budget > 0 and chars_since_last_long_pause >= 45 and action_idx >= 15 and action_idx < (total_actions - 20):

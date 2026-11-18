@@ -212,7 +212,8 @@ const settingsHtmlContent = fs.readFileSync(settingsHtmlPath, 'utf8');
 assert(settingsHtmlContent.includes('id="typingSpeed"'), 'settings.html must contain typingSpeed select');
 assert(settingsHtmlContent.includes('id="typingMinWpm"'), 'settings.html must contain typingMinWpm input');
 assert(settingsHtmlContent.includes('id="typingMaxWpm"'), 'settings.html must contain typingMaxWpm input');
-assert(settingsHtmlContent.includes('value="natural" selected'), 'settings.html must default typingSpeed to natural (50-70 WPM)');
+assert(settingsHtmlContent.includes('value="super_slow_mix" selected'), 'settings.html must default typingSpeed to super_slow_mix (20-50 WPM)');
+assert(settingsHtmlContent.includes('value="super_slow"'), 'settings.html must contain super_slow option');
 
 const settingsJsPath = path.join(__dirname, '..', 'src', 'ui', 'settings-window.js');
 const settingsJsContent = fs.readFileSync(settingsJsPath, 'utf8');
@@ -221,11 +222,13 @@ assert(settingsJsContent.includes('settings.typingSpeed = typingSpeedSelect.valu
 
 const autotypeService = require('../src/services/autotype.service');
 const defaultRange = autotypeService.getWpmRange();
-assert(defaultRange.minWpm === 50 && defaultRange.maxWpm === 70, `Default typing speed must be lowered to 50-70 WPM (actual: ${defaultRange.minWpm}-${defaultRange.maxWpm})`);
+assert(defaultRange.minWpm === 20 && defaultRange.maxWpm === 50, `Default typing speed must be super_slow_mix 20-50 WPM (actual: ${defaultRange.minWpm}-${defaultRange.maxWpm})`);
+const superSlowRange = autotypeService.getWpmRange({ speed: 'super_slow' });
+assert(superSlowRange.minWpm === 20 && superSlowRange.maxWpm === 32, 'Super slow preset must be 20-32 WPM (slower than slow)');
 const slowRange = autotypeService.getWpmRange({ speed: 'slow' });
 assert(slowRange.minWpm === 35 && slowRange.maxWpm === 50, 'Slow preset must be 35-50 WPM');
 
-assert(mainJsContent.includes('this.typingSpeed = process.env.AUTOTYPE_SPEED || "natural"'), 'main.js must initialize typingSpeed default');
+assert(mainJsContent.includes('this.typingSpeed = process.env.AUTOTYPE_SPEED || "super_slow_mix"'), 'main.js must initialize typingSpeed default to super_slow_mix');
 assert(mainJsContent.includes('envUpdates.AUTOTYPE_SPEED = this.typingSpeed'), 'main.js must persist AUTOTYPE_SPEED to env');
 
 // 10. Verify Python Default, Never Java, Optimal DSA, 1s Snippet Copy Dwell, and Snippet-First Rendering

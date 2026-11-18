@@ -428,8 +428,10 @@
                             <div class="settings-item-description">Keystroke pace when stealth-typing into external editors</div>
                         </div>
                         <select class="input-field" id="typingSpeed">
+                            <option value="super_slow_mix" selected>Super Slow + Slow & Deliberate (20 - 50 WPM, Random Switch) [Default]</option>
+                            <option value="super_slow">Super Slow (20 - 32 WPM)</option>
                             <option value="slow">Slow & Deliberate (35 - 50 WPM)</option>
-                            <option value="natural" selected>Natural / Human (50 - 70 WPM) [Recommended]</option>
+                            <option value="natural">Natural / Human (50 - 70 WPM)</option>
                             <option value="fast">Fast (75 - 95 WPM)</option>
                             <option value="turbo">Turbo (95 - 120 WPM)</option>
                             <option value="custom">Custom WPM Range</option>
@@ -442,14 +444,14 @@
                                 <div class="settings-item-label">Minimum Speed (WPM)</div>
                                 <div class="settings-item-description">Lower speed boundary with human jitter</div>
                             </div>
-                            <input type="number" class="input-field" id="typingMinWpm" placeholder="50" min="15" max="200" step="5">
+                            <input type="number" class="input-field" id="typingMinWpm" placeholder="20" min="15" max="200" step="5">
                         </div>
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label">Maximum Speed (WPM)</div>
                                 <div class="settings-item-description">Upper speed boundary for keystroke bursts</div>
                             </div>
-                            <input type="number" class="input-field" id="typingMaxWpm" placeholder="70" min="20" max="250" step="5">
+                            <input type="number" class="input-field" id="typingMaxWpm" placeholder="50" min="20" max="250" step="5">
                         </div>
                     </div>
 

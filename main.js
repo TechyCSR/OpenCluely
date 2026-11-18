@@ -159,10 +159,10 @@ class ApplicationController {
       speechService.updateSettings({ audioSourceMode: this.audioSourceMode });
     }
 
-    // Auto-typing speed settings (lowered default: natural 50-70 WPM)
-    this.typingSpeed = process.env.AUTOTYPE_SPEED || "natural";
-    this.typingMinWpm = process.env.AUTOTYPE_MIN_WPM ? Number(process.env.AUTOTYPE_MIN_WPM) : 50;
-    this.typingMaxWpm = process.env.AUTOTYPE_MAX_WPM ? Number(process.env.AUTOTYPE_MAX_WPM) : 70;
+    // Auto-typing speed settings (default: Super Slow + Slow & Deliberate 20-50 WPM with dynamic regime switching)
+    this.typingSpeed = process.env.AUTOTYPE_SPEED || "super_slow_mix";
+    this.typingMinWpm = process.env.AUTOTYPE_MIN_WPM ? Number(process.env.AUTOTYPE_MIN_WPM) : 20;
+    this.typingMaxWpm = process.env.AUTOTYPE_MAX_WPM ? Number(process.env.AUTOTYPE_MAX_WPM) : 50;
     if (typeof autoTypeService.setSpeed === 'function') {
       autoTypeService.setSpeed(this.typingSpeed, this.typingMinWpm, this.typingMaxWpm);
     }
@@ -3279,9 +3279,9 @@ class ApplicationController {
       isMcqMode: this.isMcqMode,
       audioSourceMode: this.audioSourceMode || "system",
 
-      typingSpeed: this.typingSpeed || process.env.AUTOTYPE_SPEED || "natural",
-      typingMinWpm: this.typingMinWpm || (process.env.AUTOTYPE_MIN_WPM ? Number(process.env.AUTOTYPE_MIN_WPM) : 50),
-      typingMaxWpm: this.typingMaxWpm || (process.env.AUTOTYPE_MAX_WPM ? Number(process.env.AUTOTYPE_MAX_WPM) : 70)
+      typingSpeed: this.typingSpeed || process.env.AUTOTYPE_SPEED || "super_slow_mix",
+      typingMinWpm: this.typingMinWpm || (process.env.AUTOTYPE_MIN_WPM ? Number(process.env.AUTOTYPE_MIN_WPM) : 20),
+      typingMaxWpm: this.typingMaxWpm || (process.env.AUTOTYPE_MAX_WPM ? Number(process.env.AUTOTYPE_MAX_WPM) : 50)
     };
   }
 

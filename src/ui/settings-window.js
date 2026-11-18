@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const iconGrid = document.getElementById('iconGrid');
 
     const SPEED_PRESETS = {
+        super_slow_mix: { min: 20, max: 50 },
+        super_slow: { min: 20, max: 32 },
         slow: { min: 35, max: 50 },
         natural: { min: 50, max: 70 },
         fast: { min: 75, max: 95 },
@@ -36,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateTypingSpeedFieldStates = () => {
-        const speed = typingSpeedSelect ? typingSpeedSelect.value : 'natural';
+        const speed = typingSpeedSelect ? typingSpeedSelect.value : 'super_slow_mix';
         if (customWpmGroup) {
             customWpmGroup.style.display = speed === 'custom' ? '' : 'none';
         }
@@ -187,9 +189,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
 
-        if (typingSpeedSelect) typingSpeedSelect.value = settings.typingSpeed || 'natural';
-        if (typingMinWpmInput) typingMinWpmInput.value = settings.typingMinWpm !== undefined ? settings.typingMinWpm : 50;
-        if (typingMaxWpmInput) typingMaxWpmInput.value = settings.typingMaxWpm !== undefined ? settings.typingMaxWpm : 70;
+        if (typingSpeedSelect) typingSpeedSelect.value = settings.typingSpeed || 'super_slow_mix';
+        if (typingMinWpmInput) typingMinWpmInput.value = settings.typingMinWpm !== undefined ? settings.typingMinWpm : 20;
+        if (typingMaxWpmInput) typingMaxWpmInput.value = settings.typingMaxWpm !== undefined ? settings.typingMaxWpm : 50;
         updateTypingSpeedFieldStates();
 
         // Handle icon selection

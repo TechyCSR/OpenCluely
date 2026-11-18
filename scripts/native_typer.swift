@@ -171,12 +171,14 @@ enum TypingAction {
 func main() {
     let inputData = FileHandle.standardInput.readDataToEndOfFile()
     var text = ""
-    var minWpm = 50.0
-    var maxWpm = 70.0
+    var speedMode = "super_slow_mix"
+    var minWpm = 20.0
+    var maxWpm = 50.0
     var startDelay = 0.25
 
     if let json = try? JSONSerialization.jsonObject(with: inputData, options: []) as? [String: Any] {
         text = json["text"] as? String ?? ""
+        if let mode = json["speed_mode"] as? String { speedMode = mode.lowercased() }
         if let val = json["min_wpm"] as? Double { minWpm = val }
         if let val = json["max_wpm"] as? Double { maxWpm = val }
         if let val = json["start_delay"] as? Double { startDelay = val }
@@ -271,6 +273,15 @@ func main() {
     else if totalChars < 450 { pauseBudget = Int.random(in: 1...2) }
     else { pauseBudget = Int.random(in: 2...3) }
 
+    let isSuperSlowMix = (
+        speedMode == "super_slow_mix" ||
+        speedMode == "dynamic_slow" ||
+        speedMode == "mixed_slow" ||
+        (minWpm <= 22.0 && maxWpm >= 48.0)
+    )
+    var activeRegime = Bool.random() ? "super_slow" : "slow_deliberate"
+    var regimeCharsLeft = Int.random(in: 12...28)
+
     while actionIndex < totalActions {
         if isCancelled {
             print("{\"event\":\"stopped\",\"index\":\(actionIndex),\"total\":\(totalActions)}")
@@ -300,6 +311,24 @@ func main() {
         case .char(let char):
             charsSinceLastMistake += 1
             charsSinceLastLongPause += 1
+
+            // Dynamic regime switching between Super Slow (20-32 WPM) and Slow & Deliberate (35-50 WPM)
+            var currMinWpm = minWpm
+            var currMaxWpm = maxWpm
+            if isSuperSlowMix {
+                regimeCharsLeft -= 1
+                if regimeCharsLeft <= 0 || (char == " " && Double.random(in: 0...1) < 0.35) {
+                    activeRegime = (activeRegime == "super_slow") ? "slow_deliberate" : "super_slow"
+                    regimeCharsLeft = Int.random(in: 14...32)
+                }
+                if activeRegime == "super_slow" {
+                    currMinWpm = 20.0
+                    currMaxWpm = 32.0
+                } else {
+                    currMinWpm = 35.0
+                    currMaxWpm = 50.0
+                }
+            }
 
             let canMistake = (
                 mistakeCount < maxMistakes &&
@@ -340,7 +369,7 @@ func main() {
 
                     for subC in subsequentChars {
                         typeChar(subC)
-                        let (d, _) = calculateDelay(char: subC, prevChar: prevChar, minWpm: minWpm, maxWpm: maxWpm)
+                        let (d, _) = calculateDelay(char: subC, prevChar: prevChar, minWpm: currMinWpm, maxWpm: currMaxWpm)
                         Thread.sleep(forTimeInterval: d)
                     }
 
@@ -355,13 +384,13 @@ func main() {
                     Thread.sleep(forTimeInterval: Double.random(in: 0.12...0.24))
 
                     typeChar(char)
-                    let (dCorrect, _) = calculateDelay(char: char, prevChar: prevChar, minWpm: minWpm, maxWpm: maxWpm)
+                    let (dCorrect, _) = calculateDelay(char: char, prevChar: prevChar, minWpm: currMinWpm, maxWpm: currMaxWpm)
                     Thread.sleep(forTimeInterval: dCorrect)
 
                     var retypePrev = char
                     for subC in subsequentChars {
                         typeChar(subC)
-                        let (dSub, _) = calculateDelay(char: subC, prevChar: retypePrev, minWpm: minWpm, maxWpm: maxWpm)
+                        let (dSub, _) = calculateDelay(char: subC, prevChar: retypePrev, minWpm: currMinWpm, maxWpm: currMaxWpm)
                         Thread.sleep(forTimeInterval: dSub)
                         retypePrev = subC
                     }
@@ -379,7 +408,7 @@ func main() {
             }
 
             typeChar(char)
-            var (delay, currentWpm) = calculateDelay(char: char, prevChar: prevChar, minWpm: minWpm, maxWpm: maxWpm)
+            var (delay, currentWpm) = calculateDelay(char: char, prevChar: prevChar, minWpm: currMinWpm, maxWpm: currMaxWpm)
 
             if char == " " && pauseBudget > 0 && charsSinceLastLongPause >= 45 && actionIndex >= 15 && actionIndex < (totalActions - 20) {
                 if Double.random(in: 0...1) < 0.08 {
