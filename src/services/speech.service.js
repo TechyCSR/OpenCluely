@@ -688,7 +688,7 @@ class SpeechService extends EventEmitter {
     this._chunksReceivedCount = 0;
     this._resetVadState();
     this.emit('recording-started');
-    this.emit('status', 'Local Whisper recording started');
+    this.emit('status', 'Waiting for speech…');
 
     if (this.whisperWorker.isConfigured()) {
       this.whisperWorker.warmup({
@@ -760,7 +760,7 @@ class SpeechService extends EventEmitter {
 
     try {
       this.useRendererCapture = false;
-      this.emit('status', 'Waiting for interviewer audio…');
+      this.emit('status', 'Waiting for speech…');
       logger.info('Starting native ScreenCaptureKit system audio recorder', { binPath });
 
       this.systemAudioProcess = spawn(binPath, [], {
@@ -771,7 +771,7 @@ class SpeechService extends EventEmitter {
         if (!this.isRecording) return;
         this._chunksReceivedCount = (this._chunksReceivedCount || 0) + 1;
         if (this._chunksReceivedCount === 1) {
-          this.emit('status', 'Listening to system audio (interviewer)…');
+          this.emit('status', 'Waiting for speech…');
           logger.info('System audio capture active: first audio chunk received from device');
         }
         this._ingestWhisperAudio(chunk);
@@ -780,7 +780,7 @@ class SpeechService extends EventEmitter {
       this.systemAudioProcess.stderr.on('data', (data) => {
         const msg = data.toString();
         if (msg.includes('[SYSTEM_AUDIO_READY]')) {
-          this.emit('status', 'Listening to system audio (interviewer)…');
+          this.emit('status', 'Waiting for speech…');
           logger.info('Native ScreenCaptureKit system audio capture ready');
         } else if (msg.includes('[SYSTEM_AUDIO_ERROR]')) {
           logger.warn('System audio recorder warning:', { msg: msg.trim() });
@@ -1044,6 +1044,7 @@ class SpeechService extends EventEmitter {
     this.vadSilenceMs = 0;
     this.vadPreRoll = [];
     this.vadPreRollMs = 0;
+    this.emit('status', 'Processing speech…');
     this._flushWhisperSegment({ final: false }).catch((error) => {
       logger.error('Whisper segment transcription failed', { error: error.message });
     });
@@ -1385,7 +1386,11 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperLanguage() {
-    return this._getSetting('whisperLanguage') || process.env.WHISPER_LANGUAGE || config.get('speech.whisper.language') || 'auto';
+    const lang = this._getSetting('whisperLanguage') || process.env.WHISPER_LANGUAGE || config.get('speech.whisper.language') || 'en';
+    if (!lang || lang === 'auto' || lang === 'detect') {
+      return 'en';
+    }
+    return lang;
   }
 
   _getWhisperSegmentMs() {
@@ -1953,6 +1958,7 @@ class SpeechService extends EventEmitter {
     this.segmentBytes = 0;
 
     this.transcriptionInFlight = true;
+    this.emit('status', 'Processing speech…');
 
     try {
       const transcript = await this._transcribeWhisperBuffer(audioBuffer);

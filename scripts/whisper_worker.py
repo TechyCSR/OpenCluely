@@ -109,9 +109,9 @@ def load_audio_input(audio_path):
 
 def transcribe(request):
     loaded_model, device = ensure_model(request)
-    language = request.get('language') or None
-    if language in ('auto', 'detect'):
-        language = None
+    language = request.get('language') or 'en'
+    if language in ('auto', 'detect', ''):
+        language = 'en'
 
     # Ultra-low latency transcription: beam_size=1 and best_of=1 for greedy decoding
     result = loaded_model.transcribe(

@@ -45,7 +45,7 @@ class WhisperWorkerService {
       action: 'transcribe',
       audio_path: audioPath,
       model: options.model || 'base',
-      language: options.language || 'auto',
+      language: options.language || 'en',
       model_dir: options.modelDir || null,
       device: options.device || 'auto'
     });

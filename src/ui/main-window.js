@@ -1090,21 +1090,12 @@ class MainWindowUI {
             this.modeDsaBtn.addEventListener('click', selectDsaMode);
         }
 
-        // Audio Source toggle handler (System Audio vs Mic)
+        // Audio Source toggle handler: strictly locked to system audio
         if (this.audioSourceToggle) {
+            this.audioSourceToggle.style.display = 'none';
             this.audioSourceToggle.addEventListener('click', async (e) => {
                 if (e) e.stopPropagation();
-                if (window.electronAPI && window.electronAPI.toggleAudioSourceMode) {
-                    try {
-                        const res = await window.electronAPI.toggleAudioSourceMode();
-                        if (res && res.mode) {
-                            this.setAudioSourceModeUI(res.mode);
-                        }
-                    } catch (_) {}
-                } else {
-                    const nextMode = this.audioSourceMode === 'system' ? 'microphone' : 'system';
-                    this.setAudioSourceModeUI(nextMode);
-                }
+                this.setAudioSourceModeUI('system');
             });
         }
 

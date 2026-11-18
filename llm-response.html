@@ -999,7 +999,7 @@
                     if (!statusMsg) return;
 
                     const lower = statusMsg.toLowerCase();
-                    if (lower.includes('speaking') || lower.includes('listening to') || lower.includes('speech active')) {
+                    if (lower.includes('speaking') || lower.includes('speech active')) {
                         if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                         setStatus('LISTENING');
                         setAlertText('Listening…');
