@@ -524,6 +524,7 @@ class SpeechService extends EventEmitter {
 
       this.available = true;
       this._configureWhisperWorker();
+      this.warmup().catch(() => {});
       logger.info('Local Whisper service initialized successfully', {
         command: [this.whisperCommand.command, ...this.whisperCommand.baseArgs].join(' '),
         model: this._getWhisperModel(),
@@ -538,6 +539,27 @@ class SpeechService extends EventEmitter {
       this.available = false;
       this.emit('status', 'Local Whisper unavailable');
     }
+  }
+
+  warmup() {
+    if (this.whisperWorker && typeof this.whisperWorker.warmup === 'function' && this.whisperWorker.isConfigured()) {
+      return this.whisperWorker.warmup({
+        model: this._getWhisperModel(),
+        modelDir: this._getWhisperModelDir(),
+        device: this._getWhisperDevice()
+      }).then((result) => {
+        logger.info('Whisper background warmup ready', {
+          model: result.model,
+          device: result.device,
+          gpu: result.gpu
+        });
+        return result;
+      }).catch((error) => {
+        logger.warn('Whisper background warmup notice', { error: error.message });
+        return null;
+      });
+    }
+    return Promise.resolve(null);
   }
 
   startRecording() {
@@ -1417,9 +1439,9 @@ class SpeechService extends EventEmitter {
 
   _getSilenceHangoverMs() {
     if (this.runtimeSettings.audioSourceMode === 'system') {
-      return 280; // Fast end-of-speech flush; multi-turn context handles follow-up pauses
+      return 480; // Natural speech pause handling; avoids cutting utterances on minor speech pauses
     }
-    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 280, 160);
+    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 480, 160);
   }
 
   _getMinUtteranceMs() {

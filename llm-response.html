@@ -1053,9 +1053,16 @@
             // Restore active answer
             if (api.onRestoreActiveAnswer) {
                 api.onRestoreActiveAnswer(() => {
+                    isStreaming = false;
                     hideLoadingState();
+                    if (loadingWatchdogTimer) { clearTimeout(loadingWatchdogTimer); loadingWatchdogTimer = null; }
                     if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
                         displayStructuredAnswer(answerHistory[currentHistoryIndex]);
+                        setStatus('READY');
+                        setAlertText('Answer ready');
+                    } else {
+                        setStatus('IDLE');
+                        setAlertText('Waiting for speech…');
                     }
                 });
             }
@@ -1079,6 +1086,26 @@
                         setAlertText(qPreview ? `Processing: "${qPreview}…"` : 'Processing question…');
                         showLoadingState('Processing');
                     }
+
+                    // Failsafe watchdog timer: If generation hangs for >8.5s without response or chunk,
+                    // automatically clear the stuck state and restore the active answer screen
+                    if (loadingWatchdogTimer) { clearTimeout(loadingWatchdogTimer); }
+                    loadingWatchdogTimer = setTimeout(() => {
+                        loadingWatchdogTimer = null;
+                        if (isStreaming) {
+                            console.warn('[INTERVIEW-UI] Response watchdog timeout; safely clearing stuck processing state');
+                            isStreaming = false;
+                            hideLoadingState();
+                            if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
+                                displayStructuredAnswer(answerHistory[currentHistoryIndex]);
+                                setStatus('READY');
+                                setAlertText('Answer ready');
+                            } else {
+                                setStatus('IDLE');
+                                setAlertText('Waiting for speech…');
+                            }
+                        }
+                    }, 8500);
                 });
             }
 

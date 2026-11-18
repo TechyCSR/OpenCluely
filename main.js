@@ -184,9 +184,10 @@ class ApplicationController {
 
     // Speculative Parallel Pipeline & Grace Window
     this._speculativeState = null;
-    this._speculativeGraceMs = 3200; // 3.2s continuation window for mid-question breathing pauses
+    this._speculativeGraceMs = 6500; // 6.5s continuation window for mid-question breathing pauses
     this._speculativeGraceTimer = null;
     this._isMergedContinuation = false;
+    this._lastDispatchedQuestion = null;
 
     // First-run onboarding: detects missing .env / API key and triggers
     // a settings-window prompt on first launch so users don't have to
@@ -375,6 +376,15 @@ class ApplicationController {
 
       this.starting = false;
       this.isReady = true;
+
+      // Background pre-warmup: Warm up Whisper worker model and Gemini keep-alive connection
+      // immediately upon startup so the first speech question responds in <500ms without cold-start delay
+      if (typeof speechService.warmup === 'function') {
+        speechService.warmup().catch(() => {});
+      }
+      if (typeof llmService.warmup === 'function') {
+        llmService.warmup().catch(() => {});
+      }
 
       // Launch the onboarding wizard if this is the first run.
       if (this.isFirstRun) {
@@ -1816,6 +1826,7 @@ class ApplicationController {
 
   _resetSpeculativeState() {
     this._speculativeState = null;
+    this._lastDispatchedQuestion = null;
     if (this._speculativeGraceTimer) {
       clearTimeout(this._speculativeGraceTimer);
       this._speculativeGraceTimer = null;
@@ -2466,17 +2477,20 @@ class ApplicationController {
 
     // Check if we are inside an active continuation grace window of a speculative Part 1
     const now = Date.now();
+    const isContinuationClause = /^(and|or|but|while|whereas|as well as|also|with|in terms of|specifically|how about|what about|why)\b/i.test(fragment.trim()) || /^[a-z]/.test(fragment.trim());
+    
     const hasActiveSpeculativePart1 = Boolean(
-      this._speculativeState && 
-      (now - this._speculativeState.dispatchedAt) <= this._speculativeGraceMs
+      (this._speculativeState && (now - this._speculativeState.dispatchedAt) <= this._speculativeGraceMs) ||
+      (this._lastDispatchedQuestion && (now - this._lastDispatchedQuestion.at) <= 8000 && isContinuationClause)
     );
 
     if (hasActiveSpeculativePart1) {
       // PART 2 DETECTED! Speaker resumed speech within the continuation window!
+      const basePart1Text = (this._speculativeState && this._speculativeState.part1Text) || (this._lastDispatchedQuestion && this._lastDispatchedQuestion.text) || "";
       logger.info("Part 2 speech detected within grace window; merging with Part 1", {
-        part1: this._speculativeState.part1Text,
+        part1: basePart1Text,
         part2Fragment: fragment,
-        elapsedMs: now - this._speculativeState.dispatchedAt
+        elapsedMs: this._speculativeState ? (now - this._speculativeState.dispatchedAt) : (now - this._lastDispatchedQuestion.at)
       });
 
       if (this._speculativeGraceTimer) {
@@ -2485,7 +2499,7 @@ class ApplicationController {
       }
 
       // Preempt/Abort the in-flight speculative Part 1 LLM request immediately
-      if (this._speculativeState.abortController && !this._speculativeState.isCompleted) {
+      if (this._speculativeState && this._speculativeState.abortController && !this._speculativeState.isCompleted) {
         try {
           this._speculativeState.abortController.abort('Preempted by Part 2 continuation');
         } catch (_) {}
@@ -2493,7 +2507,7 @@ class ApplicationController {
 
       // Merge Part 1 and Part 2
       if (!this._utteranceBuffer) {
-        this._utteranceBuffer = this._mergeQuestionFragments(this._speculativeState.part1Text, fragment);
+        this._utteranceBuffer = this._mergeQuestionFragments(basePart1Text, fragment);
       } else {
         this._utteranceBuffer = `${this._utteranceBuffer} ${fragment}`;
       }
@@ -2501,8 +2515,16 @@ class ApplicationController {
       // Mark that this is a merged update so UI preserves visible answer screen
       this._isMergedContinuation = true;
 
-      // Reset speculative state now that it's absorbed into the merged buffer
-      this._speculativeState = null;
+      // Keep speculative state refreshed so subsequent clauses continue to merge
+      this._speculativeState = {
+        part1Text: this._utteranceBuffer,
+        dispatchedAt: now,
+        requestId: this._speculativeState ? this._speculativeState.requestId : 0,
+        abortController: null,
+        messageId: this._speculativeState ? this._speculativeState.messageId : null,
+        isCompleted: false,
+        result: null
+      };
     } else {
       this._utteranceBuffer = this._utteranceBuffer
         ? `${this._utteranceBuffer} ${fragment}`
@@ -2609,6 +2631,11 @@ class ApplicationController {
     const currentRequestId = ++this._currentLlmRequestId;
     this._responseSeq = (this._responseSeq || 0) + 1;
     const messageId = `tr-${Date.now()}-${this._responseSeq}`;
+
+    this._lastDispatchedQuestion = {
+      text: targetQuestion,
+      at: Date.now()
+    };
 
     // If this is a fresh Part 1 question, arm the speculative parallel state & grace window
     if (!isMergedUpdate) {
@@ -2793,6 +2820,11 @@ class ApplicationController {
           }
         };
 
+        if (this._speculativeState && this._speculativeState.requestId === requestId) {
+          this._speculativeState.isCompleted = true;
+          this._speculativeState.result = instantResult;
+        }
+
         sessionManager.addModelResponse(instant.fullResponse, instantResult.metadata);
         this._hasActiveAnswer = true;
         this.sendTranscriptionLLMResponseToVoiceTargets(instantResult);
@@ -2925,14 +2957,15 @@ class ApplicationController {
           analyzeTimeout = null;
         }
 
-        // If user preempted, newer question arrived, or request was cancelled, do not retry
-        if (this._currentLlmRequestId !== requestId || (abortSignal && abortSignal.aborted) || streamError.message === 'ABORTED' || streamError.name === 'AbortError') {
-          logger.debug("Suppressed error/retry for stale or aborted transcription LLM request", { requestId, currentRequestId: this._currentLlmRequestId });
+        // Only suppress if this request was truly preempted by a NEWER incoming question:
+        const wasPreemptedByNewerQuestion = (this._currentLlmRequestId !== requestId) || Boolean(abortSignal && abortSignal.aborted && abortSignal.reason === 'Preempted by newer question');
+        if (wasPreemptedByNewerQuestion) {
+          logger.debug("Suppressed error/retry for preempted transcription request", { requestId, currentRequestId: this._currentLlmRequestId });
           return;
         }
 
         // Auto-retry once with same question if timed out or failed and attempts remain
-        if (attempt < 2 && this._currentLlmRequestId === requestId && (!abortSignal || !abortSignal.aborted)) {
+        if (attempt < 2 && this._currentLlmRequestId === requestId) {
           logger.warn(`Stuck on analyzing or stream error (attempt ${attempt}/2). Instantly restarting with same question...`, {
             requestId,
             attempt,
@@ -2956,21 +2989,23 @@ class ApplicationController {
             requestId,
             messageId,
             attempt + 1,
-            2
+            2,
+            isMergedUpdate
           );
         }
 
-        // If all retries exhausted, throw to outer catch for fallback delivery
+        // If retry exhausted or failed, fall through to deliver intelligent fallback so UI NEVER hangs!
         throw streamError;
       }
 
     } catch (error) {
-      if (abortSignal && (abortSignal.aborted || error.message === 'ABORTED' || error.name === 'AbortError')) {
-        logger.debug("Suppressed error/fallback for aborted transcription LLM request", { requestId });
+      const wasPreemptedByNewerQuestion = (this._currentLlmRequestId !== requestId) || Boolean(abortSignal && abortSignal.aborted && abortSignal.reason === 'Preempted by newer question');
+      if (wasPreemptedByNewerQuestion) {
+        logger.debug("Suppressed error/fallback for preempted transcription request", { requestId });
         return;
       }
 
-      logger.error("Transcription LLM processing failed after retries", {
+      logger.error("Transcription LLM processing failed, delivering intelligent fallback so UI never hangs", {
         requestId,
         error: error.message,
         errorStack: error.stack,
@@ -2980,10 +3015,14 @@ class ApplicationController {
 
       // Try to provide a fallback response and deliver it to windows
       try {
-        const fallbackResult = llmService.generateIntelligentFallbackResponse(text, this.activeSkill);
-        if (messageId) {
-          fallbackResult.metadata = { ...fallbackResult.metadata, messageId };
-        }
+        const fallbackResult = llmService.generateIntelligentFallbackResponse(cleanText || text, this.activeSkill);
+        fallbackResult.metadata = { 
+          ...fallbackResult.metadata, 
+          messageId,
+          question: cleanText || text,
+          isMergedUpdate
+        };
+        fallbackResult.isMergedUpdate = isMergedUpdate;
 
         sessionManager.addModelResponse(fallbackResult.response, {
           skill: this.activeSkill,
@@ -2993,7 +3032,7 @@ class ApplicationController {
           fallbackReason: error.message
         });
 
-        // CRITICAL FIX: Deliver the fallback response to voice windows so the UI exits "Analyzing..."!
+        // Deliver the fallback response to voice windows so the UI exits "Analyzing..." / "Updating..."!
         this._hasActiveAnswer = true;
         this.sendTranscriptionLLMResponseToVoiceTargets(fallbackResult);
 
@@ -3001,6 +3040,7 @@ class ApplicationController {
         logger.error("Fallback response also failed", {
           fallbackError: fallbackError.message
         });
+        this.sendToVoiceResponseWindows('restore-active-answer', {});
       }
     }
   }

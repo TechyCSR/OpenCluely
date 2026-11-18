@@ -147,7 +147,8 @@ global.setTimeout = origSetTimeout;
 console.log('6. Checking Low-Latency Speech & Sentence-to-Say Prompts...');
 const speechServicePath = path.join(__dirname, '..', 'src', 'services', 'speech.service.js');
 const speechServiceContent = fs.readFileSync(speechServicePath, 'utf8');
-assert(speechServiceContent.includes('return 280; // Fast end-of-speech flush'), 'SpeechService must have 280ms silence hangover');
+assert(speechServiceContent.includes('return 480;'), 'SpeechService must have 480ms natural pause silence hangover');
+assert(speechServiceContent.includes('warmup()'), 'SpeechService must implement warmup()');
 
 const mainJsPath = path.join(__dirname, '..', 'main.js');
 const mainJsContent = fs.readFileSync(mainJsPath, 'utf8');
@@ -167,7 +168,10 @@ assert(llmServiceContent.includes('SENTENCE-TO-SAY WISE: Strictly NO bullet poin
 
 // 7. Verify Parallel Speculative Pipeline, Multi-Turn Question Merging, and Non-Wiping UI
 console.log('7. Checking Parallel Speculative Pipeline & Non-Wiping Multi-Turn UI...');
-assert(mainJsContent.includes('this._speculativeGraceMs = 3200'), 'main.js must define speculative continuation grace window');
+const llmResponseHtmlPath = path.join(__dirname, '..', 'llm-response.html');
+const llmResponseHtmlContent = fs.readFileSync(llmResponseHtmlPath, 'utf8');
+assert(mainJsContent.includes('this._speculativeGraceMs = 6500'), 'main.js must define 6.5s speculative continuation grace window');
+assert(llmResponseHtmlContent.includes('loadingWatchdogTimer = setTimeout'), 'llm-response.html must have failsafe watchdog preventing stuck processing state');
 assert(mainJsContent.includes('_mergeQuestionFragments'), 'main.js must define _mergeQuestionFragments helper');
 assert(mainJsContent.includes('sessionManager.replaceLastUserInput'), 'main.js must replace last user input on merged question');
 
@@ -176,8 +180,6 @@ const sessionManagerContent = fs.readFileSync(sessionManagerPath, 'utf8');
 assert(sessionManagerContent.includes('replaceLastUserInput(text)'), 'session.manager.js must implement replaceLastUserInput');
 assert(sessionManagerContent.includes('replaceOrRemoveLastModelResponse'), 'session.manager.js must implement replaceOrRemoveLastModelResponse');
 
-const llmResponseHtmlPath = path.join(__dirname, '..', 'llm-response.html');
-const llmResponseHtmlContent = fs.readFileSync(llmResponseHtmlPath, 'utf8');
 assert(llmResponseHtmlContent.includes('isMergedUpdate && answerHistory.length > 0'), 'llm-response.html must rewrite active answer in-place on merged update');
 assert(llmResponseHtmlContent.includes('if (hasVisibleAnswer && !forceOverlay)'), 'llm-response.html must not wipe or obscure visible answer with loading backdrop');
 assert(llmResponseHtmlContent.includes('if (!isStreaming)'), 'llm-response.html must guard window resizing during active streaming to prevent jitter');
