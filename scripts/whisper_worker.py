@@ -158,19 +158,21 @@ for raw_line in sys.stdin:
         if action == 'transcribe':
             send({'id': request_id, 'ok': True, **transcribe(request)})
         elif action == 'warmup':
+            requested_name = request.get('model') or 'base'
+            if model is not None and model_name == requested_name:
+                send({
+                    'id': request_id,
+                    'ok': True,
+                    'warmed': True,
+                    'already_warm': True,
+                    'device': model_device,
+                    'model': model_name,
+                    'cuda_available': torch.cuda.is_available(),
+                    'gpu': torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+                })
+                continue
+
             loaded_model, device = ensure_model(request)
-            # Run a brief 1-second dummy warmup pass so PyTorch JIT kernels and buffers are pre-compiled in RAM
-            try:
-                loaded_model.transcribe(
-                    np.zeros(16000, dtype=np.float32),
-                    language='en',
-                    fp16=device == 'cuda',
-                    beam_size=1,
-                    best_of=1,
-                    condition_on_previous_text=False
-                )
-            except Exception:
-                pass
             send({
                 'id': request_id,
                 'ok': True,

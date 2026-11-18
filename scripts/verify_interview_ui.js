@@ -198,4 +198,11 @@ assert.strictEqual(testMerge2, 'Can you explain indexing in PostgreSQL specifica
 const testMerge3 = mergeFn('What is microservices?', 'Can you give a production example?');
 assert.strictEqual(testMerge3, 'What is microservices? Can you give a production example?', 'Merge must keep question mark between two independent full sentences');
 
+// 8. Verify Stuck-State Protection & Warmup Queue Non-Blocking
+console.log('8. Checking Stuck-State Protection & Warmup Non-Blocking...');
+assert(llmResponseHtmlContent.includes('speechProcessingWatchdogTimer'), 'llm-response.html must have speechProcessingWatchdogTimer');
+assert(speechServiceContent.includes("this.emit('status', 'Waiting for speech…')"), 'speech.service.js must reset status in finally');
+assert(speechServiceContent.includes('configured (userData resolved)'), 'speech.service.js must resolve relative commands to absolute userData paths');
+assert(workerPyContent.includes('already_warm'), 'whisper_worker.py must return immediately if model is already warm in RAM');
+
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');

@@ -971,6 +971,34 @@
                 });
             }
 
+            // Speech processing watchdog: ensures that any "PROCESSING" / "Processing speech…" indicator
+            // that is not followed by an LLM generation or answer within 4.5s automatically recovers to ready/idle
+            let speechProcessingWatchdogTimer = null;
+            function armSpeechProcessingWatchdog(timeoutMs = 4500) {
+                if (speechProcessingWatchdogTimer) clearTimeout(speechProcessingWatchdogTimer);
+                speechProcessingWatchdogTimer = setTimeout(() => {
+                    speechProcessingWatchdogTimer = null;
+                    if (!isStreaming && statusBadge && (statusBadge.textContent === 'PROCESSING' || statusBadge.textContent === 'ANALYZING')) {
+                        console.warn('[INTERVIEW-UI] Speech processing watchdog: safely recovering from stuck state');
+                        hideLoadingState();
+                        if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
+                            displayStructuredAnswer(answerHistory[currentHistoryIndex]);
+                            setStatus('READY');
+                            setAlertText('Answer ready');
+                        } else {
+                            setStatus('IDLE');
+                            setAlertText('Waiting for speech…');
+                        }
+                    }
+                }, timeoutMs);
+            }
+            function clearSpeechProcessingWatchdog() {
+                if (speechProcessingWatchdogTimer) {
+                    clearTimeout(speechProcessingWatchdogTimer);
+                    speechProcessingWatchdogTimer = null;
+                }
+            }
+
             // Loading state trigger
             if (api.onShowLoading) {
                 api.onShowLoading(() => {
@@ -978,12 +1006,14 @@
                     setStatus('PROCESSING');
                     setAlertText('Processing question…');
                     showLoadingState('Processing');
+                    armSpeechProcessingWatchdog(6000);
                 });
             }
 
             // Realtime speech active indicator
             if (api.onSpeechActive) {
                 api.onSpeechActive(() => {
+                    clearSpeechProcessingWatchdog();
                     if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                     if (!isStreaming) {
                         setStatus('LISTENING');
@@ -1000,6 +1030,7 @@
 
                     const lower = statusMsg.toLowerCase();
                     if (lower.includes('speaking') || lower.includes('speech active')) {
+                        clearSpeechProcessingWatchdog();
                         if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                         setStatus('LISTENING');
                         setAlertText('Listening…');
@@ -1007,7 +1038,9 @@
                         if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                         setStatus('PROCESSING');
                         setAlertText('Processing question…');
+                        armSpeechProcessingWatchdog(4500);
                     } else if (lower.includes('waiting') || lower.includes('stopped') || lower.includes('idle')) {
+                        clearSpeechProcessingWatchdog();
                         if (!isStreaming && !readyToIdleTimer) {
                             setStatus('IDLE');
                             setAlertText('Waiting for speech…');
@@ -1021,6 +1054,7 @@
             // Interim / Transcribed question received
             if (api.onTranscriptionReceived) {
                 api.onTranscriptionReceived((_e, payload) => {
+                    clearSpeechProcessingWatchdog();
                     if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                     const text = (payload && payload.text) || (typeof payload === 'string' ? payload : '');
                     if (text && text.trim()) {
@@ -1054,6 +1088,7 @@
             if (api.onRestoreActiveAnswer) {
                 api.onRestoreActiveAnswer(() => {
                     isStreaming = false;
+                    clearSpeechProcessingWatchdog();
                     hideLoadingState();
                     if (loadingWatchdogTimer) { clearTimeout(loadingWatchdogTimer); loadingWatchdogTimer = null; }
                     if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
@@ -1070,6 +1105,7 @@
             // Streaming start
             if (api.onTranscriptionLlmResponseStart) {
                 api.onTranscriptionLlmResponseStart((_e, data) => {
+                    clearSpeechProcessingWatchdog();
                     if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
                     const skill = data && data.skill;
                     updateSkillBadge(skill);

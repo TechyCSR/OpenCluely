@@ -712,24 +712,6 @@ class SpeechService extends EventEmitter {
     this.emit('recording-started');
     this.emit('status', 'Waiting for speech…');
 
-    if (this.whisperWorker.isConfigured()) {
-      this.whisperWorker.warmup({
-        model: this._getWhisperModel(),
-        modelDir: this._getWhisperModelDir(),
-        device: this._getWhisperDevice()
-      }).then((result) => {
-        logger.info('Whisper GPU warmup completed while recording', {
-          model: result.model,
-          device: result.device,
-          gpu: result.gpu
-        });
-      }).catch((error) => {
-        logger.warn('Whisper warmup failed; transcription will use fallback', {
-          error: error.message
-        });
-      });
-    }
-
     // On macOS in system mode (interviewer speaking from device), capture direct internal
     // audio via the ScreenCaptureKit system_audio_recorder helper so all interviewer speech
     // (from Zoom, Meet, Teams, Chrome, bot interview, internal speakers or headphones) is captured.
@@ -1743,17 +1725,58 @@ class SpeechService extends EventEmitter {
     }
 
     const candidates = [];
-    // Normalize forward slashes to platform separator before trying anything
     const normalizedCmd = path.normalize(parsed.command);
 
-    candidates.push({
-      command: normalizedCmd,
-      baseArgs: parsed.baseArgs,
-      source: 'configured (normalized)'
-    });
+    // If an absolute path is provided, prioritize it directly
+    if (path.isAbsolute(normalizedCmd)) {
+      candidates.push({
+        command: normalizedCmd,
+        baseArgs: parsed.baseArgs,
+        source: 'configured (absolute)'
+      });
+    } else {
+      // Relative path: resolve against userData venv, project root, and cwd to prevent ENOENT in packaged builds
+      try {
+        const { app } = require('electron');
+        if (app && typeof app.getPath === 'function') {
+          const userDataPath = path.join(app.getPath('userData'), normalizedCmd);
+          if (fs.existsSync(userDataPath)) {
+            candidates.push({
+              command: userDataPath,
+              baseArgs: parsed.baseArgs,
+              source: 'configured (userData resolved)'
+            });
+          }
+        }
+      } catch (_) {}
+
+      const projectPath = path.resolve(__dirname, '..', '..', normalizedCmd);
+      if (fs.existsSync(projectPath)) {
+        candidates.push({
+          command: projectPath,
+          baseArgs: parsed.baseArgs,
+          source: 'configured (project resolved)'
+        });
+      }
+
+      const cwdPath = path.resolve(normalizedCmd);
+      if (fs.existsSync(cwdPath)) {
+        candidates.push({
+          command: cwdPath,
+          baseArgs: parsed.baseArgs,
+          source: 'configured (cwd resolved)'
+        });
+      }
+
+      candidates.push({
+        command: normalizedCmd,
+        baseArgs: parsed.baseArgs,
+        source: 'configured (normalized)'
+      });
+    }
 
     const resolvedPath = path.resolve(normalizedCmd);
-    if (resolvedPath !== normalizedCmd) {
+    if (resolvedPath !== normalizedCmd && !candidates.some(c => c.command === resolvedPath)) {
       candidates.push({
         command: resolvedPath,
         baseArgs: parsed.baseArgs,
@@ -1990,8 +2013,12 @@ class SpeechService extends EventEmitter {
       } else if (clean) {
         logger.debug('Dropped likely Whisper silence hallucination', { transcript: clean });
       }
+    } catch (err) {
+      logger.warn('Whisper transcription segment error', { error: err.message });
     } finally {
       this.transcriptionInFlight = false;
+      // Always reset speech status to active listening so frontend never gets permanently stuck on "Processing speech…"
+      this.emit('status', 'Waiting for speech…');
 
       if (this.pendingFlush) {
         this.pendingFlush = false;
@@ -2059,7 +2086,7 @@ class SpeechService extends EventEmitter {
           device: this._getWhisperDevice()
         });
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Whisper worker transcription timed out after 25000ms')), 25000);
+          setTimeout(() => reject(new Error('Whisper worker transcription timed out after 12000ms')), 12000);
         });
         const result = await Promise.race([transcribePromise, timeoutPromise]);
         logger.info('Persistent Whisper transcription completed', {
@@ -2075,6 +2102,9 @@ class SpeechService extends EventEmitter {
           error: error.message,
           workerTraceback: error.workerTraceback
         });
+        try {
+          this.whisperWorker.close();
+        } catch (_) {}
       }
     }
 
