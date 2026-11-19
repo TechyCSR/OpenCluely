@@ -429,7 +429,9 @@ class SpeechService extends EventEmitter {
     this.whisperWorker = new WhisperWorkerService();
     this.isProcessingAudio = false;
     this.manualStopRequested = false;
+    this._transcriptionStartedAt = 0;
     this._resetVadState();
+    this._startPipelineWatchdog();
 
     this.initializeClient();
   }
@@ -845,6 +847,57 @@ class SpeechService extends EventEmitter {
     this.vadPreRoll = [];            // ring of recent pre-speech chunks
     this.vadPreRollMs = 0;           // duration held in the pre-roll ring
     this.vadLastChunkAt = 0;         // timestamp of the last ingested chunk
+  }
+
+  /**
+   * Global pipeline watchdog to guarantee self-healing from stuck states.
+   * Runs continuously to detect and immediately unlock any hung transcription or stalled recorder.
+   */
+  _startPipelineWatchdog() {
+    if (this._pipelineWatchdog) clearInterval(this._pipelineWatchdog);
+    this._pipelineWatchdog = setInterval(() => {
+      // 1. If not actively recording and transcription has been stuck, unlock it
+      if (!this.isRecording) {
+        if (this.transcriptionInFlight || this.isProcessingAudio) {
+          const stuckTime = this._transcriptionStartedAt ? (Date.now() - this._transcriptionStartedAt) : 0;
+          if (stuckTime > 15000) {
+            logger.warn('Failsafe: clearing stuck speech transcription state while idle', { stuckTime });
+            this.transcriptionInFlight = false;
+            this.isProcessingAudio = false;
+            this._transcriptionStartedAt = 0;
+            this.segmentBuffers = [];
+            this.segmentBytes = 0;
+            this.emit('status', 'Waiting for speech…');
+          }
+        }
+        return;
+      }
+
+      // 2. If actively recording, check if transcription has been in flight for > 20s
+      if (this.transcriptionInFlight) {
+        const stuckTime = this._transcriptionStartedAt ? (Date.now() - this._transcriptionStartedAt) : 0;
+        if (stuckTime > 20000) {
+          logger.warn('Failsafe: transcription in flight stuck for >20s, unlocking pipeline so next questions are captured', { stuckTime });
+          this.transcriptionInFlight = false;
+          this.isProcessingAudio = false;
+          this._transcriptionStartedAt = 0;
+          this.pendingFlush = false;
+          this.pendingFinal = false;
+          this.segmentBuffers = [];
+          this.segmentBytes = 0;
+          this.emit('status', 'Waiting for speech…');
+        }
+      }
+
+      // 3. If recording system audio on macOS and no chunks received for >8 seconds, verify helper is running
+      if (this.isRecording && this.runtimeSettings.audioSourceMode === 'system' && process.platform === 'darwin') {
+        const lastChunkTime = this.vadLastChunkAt ? (Date.now() - this.vadLastChunkAt) : 0;
+        if (lastChunkTime > 8000 && !this.systemAudioProcess) {
+          logger.warn('Failsafe: system audio process absent while recording, resurrecting...');
+          this._startSystemAudioCapture();
+        }
+      }
+    }, 2000);
   }
 
   /**
@@ -2007,6 +2060,7 @@ class SpeechService extends EventEmitter {
     this.segmentBytes = 0;
 
     this.transcriptionInFlight = true;
+    this._transcriptionStartedAt = Date.now();
     this.emit('status', 'Processing speech…');
 
     try {
@@ -2021,6 +2075,7 @@ class SpeechService extends EventEmitter {
       logger.warn('Whisper transcription segment error', { error: err.message });
     } finally {
       this.transcriptionInFlight = false;
+      this._transcriptionStartedAt = 0;
       // Always reset speech status to active listening so frontend never gets permanently stuck on "Processing speech…"
       this.emit('status', 'Waiting for speech…');
 
@@ -2082,7 +2137,9 @@ class SpeechService extends EventEmitter {
 
     if (this.whisperWorker.isConfigured()) {
       const startedAt = Date.now();
+      let timeoutHandle = null;
       try {
+        const timeoutMs = 25000;
         const transcribePromise = this.whisperWorker.transcribe(audioFilePath, {
           model: this._getWhisperModel(),
           language: this._getWhisperLanguage(),
@@ -2090,9 +2147,13 @@ class SpeechService extends EventEmitter {
           device: this._getWhisperDevice()
         });
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Whisper worker transcription timed out after 12000ms')), 12000);
+          timeoutHandle = setTimeout(() => reject(new Error(`Whisper worker transcription timed out after ${timeoutMs}ms`)), timeoutMs);
         });
         const result = await Promise.race([transcribePromise, timeoutPromise]);
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
         logger.info('Persistent Whisper transcription completed', {
           processingTime: Date.now() - startedAt,
           model: result.model,
@@ -2102,13 +2163,20 @@ class SpeechService extends EventEmitter {
         });
         return result.text || '';
       } catch (error) {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
         logger.warn('Persistent Whisper worker failed; falling back to CLI', {
           error: error.message,
           workerTraceback: error.workerTraceback
         });
-        try {
-          this.whisperWorker.close();
-        } catch (_) {}
+        // Only close the worker process if it was genuinely aborted or dead
+        if (!this.whisperWorker.process || this.whisperWorker.process.killed) {
+          try {
+            this.whisperWorker.close();
+          } catch (_) {}
+        }
       }
     }
 
@@ -2146,15 +2214,22 @@ class SpeechService extends EventEmitter {
         });
 
         let stderr = '';
+        const timer = setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch (_) {}
+          reject(new Error('Whisper CLI timed out after 15000ms'));
+        }, 15000);
+
         child.stderr.on('data', (chunk) => {
           stderr += chunk.toString();
         });
 
         child.on('error', (error) => {
+          clearTimeout(timer);
           reject(error);
         });
 
         child.on('close', (code) => {
+          clearTimeout(timer);
           if (code === 0) {
             resolve();
             return;

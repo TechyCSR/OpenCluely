@@ -271,4 +271,43 @@ assert(windowManagerContent.includes('// Check collision / overlap between LLM r
 assert(windowManagerContent.includes('moving Cluely bar down below interview window'), 'window.manager.js must log moving Cluely bar down when resolving overlap');
 assert(windowManagerContent.includes('mainWindow.setPosition(mainBounds.x, safeMainY)'), 'window.manager.js must set Cluely bar position cleanly below interview window');
 
+// 12. Verify Speech Service Failsafe & Continuous Pipeline Watchdog
+console.log('12. Checking Speech Service Failsafe & Pipeline Watchdog...');
+assert(speechServiceContent.includes('_startPipelineWatchdog()'), 'speech.service.js must implement _startPipelineWatchdog');
+assert(speechServiceContent.includes('const timeoutMs = 25000;'), 'speech.service.js must provide 25s timeout for Whisper worker');
+assert(speechServiceContent.includes('Whisper CLI timed out after 15000ms'), 'speech.service.js must provide 15s timeout for CLI fallback');
+assert(speechServiceContent.includes('transcription in flight stuck for >20s, unlocking pipeline'), 'speech.service.js must have auto-recovery for hung transcription');
+
+// 13. Verify Direct Web AI Workspace (ChatGPT, Gemini, Grok) with 1s Hover Dwell & System Audio Dictation
+console.log('13. Checking Direct Web AI Workspace & 1s Hover Dwell...');
+const webModuleHtmlPath = path.join(__dirname, '..', 'web-module.html');
+assert(fs.existsSync(webModuleHtmlPath), 'web-module.html must exist');
+const webModuleHtmlContent = fs.readFileSync(webModuleHtmlPath, 'utf8');
+assert(webModuleHtmlContent.includes('chatgpt.com'), 'web-module.html must support ChatGPT');
+assert(webModuleHtmlContent.includes('gemini.google.com'), 'web-module.html must support Gemini');
+assert(webModuleHtmlContent.includes('grok.com'), 'web-module.html must support Grok');
+assert(webModuleHtmlContent.includes('btnDictate'), 'web-module.html must have dictation button');
+
+const webInjectPath = path.join(__dirname, '..', 'src', 'ui', 'web-view-inject.js');
+assert(fs.existsSync(webInjectPath), 'src/ui/web-view-inject.js must exist');
+const webInjectContent = fs.readFileSync(webInjectPath, 'utf8');
+assert(webInjectContent.includes('dwell-ring-wrapper'), 'web-view-inject.js must create dwell-ring-wrapper');
+assert(webInjectContent.includes('isCodeCopyButton'), 'web-view-inject.js must detect code snippet copy buttons');
+assert(webInjectContent.includes('dwell-code-copy'), 'web-view-inject.js must style code snippet copy dwell');
+assert(webInjectContent.includes('injectPromptAndSend'), 'web-view-inject.js must implement injectPromptAndSend');
+assert(webInjectContent.includes('1000'), 'web-view-inject.js must use 1000ms (1-second) dwell timer');
+
+const webModuleJsPath = path.join(__dirname, '..', 'src', 'ui', 'web-module.js');
+assert(fs.existsSync(webModuleJsPath), 'src/ui/web-module.js must exist');
+const webModuleJsContent = fs.readFileSync(webModuleJsPath, 'utf8');
+assert(webModuleJsContent.includes('attachDwellAutoClick'), 'web-module.js must attach dwell to toolbar buttons');
+assert(webModuleJsContent.includes('injectScriptIntoWebview'), 'web-module.js must inject userscript into webview');
+
+assert(windowManagerContent.includes("type === 'webModule'"), 'window.manager.js must configure webModule window');
+assert(windowManagerContent.includes('webviewTag: true'), 'window.manager.js must enable webviewTag');
+assert(windowManagerContent.includes('toggleWebModule()'), 'window.manager.js must implement toggleWebModule');
+assert(mainJsContent.includes('CommandOrControl+Shift+W'), 'main.js must register Cmd+Shift+W shortcut for Web Module');
+assert(mainJsContent.includes('show-web-module'), 'main.js must handle show-web-module IPC');
+assert(mainJsContent.includes('web-module-dictation-text'), 'main.js must broadcast web-module-dictation-text');
+
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');

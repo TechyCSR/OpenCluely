@@ -133,6 +133,17 @@ class WindowManager {
         alwaysOnTop: true,
         hasShadow: false,
         visibleOnAllWorkspaces: true
+      },
+      webModule: {
+        width: 980,
+        height: 720,
+        file: 'web-module.html',
+        title: 'Direct Web AI Workspace',
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        resizable: true,
+        visibleOnAllWorkspaces: true
       }
     };
 
@@ -162,6 +173,7 @@ class WindowManager {
       await this.createSettingsWindow();
       await this.createClipboardWindow();
       await this.createTargetBoxWindow();
+      await this.createWebModuleWindow();
       
       this.setupWindowEventHandlers();
       this.setupScreenTracking();
@@ -344,6 +356,29 @@ class WindowManager {
     return window;
   }
 
+  async createWebModuleWindow(showOnCreate = false) {
+    if (this.windows.has('webModule')) {
+      const win = this.windows.get('webModule');
+      if (showOnCreate) this.showOnCurrentDesktop(win);
+      return win;
+    }
+    const window = await this.createWindow('webModule');
+    this.windows.set('webModule', window);
+
+    window.webContents.on('console-message', (event, level, message) => {
+      if (message.includes('WEB-MODULE') || message.includes('WEB-VIEW')) {
+        logger.info(`[WEB-MODULE] ${message}`);
+      }
+    });
+
+    if (showOnCreate) {
+      this.showOnCurrentDesktop(window);
+    } else {
+      window.hide();
+    }
+    return window;
+  }
+
   async createWindow(type, showOnCreate = false) {
     const windowConfig = this.windowConfigs[type];
     if (!windowConfig) {
@@ -495,6 +530,32 @@ class WindowManager {
           acceptFirstMouse: true
         }),
         level: process.platform === 'darwin' ? 'floating' : undefined,
+      };
+    } else if (type === 'webModule') {
+      browserWindowOptions = {
+        ...baseOptions,
+        webPreferences: {
+          ...baseOptions.webPreferences,
+          webviewTag: true
+        },
+        frame: false,
+        titleBarStyle: 'hidden',
+        transparent: true,
+        backgroundColor: '#00000000',
+        resizable: true,
+        minWidth: 500,
+        minHeight: 400,
+        minimizable: false,
+        maximizable: true,
+        closable: true,
+        hasShadow: true,
+        focusable: true,
+        level: process.platform === 'darwin' ? 'floating' : undefined,
+        ...(process.platform === 'darwin' && {
+          type: 'panel',
+          acceptFirstMouse: true,
+          disableAutoHideCursor: true
+        })
       };
     } else if (type === 'clipboard' || type === 'targetBox') {
       // Use config settings for frameless/transparency
@@ -2498,6 +2559,37 @@ class WindowManager {
     // Notify all windows about recording state
     this.broadcastToAllWindows('recording-stopped');
     logger.debug('Recording stopped, chat window kept visible for the response');
+  }
+
+  showWebModule() {
+    const win = this.windows.get('webModule');
+    if (win && !win.isDestroyed()) {
+      this.showOnCurrentDesktop(win);
+      logger.debug('Web module window shown');
+    } else {
+      this.createWebModuleWindow(true);
+    }
+  }
+
+  hideWebModule() {
+    const win = this.windows.get('webModule');
+    if (win && !win.isDestroyed() && win.isVisible()) {
+      win.hide();
+      logger.debug('Web module window hidden');
+    }
+  }
+
+  toggleWebModule() {
+    const win = this.windows.get('webModule');
+    if (!win || win.isDestroyed()) {
+      this.createWebModuleWindow(true);
+      return;
+    }
+    if (win.isVisible()) {
+      this.hideWebModule();
+    } else {
+      this.showWebModule();
+    }
   }
 
   broadcastSkillChange(skill) {

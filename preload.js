@@ -221,6 +221,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('llm-window-state', handler);
     return () => ipcRenderer.removeListener('llm-window-state', handler);
   },
+
+  // Web AI Workspace Module
+  showWebModule: () => ipcRenderer.invoke('show-web-module'),
+  hideWebModule: () => ipcRenderer.invoke('hide-web-module'),
+  toggleWebModule: () => ipcRenderer.invoke('toggle-web-module'),
+  onWebModuleDictationText: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('web-module-dictation-text', handler);
+    return () => ipcRenderer.removeListener('web-module-dictation-text', handler);
+  },
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),
@@ -238,7 +248,10 @@ contextBridge.exposeInMainWorld('api', {
             'toggle-recording',
             'toggle-interaction-mode',
             'update-skill',
-            'window-loaded'
+            'window-loaded',
+            'toggle-web-module',
+            'close-web-module',
+            'open-web-module'
         ];
         if (validChannels.includes(channel)) {
             ipcRenderer.send(channel, data);
@@ -254,7 +267,8 @@ contextBridge.exposeInMainWorld('api', {
             'skill-updated',
             'update-skill',
             'recording-started',
-            'recording-stopped'
+            'recording-stopped',
+            'web-module-dictation-text'
         ];
         if (validChannels.includes(channel)) {
             ipcRenderer.on(channel, (event, ...args) => func(...args));

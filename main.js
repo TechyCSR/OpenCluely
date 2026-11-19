@@ -617,6 +617,9 @@ class ApplicationController {
       // Toggle Target Box (Alt+X or Cmd+Alt+X)
       "Alt+X": () => windowManager.showTargetBox(),
       "CommandOrControl+Alt+X": () => windowManager.showTargetBox(),
+      // Toggle Direct Web AI Workspace (ChatGPT, Gemini, Grok) [Cmd+Shift+W or Alt+W]
+      "CommandOrControl+Shift+W": () => windowManager.toggleWebModule(),
+      "Alt+W": () => windowManager.toggleWebModule(),
       // Toggle Clipboard History (Alt+C or Cmd+Alt+C)
       "Alt+C": () => windowManager.showClipboardWindow(),
       "CommandOrControl+Alt+C": () => windowManager.showClipboardWindow(),
@@ -672,6 +675,7 @@ class ApplicationController {
 
     speechService.on("transcription", (text) => {
       this.handleTranscriptionFragment(text);
+      windowManager.broadcastToAllWindows('web-module-dictation-text', { text });
     });
 
     speechService.on("interim-transcription", (text) => {
@@ -1203,6 +1207,34 @@ class ApplicationController {
 
     ipcMain.handle("get-settings", () => {
       return this.getSettings();
+    });
+
+    // Web AI Workspace Module handlers (ChatGPT, Gemini, Grok direct chat)
+    ipcMain.handle("show-web-module", () => {
+      windowManager.showWebModule();
+      return true;
+    });
+
+    ipcMain.handle("hide-web-module", () => {
+      windowManager.hideWebModule();
+      return true;
+    });
+
+    ipcMain.handle("toggle-web-module", () => {
+      windowManager.toggleWebModule();
+      return true;
+    });
+
+    ipcMain.on("toggle-web-module", () => {
+      windowManager.toggleWebModule();
+    });
+
+    ipcMain.on("open-web-module", () => {
+      windowManager.showWebModule();
+    });
+
+    ipcMain.on("close-web-module", () => {
+      windowManager.hideWebModule();
     });
 
     // First-run onboarding status — renderer can query to know whether
@@ -2887,9 +2919,9 @@ class ApplicationController {
         abortSignal.addEventListener('abort', () => combinedAbort(abortSignal.reason || 'Preempted'), { once: true });
       }
 
-      // 8.5-second watchdog for "Analyzing..." phase:
+      // 10-second watchdog for "Analyzing..." phase:
       // Allows realistic model inference initiation without premature abortion.
-      const WATCHDOG_MS = 8500;
+      const WATCHDOG_MS = 10000;
       analyzeTimeout = setTimeout(() => {
         if (!hasReceivedChunk && !internalAbort.signal.aborted) {
           logger.warn(`Watchdog: question stuck on analyzing for >${WATCHDOG_MS}ms, restarting generation...`, {

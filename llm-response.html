@@ -810,6 +810,7 @@
             <!-- Right: Mode Badge & Close Button -->
             <div class="header-right">
                 <span class="title-badge" id="skillBadge">INTERVIEW</span>
+                <button id="web-module-btn" class="window-btn" title="Open Direct Web AI (ChatGPT, Gemini, Grok) [⌘⇧W]" style="font-size: 11px; margin-right: 4px; display: inline-flex; align-items: center; justify-content: center;"><i class="fas fa-globe"></i></button>
                 <button id="close-window-btn" class="window-btn" title="Close (Cmd+Shift+V / Esc)">×</button>
             </div>
         </div>
@@ -923,6 +924,17 @@
                     } catch (_) {
                         try { window.close(); } catch (_) {}
                     }
+                });
+            }
+
+            // Web AI Workspace Button
+            const webBtn = document.getElementById('web-module-btn');
+            if (webBtn) {
+                webBtn.addEventListener('click', () => {
+                    try {
+                        if (api && api.toggleWebModule) api.toggleWebModule();
+                        else if (window.api && window.api.send) window.api.send('toggle-web-module');
+                    } catch (_) {}
                 });
             }
 
@@ -1124,7 +1136,7 @@
                         showLoadingState('Processing');
                     }
 
-                    // Failsafe watchdog timer: If generation hangs for >8.5s without response or chunk,
+                    // Failsafe watchdog timer: If generation hangs for >12s without response or chunk,
                     // automatically clear the stuck state and restore the active answer screen
                     if (loadingWatchdogTimer) { clearTimeout(loadingWatchdogTimer); }
                     loadingWatchdogTimer = setTimeout(() => {
@@ -1142,7 +1154,7 @@
                                 setAlertText('Waiting for speech…');
                             }
                         }
-                    }, 8500);
+                    }, 12000);
                 });
             }
 
@@ -1150,6 +1162,7 @@
             if (api.onTranscriptionLlmResponseChunk) {
                 api.onTranscriptionLlmResponseChunk((_e, payload) => {
                     if (readyToIdleTimer) { clearTimeout(readyToIdleTimer); readyToIdleTimer = null; }
+                    if (loadingWatchdogTimer) { clearTimeout(loadingWatchdogTimer); loadingWatchdogTimer = null; }
                     if (!payload) return;
                     const chunk = payload.delta || payload.chunk || payload.text || (typeof payload === 'string' ? payload : '');
                     if (!chunk) return;

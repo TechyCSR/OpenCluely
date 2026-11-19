@@ -477,6 +477,7 @@ class MainWindowUI {
         this.mcqToggle = document.getElementById('mcqToggle');
         this.autoHideToggle = document.getElementById('autoHideToggle');
         this.autoTypeButton = document.getElementById('autoTypeButton');
+        this.webModuleBtn = document.getElementById('webModuleBtn');
         this.autoTypeLabel = document.getElementById('autoTypeLabel');
         this.autoTypeProgressFill = document.getElementById('autoTypeProgressFill');
         this.opacitySlider = document.getElementById('opacitySlider');
@@ -824,6 +825,21 @@ class MainWindowUI {
             this.autoTypeButton.addEventListener('click', triggerAutoTypeAction);
             if (window.RubicHoverDwell) {
                 window.RubicHoverDwell.attach(this.autoTypeButton, triggerAutoTypeAction);
+            }
+        }
+
+        // Web AI Workspace Module toggle
+        if (this.webModuleBtn) {
+            const triggerWebModuleAction = async () => {
+                if (window.electronAPI && window.electronAPI.toggleWebModule) {
+                    await window.electronAPI.toggleWebModule();
+                } else if (window.api) {
+                    window.api.send('toggle-web-module');
+                }
+            };
+            this.webModuleBtn.addEventListener('click', triggerWebModuleAction);
+            if (window.RubicHoverDwell) {
+                window.RubicHoverDwell.attach(this.webModuleBtn, triggerWebModuleAction);
             }
         }
 
