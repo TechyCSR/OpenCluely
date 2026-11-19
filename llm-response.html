@@ -990,7 +990,9 @@
                 if (speechProcessingWatchdogTimer) clearTimeout(speechProcessingWatchdogTimer);
                 speechProcessingWatchdogTimer = setTimeout(() => {
                     speechProcessingWatchdogTimer = null;
-                    if (!isStreaming && statusBadge && (statusBadge.textContent === 'PROCESSING' || statusBadge.textContent === 'ANALYZING')) {
+                    const label = document.getElementById('statusLabel');
+                    const currentStatus = label ? label.textContent.trim().toUpperCase() : '';
+                    if (!isStreaming && (currentStatus === 'PROCESSING' || currentStatus === 'ANALYZING' || currentStatus === 'RETRYING')) {
                         console.warn('[INTERVIEW-UI] Speech processing watchdog: safely recovering from stuck state');
                         hideLoadingState();
                         if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
@@ -1240,6 +1242,30 @@
             if (api.onTranscriptionLlmResponse) {
                 api.onTranscriptionLlmResponse((_e, data) => handleFinalResponse(data || _e));
             }
+
+            // Error Recovery: Ensure speech and LLM errors never leave the interview window stuck
+            const handlePipelineError = (err) => {
+                console.warn('[INTERVIEW-UI] Pipeline error received:', err);
+                isStreaming = false;
+                clearSpeechProcessingWatchdog();
+                hideLoadingState();
+                if (loadingWatchdogTimer) { clearTimeout(loadingWatchdogTimer); loadingWatchdogTimer = null; }
+                if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
+                    displayStructuredAnswer(answerHistory[currentHistoryIndex]);
+                    setStatus('READY');
+                    setAlertText('Answer ready');
+                } else {
+                    setStatus('IDLE');
+                    setAlertText('Waiting for speech…');
+                }
+            };
+
+            if (api.onLlmError) {
+                api.onLlmError((_e, data) => handlePipelineError(data));
+            }
+            if (api.onSpeechError) {
+                api.onSpeechError((_e, data) => handlePipelineError(data));
+            }
         }
 
         // ── Status & Ribbon Updates ──
@@ -1400,10 +1426,16 @@
 
             if (loadingWatchdogTimer) clearTimeout(loadingWatchdogTimer);
             loadingWatchdogTimer = setTimeout(() => {
+                loadingWatchdogTimer = null;
+                console.warn('[INTERVIEW-UI] Loading watchdog timeout; safely clearing stuck loader');
+                hideLoadingState();
                 if (answerHistory.length > 0 && currentHistoryIndex >= 0) {
-                    console.warn('[INTERVIEW-UI] Loading watchdog timeout; restoring active answer');
-                    hideLoadingState();
                     displayStructuredAnswer(answerHistory[currentHistoryIndex]);
+                    setStatus('READY');
+                    setAlertText('Answer ready');
+                } else {
+                    setStatus('IDLE');
+                    setAlertText('Waiting for speech…');
                 }
             }, 7500);
         }

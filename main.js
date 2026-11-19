@@ -347,6 +347,30 @@ class ApplicationController {
       platform: process.platform,
     });
 
+    // Auto-approve microphone and media capture permissions so websites like ChatGPT, Gemini, Grok never prompt
+    const grantMediaPermissions = (ses) => {
+      if (!ses) return;
+      try {
+        ses.setPermissionRequestHandler((webContents, permission, callback) => {
+          if (permission === 'media' || permission === 'microphone' || permission === 'audioCapture') {
+            callback(true);
+          } else {
+            callback(false);
+          }
+        });
+        ses.setPermissionCheckHandler((webContents, permission) => {
+          if (permission === 'media' || permission === 'microphone' || permission === 'audioCapture') {
+            return true;
+          }
+          return false;
+        });
+      } catch (err) {
+        logger.warn('Could not configure media permissions on session', { error: err.message });
+      }
+    };
+    grantMediaPermissions(session.defaultSession);
+    grantMediaPermissions(session.fromPartition('persist:webmodule'));
+
     try {
       this.setupPermissions();
       this.setupNetworkConfiguration();
@@ -709,6 +733,16 @@ class ApplicationController {
       BrowserWindow.getAllWindows().forEach((window) => {
         window.webContents.send("speech-error", { error, available: this.speechAvailable });
       });
+    });
+
+    // Stream system audio PCM chunks directly to the Web Module workspace if open
+    speechService.on("system-audio-chunk", (chunk) => {
+      try {
+        const webWin = windowManager.getWindow("webModule");
+        if (webWin && !webWin.isDestroyed() && webWin.isVisible()) {
+          webWin.webContents.send("system-audio-stream", chunk);
+        }
+      } catch (_) {}
     });
 
     // Auto-Type events broadcasting
@@ -1223,6 +1257,19 @@ class ApplicationController {
     ipcMain.handle("toggle-web-module", () => {
       windowManager.toggleWebModule();
       return true;
+    });
+
+    ipcMain.handle("start-system-audio-for-web", async () => {
+      try {
+        if (!speechService.isRecording) {
+          logger.info("Starting speechService audio capture for web module system audio stream");
+          await speechService.startRecording();
+        }
+        return true;
+      } catch (err) {
+        logger.warn("Could not start speech service for web dictation", { error: err.message });
+        return false;
+      }
     });
 
     ipcMain.on("toggle-web-module", () => {

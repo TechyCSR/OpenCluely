@@ -199,7 +199,7 @@ class WhisperWorkerService {
     if (this.process && !this.process.killed) {
       try {
         this.closing = true;
-        this.process.kill();
+        this.process.kill('SIGKILL');
       } catch (_) {
         // Ignore shutdown races.
       }
@@ -207,6 +207,12 @@ class WhisperWorkerService {
     this.process = null;
     this.readyInfo = null;
     this._rejectAll(new Error('Whisper worker closed'));
+  }
+
+  restart() {
+    logger.info('Restarting persistent Whisper worker process');
+    this.close();
+    this._ensureProcess();
   }
 }
 

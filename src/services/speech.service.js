@@ -780,6 +780,7 @@ class SpeechService extends EventEmitter {
           this.emit('status', 'Waiting for speech…');
           logger.info('System audio capture active: first audio chunk received from device');
         }
+        this.emit('system-audio-chunk', chunk);
         this._ingestWhisperAudio(chunk);
       });
 
@@ -892,8 +893,8 @@ class SpeechService extends EventEmitter {
       // 3. If recording system audio on macOS and no chunks received for >8 seconds, verify helper is running
       if (this.isRecording && this.runtimeSettings.audioSourceMode === 'system' && process.platform === 'darwin') {
         const lastChunkTime = this.vadLastChunkAt ? (Date.now() - this.vadLastChunkAt) : 0;
-        if (lastChunkTime > 8000 && !this.systemAudioProcess) {
-          logger.warn('Failsafe: system audio process absent while recording, resurrecting...');
+        if (!this.systemAudioProcess || lastChunkTime > 8000) {
+          logger.warn('Failsafe: system audio process absent or stalled (>8s silence), resurrecting helper...', { lastChunkTime });
           this._startSystemAudioCapture();
         }
       }
@@ -1091,6 +1092,7 @@ class SpeechService extends EventEmitter {
       this.vadSpeaking = false;
       this.vadSpeechMs = 0;
       this.vadSilenceMs = 0;
+      this.emit('status', 'Waiting for speech…');
     }
   }
 
@@ -2052,6 +2054,7 @@ class SpeechService extends EventEmitter {
     }
 
     if (!this.segmentBytes) {
+      this.emit('status', 'Waiting for speech…');
       return;
     }
 
@@ -2167,16 +2170,14 @@ class SpeechService extends EventEmitter {
           clearTimeout(timeoutHandle);
           timeoutHandle = null;
         }
-        logger.warn('Persistent Whisper worker failed; falling back to CLI', {
+        logger.warn('Persistent Whisper worker failed; restarting worker and falling back to CLI', {
           error: error.message,
           workerTraceback: error.workerTraceback
         });
-        // Only close the worker process if it was genuinely aborted or dead
-        if (!this.whisperWorker.process || this.whisperWorker.process.killed) {
-          try {
-            this.whisperWorker.close();
-          } catch (_) {}
-        }
+        // Restart the worker process to avoid queue stall
+        try {
+          this.whisperWorker.restart();
+        } catch (_) {}
       }
     }
 

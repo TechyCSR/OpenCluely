@@ -310,4 +310,36 @@ assert(mainJsContent.includes('CommandOrControl+Shift+W'), 'main.js must registe
 assert(mainJsContent.includes('show-web-module'), 'main.js must handle show-web-module IPC');
 assert(mainJsContent.includes('web-module-dictation-text'), 'main.js must broadcast web-module-dictation-text');
 
+// 14. Verify Interview Module Window Self-Healing Watchdogs & Error Listeners
+console.log('14. Checking Interview Module Window Self-Healing Watchdogs & Error Listeners...');
+assert(htmlContent.includes("document.getElementById('statusLabel')"), 'llm-response.html must check statusLabel for watchdog recovery');
+assert(htmlContent.includes('api.onLlmError'), 'llm-response.html must listen for onLlmError');
+assert(htmlContent.includes('api.onSpeechError'), 'llm-response.html must listen for onSpeechError');
+assert(htmlContent.includes('Loading watchdog timeout; safely clearing stuck loader'), 'llm-response.html must recover on loading timeout even on initial question');
+
+const whisperWorkerServicePath = path.join(__dirname, '..', 'src', 'services', 'whisper-worker.service.js');
+const whisperWorkerServiceContent = fs.readFileSync(whisperWorkerServicePath, 'utf8');
+assert(whisperWorkerServiceContent.includes('restart()'), 'whisper-worker.service.js must implement restart()');
+assert(speechServiceContent.includes('this.whisperWorker.restart()'), 'speech.service.js must call whisperWorker.restart() on timeout');
+assert(speechServiceContent.includes('this.emit(\'system-audio-chunk\', chunk);'), 'speech.service.js must emit system-audio-chunk');
+
+// 15. Verify Web Module Auto-Approve Microphone & System Audio Interception
+console.log('15. Checking Web Module Auto-Approve Microphone & System Audio Interception...');
+assert(mainJsContent.includes("permission === 'media' || permission === 'microphone'"), 'main.js must auto-approve media and microphone permissions');
+assert(mainJsContent.includes("grantMediaPermissions(session.fromPartition('persist:webmodule'))"), 'main.js must auto-approve permissions on webmodule partition');
+assert(webModuleJsContent.includes("e.permission === 'media' || e.permission === 'microphone'"), 'web-module.js must auto-approve webview permission-request');
+assert(webInjectContent.includes('navigator.mediaDevices.getUserMedia = async function'), 'web-view-inject.js must intercept getUserMedia');
+assert(webInjectContent.includes('getOrCreateSystemAudioStream'), 'web-view-inject.js must route system audio into MediaStream');
+assert(webInjectContent.includes('ingestSystemAudioPCM'), 'web-view-inject.js must implement ingestSystemAudioPCM');
+
+// 16. Verify Link Exclusion from 1s Hover Dwell & Linked Website Transparency
+console.log('16. Checking Link Exclusion from 1s Hover Dwell & Linked Website Transparency...');
+const preloadPath = path.join(__dirname, '..', 'preload.js');
+const preloadContent = fs.readFileSync(preloadPath, 'utf8');
+assert(webInjectContent.includes("el.closest('a, [role=\"link\"], [href]')"), 'web-view-inject.js must strictly exclude links from auto-click');
+assert(webInjectContent.includes('updateWebsiteTransparency'), 'web-view-inject.js must implement updateWebsiteTransparency');
+assert(webModuleJsContent.includes('applyWebsiteOpacity'), 'web-module.js must link website transparency to Cluely bar opacity');
+assert(preloadContent.includes('startSystemAudioForWeb'), 'preload.js must expose startSystemAudioForWeb');
+assert(preloadContent.includes('onSystemAudioStream'), 'preload.js must expose onSystemAudioStream');
+
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');

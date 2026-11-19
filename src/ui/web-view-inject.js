@@ -118,15 +118,23 @@
 
   function isClickableButton(el) {
     if (!el || el === document.body || el === document.documentElement) return false;
-    const tag = el.tagName.toLowerCase();
-    const role = (el.getAttribute('role') || '').toLowerCase();
-    if (tag === 'button' || role === 'button') return true;
-    if (el.classList.contains('btn') || isCodeCopyButton(el)) return true;
-    // Check parent up to 2 levels
-    const p = el.parentElement;
-    if (p && (p.tagName.toLowerCase() === 'button' || (p.getAttribute('role') || '').toLowerCase() === 'button')) {
-      return p;
+
+    // STRICT REQUIREMENT: EXCLUDE LINKS completely!
+    if (el.closest('a, [role="link"], [href]')) {
+      return false;
     }
+
+    // Match button elements
+    const buttonEl = el.closest('button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]');
+    if (buttonEl) {
+      if (buttonEl.closest('a, [role="link"], [href]')) return false;
+      return buttonEl;
+    }
+
+    if (isCodeCopyButton(el) || el.classList.contains('btn') || (el.getAttribute('data-testid') && el.getAttribute('data-testid').toLowerCase().includes('button'))) {
+      return el;
+    }
+
     return false;
   }
 
@@ -297,4 +305,127 @@
 
     return true;
   };
+
+  // ── 1. Virtual MediaStream System Audio Ingestion & Routing ──
+  let sysAudioCtx = null;
+  let sysAudioDest = null;
+  let nextChunkTime = 0;
+
+  function getOrCreateSystemAudioStream() {
+    if (!sysAudioCtx || sysAudioCtx.state === 'closed') {
+      sysAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      sysAudioDest = sysAudioCtx.createMediaStreamDestination();
+      nextChunkTime = sysAudioCtx.currentTime;
+    }
+    if (sysAudioCtx.state === 'suspended') {
+      sysAudioCtx.resume();
+    }
+    return sysAudioDest.stream;
+  }
+
+  window.ingestSystemAudioPCM = (rawBuffer) => {
+    try {
+      getOrCreateSystemAudioStream();
+      const int16 = new Int16Array(rawBuffer.buffer || rawBuffer);
+      if (!int16.length) return;
+      const float32 = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768.0;
+      }
+      const audioBuffer = sysAudioCtx.createBuffer(1, float32.length, 16000);
+      audioBuffer.copyToChannel(float32, 0);
+
+      const source = sysAudioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(sysAudioDest);
+
+      const now = sysAudioCtx.currentTime;
+      if (nextChunkTime < now) {
+        nextChunkTime = now;
+      }
+      source.start(nextChunkTime);
+      nextChunkTime += audioBuffer.duration;
+    } catch (err) {
+      console.error('[WEB-VIEW] System audio ingest error:', err);
+    }
+  };
+
+  // Intercept getUserMedia so website's voice dictation mic uses the system audio stream
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async function(constraints) {
+      console.log('[WEB-VIEW] Intercepted getUserMedia with constraints:', constraints);
+      if (constraints && (constraints.audio || constraints === true)) {
+        try {
+          if (typeof require !== 'undefined') {
+            try {
+              const { ipcRenderer } = require('electron');
+              ipcRenderer.sendToHost('request-system-audio-start');
+            } catch (_) {}
+          }
+          const stream = getOrCreateSystemAudioStream();
+          showToast('🎙️ Using System Audio (Interviewer)', true);
+          return stream;
+        } catch (e) {
+          console.warn('[WEB-VIEW] Fallback to original getUserMedia:', e);
+        }
+      }
+      return origGetUserMedia(constraints);
+    };
+  }
+
+  // Intercept enumerateDevices to advertise system audio device
+  if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    const origEnumerate = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+    navigator.mediaDevices.enumerateDevices = async function() {
+      const devices = await origEnumerate();
+      const hasVirtual = devices.some(d => d.label && d.label.includes('System Audio'));
+      if (!hasVirtual) {
+        devices.unshift({
+          deviceId: 'system-audio-default',
+          kind: 'audioinput',
+          label: 'System Audio (Interviewer)',
+          groupId: 'system-audio-group'
+        });
+      }
+      return devices;
+    };
+  }
+
+  // ── 2. Website Transparency Linked to Cluely Bar Setting ──
+  let websiteStyleEl = null;
+  window.updateWebsiteTransparency = (opacity) => {
+    const op = typeof opacity === 'number' ? opacity : parseFloat(opacity);
+    if (isNaN(op)) return;
+
+    if (!websiteStyleEl) {
+      websiteStyleEl = document.createElement('style');
+      websiteStyleEl.id = 'web-module-transparency-override';
+      document.head.appendChild(websiteStyleEl);
+    }
+
+    if (op >= 0.98) {
+      websiteStyleEl.textContent = '';
+      return;
+    }
+
+    // Inject subtle glass-morphism onto website background surfaces
+    websiteStyleEl.textContent = `
+      html, body, #__next, main, [class*="bg-token-main-surface"], [class*="dark:bg-"] {
+        background-color: rgba(18, 20, 26, ${Math.max(0.25, op * 0.88)}) !important;
+      }
+    `;
+  };
+
+  // IPC listeners if available in webview context
+  try {
+    const { ipcRenderer } = require('electron');
+    ipcRenderer.on('system-audio-chunk', (_e, chunk) => {
+      window.ingestSystemAudioPCM(chunk);
+    });
+    ipcRenderer.on('update-website-opacity', (_e, op) => {
+      window.updateWebsiteTransparency(op);
+    });
+  } catch (_) {}
 })();
+

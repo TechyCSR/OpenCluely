@@ -176,6 +176,48 @@ document.addEventListener('DOMContentLoaded', () => {
         injectScriptIntoWebview();
     });
 
+    // Auto-approve media & microphone permission requests from webview
+    webview.addEventListener('permission-request', (e) => {
+        if (e.permission === 'media' || e.permission === 'microphone' || e.permission === 'audioCapture') {
+            console.log('[WEB-MODULE] Auto-approved microphone access request for webview');
+            e.request.allow();
+        }
+    });
+
+    // Listen for requests originating from inside the webview
+    webview.addEventListener('ipc-message', (e) => {
+        if (e.channel === 'request-system-audio-start') {
+            console.log('[WEB-MODULE] Webview requested system audio capture start');
+            if (window.electronAPI && window.electronAPI.startSystemAudioForWeb) {
+                window.electronAPI.startSystemAudioForWeb();
+            }
+        } else if (e.channel === 'request-hide-web-module') {
+            if (window.electronAPI && window.electronAPI.hideWebModule) {
+                window.electronAPI.hideWebModule();
+            }
+        }
+    });
+
+    // Stream system audio PCM chunks directly into the webview for web dictation
+    if (window.electronAPI && window.electronAPI.onSystemAudioStream) {
+        window.electronAPI.onSystemAudioStream((chunk) => {
+            if (webview) {
+                try {
+                    webview.send('system-audio-chunk', chunk);
+                } catch (_) {}
+            }
+        });
+    }
+
+    // Escape key to hide web module instantly
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (window.electronAPI && window.electronAPI.hideWebModule) {
+                window.electronAPI.hideWebModule();
+            }
+        }
+    });
+
     // ── Dictation (Capture System Audio & Inject into Web Chat) ──
     function setDictatingState(active) {
         isDictating = active;
@@ -238,15 +280,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Sync opacity
+    // Sync opacity with Cluely bar transparency setting
+    function applyWebsiteOpacity(opacity) {
+        if (opacity === undefined || opacity === null) return;
+        const opVal = typeof opacity === 'number' ? opacity : parseFloat(opacity);
+        if (isNaN(opVal)) return;
+
+        const opStr = opVal.toString();
+        document.body.style.opacity = opStr;
+        if (webview) {
+            webview.style.opacity = opStr;
+            try {
+                webview.send('update-website-opacity', opVal);
+                webview.executeJavaScript(`if (window.updateWebsiteTransparency) window.updateWebsiteTransparency(${opVal});`).catch(() => {});
+            } catch (_) {}
+        }
+    }
+
     if (window.electronAPI && window.electronAPI.getOpacity) {
-        window.electronAPI.getOpacity().then(op => {
-            if (op !== undefined && op !== null) document.body.style.opacity = op.toString();
-        }).catch(() => {});
+        window.electronAPI.getOpacity().then(op => applyWebsiteOpacity(op)).catch(() => {});
     }
     if (window.electronAPI && window.electronAPI.onOpacityUpdate) {
-        window.electronAPI.onOpacityUpdate((event, opacity) => {
-            document.body.style.opacity = opacity.toString();
+        window.electronAPI.onOpacityUpdate((_event, opacity) => {
+            applyWebsiteOpacity(opacity);
         });
     }
 });
+
