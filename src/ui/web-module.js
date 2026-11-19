@@ -1,7 +1,7 @@
 /**
  * Direct Web AI Workspace Renderer
  * Manages tab switching, toolbar 1s hover dwell, webview userscript injection,
- * and automatic system audio dictation into ChatGPT, Gemini, Grok, and Claude.
+ * background hover-click tracking, and automatic system audio dictation into ChatGPT, Gemini, Grok, and Claude.
  */
 document.addEventListener('DOMContentLoaded', () => {
     const webview = document.getElementById('chatWebview');
@@ -20,45 +20,27 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDictating = false;
     let currentTab = 'chatgpt';
 
+    // ── Configure Absolute file:// Preload for Webview ──
+    const path = require('path');
+    const url = require('url');
+    try {
+        const injectPath = path.join(__dirname, 'web-view-inject.js');
+        const preloadUrl = url.pathToFileURL(injectPath).href;
+        webview.preload = preloadUrl;
+        console.log('[WEB-MODULE] Configured webview preload file URL:', preloadUrl);
+    } catch (e) {
+        console.warn('[WEB-MODULE] Error setting webview preload URL:', e);
+    }
+
     // ── Universal 1-Second Hover Dwell on Toolbar Buttons ──
     function attachDwellAutoClick(btn) {
         let timer = null;
-        let ringWrapper = null;
 
         btn.addEventListener('mouseenter', () => {
             if (timer) clearTimeout(timer);
-            if (ringWrapper) try { ringWrapper.remove(); } catch (_) {}
-
-            const rect = btn.getBoundingClientRect();
-            if (rect.width < 10 || rect.height < 10) return;
-
-            ringWrapper = document.createElement('div');
-            ringWrapper.className = 'btn-dwell-ring';
-            const rx = 8;
-            ringWrapper.innerHTML = `
-                <svg class="btn-dwell-svg">
-                    <rect x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx="${rx}" class="btn-dwell-rect" />
-                </svg>
-            `;
-            btn.appendChild(ringWrapper);
-
-            const rectShape = ringWrapper.querySelector('.btn-dwell-rect');
-            const perim = 2 * (rect.width + rect.height);
-            if (rectShape) {
-                rectShape.style.strokeDasharray = `${perim}`;
-                rectShape.style.strokeDashoffset = `${perim}`;
-                requestAnimationFrame(() => {
-                    rectShape.style.strokeDashoffset = '0';
-                });
-            }
-
             timer = setTimeout(() => {
                 timer = null;
                 btn.click();
-                if (ringWrapper) {
-                    try { ringWrapper.remove(); } catch (_) {}
-                    ringWrapper = null;
-                }
             }, 1000);
         });
 
@@ -66,10 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (timer) {
                 clearTimeout(timer);
                 timer = null;
-            }
-            if (ringWrapper) {
-                try { ringWrapper.remove(); } catch (_) {}
-                ringWrapper = null;
             }
         });
     }
@@ -134,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Webview Lifecycle & Injected Userscript ──
     const fs = require('fs');
-    const path = require('path');
     let injectScriptContent = '';
     try {
         const injectPath = path.join(__dirname, 'web-view-inject.js');
@@ -149,9 +126,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!webview) return;
         if (injectScriptContent) {
             webview.executeJavaScript(injectScriptContent)
-                .then(() => console.log('[WEB-MODULE] Successfully injected 1s hover dwell script'))
+                .then(() => console.log('[WEB-MODULE] Injected script active in webview'))
                 .catch(err => console.error('[WEB-MODULE] Script injection error:', err));
         }
+        try {
+            webview.insertCSS(`
+                html, body {
+                    background-color: transparent !important;
+                }
+                #__next, main, [class*="bg-token-main-surface"], [class*="dark:bg-"] {
+                    background-color: rgba(18, 20, 26, 0.82) !important;
+                }
+            `).catch(() => {});
+        } catch (_) {}
     }
 
     webview.addEventListener('did-start-loading', () => {
@@ -209,6 +196,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ── Global Cursor Hover Forwarding (Works when other window is selected) ──
+    if (window.electronAPI && window.electronAPI.onGlobalCursorHover) {
+        window.electronAPI.onGlobalCursorHover((data) => {
+            if (webview && data && data.webviewY >= 0) {
+                try {
+                    webview.send('check-hover-at', { x: data.webviewX, y: data.webviewY });
+                    webview.executeJavaScript(`if (window.checkHoverAt) window.checkHoverAt(${data.webviewX}, ${data.webviewY});`).catch(() => {});
+                } catch (_) {}
+            }
+        });
+    }
+
     // Escape key to hide web module instantly
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -241,10 +240,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Tell main process to toggle recording with system audio
         if (window.electronAPI && window.electronAPI.toggleRecording) {
             window.electronAPI.toggleRecording({ source: 'web-dictation' });
+        } else if (window.electronAPI && window.electronAPI.toggleSpeechRecognition) {
+            window.electronAPI.toggleSpeechRecognition();
         } else if (window.api) {
             window.api.send('toggle-recording', { source: 'web-dictation' });
         }
     });
+
+    // Listen to global recording state changes
+    if (window.electronAPI && window.electronAPI.receive) {
+        window.electronAPI.receive('recording-started', () => setDictatingState(true));
+        window.electronAPI.receive('recording-stopped', () => setDictatingState(false));
+    }
 
     // Listen for live speech transcription from main process
     if (window.electronAPI && window.electronAPI.onTranscription) {
@@ -254,7 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             console.log('[WEB-MODULE] Received transcription from speech engine:', text);
 
-            // If dictation mode was triggered or web module is visible, auto-inject into active webview chat!
             if (webview && isDictating) {
                 statusText.textContent = 'Injecting question into chat…';
                 webview.executeJavaScript(`window.injectPromptAndSend(${JSON.stringify(text)})`)
@@ -306,4 +312,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-

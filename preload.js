@@ -226,7 +226,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showWebModule: () => ipcRenderer.invoke('show-web-module'),
   hideWebModule: () => ipcRenderer.invoke('hide-web-module'),
   toggleWebModule: () => ipcRenderer.invoke('toggle-web-module'),
+  toggleRecording: (options) => ipcRenderer.send('toggle-recording', options),
   startSystemAudioForWeb: () => ipcRenderer.invoke('start-system-audio-for-web'),
+  onGlobalCursorHover: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('global-cursor-hover', handler);
+    return () => ipcRenderer.removeListener('global-cursor-hover', handler);
+  },
   onSystemAudioStream: (callback) => {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on('system-audio-stream', handler);

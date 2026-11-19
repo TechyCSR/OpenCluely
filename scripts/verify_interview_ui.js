@@ -291,9 +291,9 @@ assert(webModuleHtmlContent.includes('btnDictate'), 'web-module.html must have d
 const webInjectPath = path.join(__dirname, '..', 'src', 'ui', 'web-view-inject.js');
 assert(fs.existsSync(webInjectPath), 'src/ui/web-view-inject.js must exist');
 const webInjectContent = fs.readFileSync(webInjectPath, 'utf8');
-assert(webInjectContent.includes('dwell-ring-wrapper'), 'web-view-inject.js must create dwell-ring-wrapper');
+assert(webInjectContent.includes('cursor: default !important'), 'web-view-inject.js must preserve default cursor without visual symbol change');
 assert(webInjectContent.includes('isCodeCopyButton'), 'web-view-inject.js must detect code snippet copy buttons');
-assert(webInjectContent.includes('dwell-code-copy'), 'web-view-inject.js must style code snippet copy dwell');
+assert(webInjectContent.includes('checkHoverAt'), 'web-view-inject.js must implement checkHoverAt for background window hover tracking');
 assert(webInjectContent.includes('injectPromptAndSend'), 'web-view-inject.js must implement injectPromptAndSend');
 assert(webInjectContent.includes('1000'), 'web-view-inject.js must use 1000ms (1-second) dwell timer');
 

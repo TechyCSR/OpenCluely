@@ -143,7 +143,9 @@ class WindowManager {
         transparent: true,
         alwaysOnTop: true,
         resizable: true,
-        visibleOnAllWorkspaces: true
+        visibleOnAllWorkspaces: true,
+        acceptFirstMouse: true,
+        hasShadow: false
       }
     };
 
@@ -359,11 +361,23 @@ class WindowManager {
   async createWebModuleWindow(showOnCreate = false) {
     if (this.windows.has('webModule')) {
       const win = this.windows.get('webModule');
-      if (showOnCreate) this.showOnCurrentDesktop(win);
+      if (showOnCreate) {
+        const curOp = this.currentOpacity !== undefined ? this.currentOpacity : 0.38;
+        win.setOpacity(curOp);
+        win.setIgnoreMouseEvents(false);
+        this.showOnCurrentDesktop(win);
+      }
       return win;
     }
     const window = await this.createWindow('webModule');
     this.windows.set('webModule', window);
+
+    // Ensure webModule receives all mouse events and matches active opacity
+    const initialOp = this.currentOpacity !== undefined ? this.currentOpacity : 0.38;
+    try {
+      window.setOpacity(initialOp);
+      window.setIgnoreMouseEvents(false);
+    } catch (_) {}
 
     window.webContents.on('console-message', (event, level, message) => {
       if (message.includes('WEB-MODULE') || message.includes('WEB-VIEW')) {
@@ -1496,7 +1510,10 @@ class WindowManager {
     
     this.windows.forEach((window, type) => {
       if (!window.isDestroyed()) {
-        if (interactive) {
+        if (type === 'webModule') {
+          // Web Module workspace is always interactive, never click-through
+          window.setIgnoreMouseEvents(false);
+        } else if (interactive) {
           // Interactive mode: allow mouse events for all windows
           window.setIgnoreMouseEvents(false);
         } else {
@@ -2564,8 +2581,14 @@ class WindowManager {
   showWebModule() {
     const win = this.windows.get('webModule');
     if (win && !win.isDestroyed()) {
+      const curOp = this.currentOpacity !== undefined ? this.currentOpacity : 0.38;
+      try {
+        win.setOpacity(curOp);
+        win.setIgnoreMouseEvents(false);
+      } catch (_) {}
       this.showOnCurrentDesktop(win);
-      logger.debug('Web module window shown');
+      win.webContents.send('update-opacity', curOp);
+      logger.debug('Web module window shown with opacity', { opacity: curOp });
     } else {
       this.createWebModuleWindow(true);
     }

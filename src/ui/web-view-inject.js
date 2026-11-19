@@ -1,108 +1,31 @@
 /**
  * Stealth Web Module Injected Script for ChatGPT, Gemini, Grok, and Claude
  * Features:
- * 1. 1-second universal hover dwell auto-click for all buttons.
- * 2. Dedicated 1-second hover dwell for code snippet copy buttons with emerald glow and copy toast.
- * 3. Direct prompt text injection and auto-submission from native system audio transcription.
+ * 1. 1-second invisible hover dwell auto-click on buttons (excluding links).
+ * 2. No mouse cursor symbol change on buttons (cursor remains default).
+ * 3. Works even when other window is selected/active via background cursor hover tracking.
+ * 4. Virtual MediaStream injection using system audio PCM (NO physical mic, NO macOS orange dot).
+ * 5. Direct prompt text injection and auto-submission from native system audio transcription.
  */
 (() => {
   if (window.__webModuleInjected) return;
   window.__webModuleInjected = true;
 
-  console.log('[WEB-VIEW] Direct AI Assistant script initialized with 1s hover dwell');
+  console.log('[WEB-VIEW] Direct AI Assistant script initialized with silent 1s hover dwell & system audio');
 
-  // ── Inject Sleek Dwell Animation Styles ──
-  const styleEl = document.createElement('style');
-  styleEl.textContent = `
-    .dwell-ring-wrapper {
-      position: absolute !important;
-      inset: -3px !important;
-      pointer-events: none !important;
-      z-index: 999999 !important;
-      border-radius: inherit !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      overflow: visible !important;
-    }
-    .dwell-ring-svg {
-      position: absolute !important;
-      width: 100% !important;
-      height: 100% !important;
-      overflow: visible !important;
-    }
-    .dwell-ring-circle {
-      fill: none !important;
-      stroke: #38bdf8 !important;
-      stroke-width: 2.5px !important;
-      stroke-linecap: round !important;
-      stroke-dasharray: 200 !important;
-      stroke-dashoffset: 200 !important;
-      transition: stroke-dashoffset 1000ms linear !important;
-      filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.8)) !important;
-    }
-    .dwell-code-copy {
-      outline: 2px solid #10b981 !important;
-      outline-offset: 2px !important;
-      box-shadow: 0 0 12px rgba(16, 185, 129, 0.45) !important;
-    }
-    .dwell-code-copy .dwell-ring-circle {
-      stroke: #10b981 !important;
-      filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.9)) !important;
-    }
-    .dwell-toast {
-      position: fixed !important;
-      top: 18px !important;
-      left: 50% !important;
-      transform: translateX(-50%) translateY(-20px) !important;
-      background: rgba(15, 23, 42, 0.94) !important;
-      border: 1px solid rgba(16, 185, 129, 0.4) !important;
-      color: #34d399 !important;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-      font-size: 12px !important;
-      font-weight: 600 !important;
-      padding: 6px 14px !important;
-      border-radius: 20px !important;
-      backdrop-filter: blur(12px) !important;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
-      z-index: 10000000 !important;
-      opacity: 0 !important;
-      pointer-events: none !important;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
-      display: flex !important;
-      align-items: center !important;
-      gap: 6px !important;
-    }
-    .dwell-toast.is-visible {
-      opacity: 1 !important;
-      transform: translateX(-50%) translateY(0) !important;
+  // ── Cursor Invariant: Do not change mouse cursor symbol on buttons ──
+  const stealthStyle = document.createElement('style');
+  stealthStyle.id = 'web-module-stealth-styles';
+  stealthStyle.textContent = `
+    button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"], .btn {
+      cursor: default !important;
     }
   `;
-  document.head.appendChild(styleEl);
+  document.head.appendChild(stealthStyle);
 
-  // ── Floating HUD Toast ──
-  const toast = document.createElement('div');
-  toast.className = 'dwell-toast';
-  toast.innerHTML = '<span>✓</span> <span id="dwellToastMsg">Action completed (1s dwell)</span>';
-  document.body.appendChild(toast);
-
-  let toastTimer = null;
-  function showToast(msg, isCode = false) {
-    const label = document.getElementById('dwellToastMsg');
-    if (label) label.textContent = msg;
-    toast.style.borderColor = isCode ? 'rgba(16, 185, 129, 0.6)' : 'rgba(56, 189, 248, 0.6)';
-    toast.style.color = isCode ? '#34d399' : '#38bdf8';
-    toast.classList.add('is-visible');
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      toast.classList.remove('is-visible');
-    }, 2200);
-  }
-
-  // ── Universal 1-Second Hover Dwell State ──
+  // ── Universal 1-Second Hover Dwell State (Silent, Zero Visual Changes) ──
   let activeDwellTarget = null;
   let activeDwellTimer = null;
-  let activeRingElement = null;
 
   function isCodeCopyButton(el) {
     if (!el) return false;
@@ -143,72 +66,29 @@
       clearTimeout(activeDwellTimer);
       activeDwellTimer = null;
     }
-    if (activeRingElement) {
-      try { activeRingElement.remove(); } catch (_) {}
-      activeRingElement = null;
-    }
-    if (activeDwellTarget) {
-      activeDwellTarget.classList.remove('dwell-code-copy');
-      activeDwellTarget = null;
-    }
+    activeDwellTarget = null;
   }
 
   document.addEventListener('mouseover', (e) => {
     const rawTarget = e.target;
     let target = isClickableButton(rawTarget);
-    if (!target) return;
+    if (!target) {
+      clearActiveDwell();
+      return;
+    }
     if (typeof target === 'boolean') target = rawTarget;
 
     if (activeDwellTarget === target) return;
     clearActiveDwell();
 
     activeDwellTarget = target;
-    const isCode = isCodeCopyButton(target);
 
-    // Create Dwell Progress Ring
-    const rect = target.getBoundingClientRect();
-    if (rect.width < 10 || rect.height < 10) return;
-
-    const ringWrapper = document.createElement('div');
-    ringWrapper.className = 'dwell-ring-wrapper';
-    if (isCode) target.classList.add('dwell-code-copy');
-
-    const rx = Math.max(4, parseInt(window.getComputedStyle(target).borderRadius) || 6);
-    ringWrapper.innerHTML = `
-      <svg class="dwell-ring-svg">
-        <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" rx="${rx}" class="dwell-ring-circle" />
-      </svg>
-    `;
-
-    // Ensure relative positioning on target so absolute ring fits cleanly
-    const pos = window.getComputedStyle(target).position;
-    if (pos === 'static') {
-      target.style.position = 'relative';
-    }
-    target.appendChild(ringWrapper);
-    activeRingElement = ringWrapper;
-
-    const circle = ringWrapper.querySelector('.dwell-ring-circle');
-    // Compute exact perimeter for stroke-dashoffset animation
-    const perim = 2 * (rect.width + rect.height);
-    if (circle) {
-      circle.style.strokeDasharray = `${perim}`;
-      circle.style.strokeDashoffset = `${perim}`;
-      // Trigger smooth 1000ms transition
-      requestAnimationFrame(() => {
-        circle.style.strokeDashoffset = '0';
-      });
-    }
-
-    // Arm 1-second auto-click timer
+    // Arm 1-second auto-click timer (silent, no visible ring or cursor change)
     activeDwellTimer = setTimeout(() => {
       activeDwellTimer = null;
       try {
         target.click();
         console.log('[WEB-VIEW] 1s hover dwell auto-clicked button', target);
-        if (isCode) {
-          showToast('✓ Code Copied to Clipboard (1s dwell)', true);
-        }
       } catch (err) {
         console.error('[WEB-VIEW] Dwell click error:', err);
       }
@@ -224,6 +104,36 @@
     }
     clearActiveDwell();
   }, true);
+
+  // ── Background Cursor Hover Tracking (Works when other window is selected) ──
+  let bgHoverTarget = null;
+  let bgHoverStartTime = null;
+
+  window.checkHoverAt = (x, y) => {
+    try {
+      const el = document.elementFromPoint(x, y);
+      const target = isClickableButton(el);
+      if (!target) {
+        bgHoverTarget = null;
+        bgHoverStartTime = null;
+        return;
+      }
+
+      if (bgHoverTarget !== target) {
+        bgHoverTarget = target;
+        bgHoverStartTime = Date.now();
+      } else if (bgHoverStartTime && (Date.now() - bgHoverStartTime >= 1000)) {
+        // 1-second hover completed! Click the button touchlessly
+        bgHoverStartTime = Date.now() + 999999; // lock until cursor leaves
+        try {
+          target.click();
+          console.log('[WEB-VIEW] Background hover auto-clicked button at', x, y, target);
+        } catch (err) {
+          console.error('[WEB-VIEW] Background click failed:', err);
+        }
+      }
+    } catch (_) {}
+  };
 
   // ── Direct Prompt Injection from System Audio ──
   window.injectPromptAndSend = (text) => {
@@ -247,7 +157,7 @@
     let inputEl = null;
     for (const sel of inputCandidates) {
       const el = document.querySelector(sel);
-      if (el && el.offsetParent !== null) { // must be visible
+      if (el && el.offsetParent !== null) {
         inputEl = el;
         break;
       }
@@ -255,7 +165,6 @@
 
     if (!inputEl) {
       console.warn('[WEB-VIEW] Could not find chat prompt input field');
-      showToast('⚠️ Could not locate chat input field', false);
       return false;
     }
 
@@ -270,8 +179,6 @@
       inputEl.dispatchEvent(new Event('input', { bubbles: true }));
       inputEl.dispatchEvent(new Event('change', { bubbles: true }));
     }
-
-    showToast('✓ Question dictated & submitted (System Audio)', true);
 
     // Auto-click the send / submit button after a brief tick
     setTimeout(() => {
@@ -306,7 +213,7 @@
     return true;
   };
 
-  // ── 1. Virtual MediaStream System Audio Ingestion & Routing ──
+  // ── Virtual MediaStream System Audio Ingestion & Routing ──
   let sysAudioCtx = null;
   let sysAudioDest = null;
   let nextChunkTime = 0;
@@ -350,7 +257,8 @@
     }
   };
 
-  // Intercept getUserMedia so website's voice dictation mic uses the system audio stream
+  // Intercept getUserMedia so website voice dictation mic uses the system audio stream
+  // without touching physical mic hardware (eliminating macOS orange indicator)
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async function(constraints) {
@@ -364,7 +272,7 @@
             } catch (_) {}
           }
           const stream = getOrCreateSystemAudioStream();
-          showToast('🎙️ Using System Audio (Interviewer)', true);
+          console.log('[WEB-VIEW] Feeding system audio stream to web page');
           return stream;
         } catch (e) {
           console.warn('[WEB-VIEW] Fallback to original getUserMedia:', e);
@@ -392,7 +300,7 @@
     };
   }
 
-  // ── 2. Website Transparency Linked to Cluely Bar Setting ──
+  // ── Website Transparency Linked to Cluely Bar Setting ──
   let websiteStyleEl = null;
   window.updateWebsiteTransparency = (opacity) => {
     const op = typeof opacity === 'number' ? opacity : parseFloat(opacity);
@@ -412,7 +320,7 @@
     // Inject subtle glass-morphism onto website background surfaces
     websiteStyleEl.textContent = `
       html, body, #__next, main, [class*="bg-token-main-surface"], [class*="dark:bg-"] {
-        background-color: rgba(18, 20, 26, ${Math.max(0.25, op * 0.88)}) !important;
+        background-color: rgba(18, 20, 26, ${Math.max(0.18, op * 0.85)}) !important;
       }
     `;
   };
@@ -420,6 +328,9 @@
   // IPC listeners if available in webview context
   try {
     const { ipcRenderer } = require('electron');
+    ipcRenderer.on('check-hover-at', (_e, { x, y }) => {
+      window.checkHoverAt(x, y);
+    });
     ipcRenderer.on('system-audio-chunk', (_e, chunk) => {
       window.ingestSystemAudioPCM(chunk);
     });
@@ -428,4 +339,3 @@
     });
   } catch (_) {}
 })();
-

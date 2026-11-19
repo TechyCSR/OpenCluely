@@ -465,6 +465,35 @@ class ApplicationController {
         }, 500);
       }
 
+      // Global cursor tracking for touchless background hover-clicking on Web Module buttons
+      const { screen } = require('electron');
+      this._globalCursorTracker = setInterval(() => {
+        try {
+          const webWin = windowManager.getWindow('webModule');
+          if (!webWin || webWin.isDestroyed() || !webWin.isVisible()) return;
+
+          const bounds = webWin.getBounds();
+          const point = screen.getCursorScreenPoint();
+          if (
+            point.x >= bounds.x &&
+            point.x <= bounds.x + bounds.width &&
+            point.y >= bounds.y &&
+            point.y <= bounds.y + bounds.height
+          ) {
+            const localX = point.x - bounds.x;
+            const localY = point.y - bounds.y;
+            webWin.webContents.send('global-cursor-hover', {
+              screenX: point.x,
+              screenY: point.y,
+              localX,
+              localY,
+              webviewX: localX,
+              webviewY: localY - 44
+            });
+          }
+        } catch (_) {}
+      }, 75);
+
       logger.info("All windows initialized successfully", {
         windowCount: Object.keys(windowManager.getWindowStats().windows).length,
         currentDesktop: "detected",
@@ -1270,6 +1299,10 @@ class ApplicationController {
         logger.warn("Could not start speech service for web dictation", { error: err.message });
         return false;
       }
+    });
+
+    ipcMain.on("toggle-recording", () => {
+      this.toggleSpeechRecognition();
     });
 
     ipcMain.on("toggle-web-module", () => {
