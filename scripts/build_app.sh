@@ -114,6 +114,9 @@ done
 if [ -d "$PROJECT_DIR/assests" ]; then
     cp -R "$PROJECT_DIR/assests" "$APP_TARGET/Contents/Resources/app/" 2>/dev/null || true
 fi
+if [ -d "$PROJECT_DIR/src" ]; then
+    cp -R "$PROJECT_DIR/src" "$APP_TARGET/Contents/Resources/app/" 2>/dev/null || true
+fi
 rm -f "$APP_TARGET/Contents/Resources/default_app.asar"
 
 # 6. Generate Info.plist with explicit Screen Recording & Microphone descriptions

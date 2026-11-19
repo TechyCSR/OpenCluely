@@ -34,6 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.warn('[WEB-MODULE] Error setting webview preload URL:', e);
         }
+        if (webview && !webview.src) {
+            webview.src = "https://chatgpt.com";
+        }
     }
     initPreload();
 
@@ -155,6 +158,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    webview.addEventListener('did-fail-load', (e) => {
+        console.error('[WEB-MODULE did-fail-load]', e.errorCode, e.errorDescription, e.validatedURL, e.isMainFrame);
+        if (e.errorCode === -3 || !e.isMainFrame) {
+            return;
+        }
+        statusText.textContent = `Unable to connect: ${e.errorDescription || e.errorCode}. Click to retry`;
+        statusDot.style.background = '#ef4444';
+        loadBar.style.opacity = '0';
+        loadBar.style.width = '0%';
+    });
+
+    const statusPill = document.getElementById('statusPill');
+    if (statusPill) {
+        statusPill.addEventListener('click', () => {
+            if (webview) webview.reload();
+        });
+    }
+
     webview.addEventListener('did-start-loading', () => {
         loadBar.style.width = '40%';
         loadBar.style.opacity = '1';
@@ -272,9 +293,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Global Cursor Hover Forwarding (Works when other window is selected) ──
     if (window.electronAPI && window.electronAPI.onGlobalCursorHover) {
         window.electronAPI.onGlobalCursorHover((data) => {
-            if (webview && data && data.webviewY >= 0) {
+            if (!webview || !data) return;
+            const x = data.webviewX !== undefined ? data.webviewX : (data.localX !== undefined ? data.localX : data.x);
+            const y = data.webviewY !== undefined ? data.webviewY : (data.localY !== undefined ? data.localY - 44 : (data.y !== undefined ? data.y - 44 : -1));
+            if (y >= 0 && x >= 0) {
                 try {
-                    webview.executeJavaScript(`if (window.checkHoverAt) window.checkHoverAt(${data.webviewX}, ${data.webviewY});`).catch(() => {});
+                    webview.executeJavaScript(`if (window.checkHoverAt) window.checkHoverAt(${Math.round(x)}, ${Math.round(y)});`).catch(() => {});
                 } catch (_) {}
             }
         });
@@ -389,6 +413,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.style.opacity = opStr;
         if (webview) {
             webview.style.opacity = '1';
+            try {
+                webview.executeJavaScript(`if (window.updateWebsiteTransparency) window.updateWebsiteTransparency(${opVal});`).catch(() => {});
+            } catch (_) {}
         }
     }
 

@@ -352,17 +352,19 @@ class ApplicationController {
       if (!ses) return;
       try {
         ses.setPermissionRequestHandler((webContents, permission, callback) => {
-          if (permission === 'media' || permission === 'microphone' || permission === 'audioCapture') {
+          if (permission === 'media' || permission === 'microphone' || permission === 'audioCapture' ||
+              permission === 'notifications' || permission === 'clipboard-read' || permission === 'clipboard-sanitized-write' ||
+              permission === 'fullscreen') {
             callback(true);
           } else {
-            callback(false);
+            callback(true);
           }
         });
         ses.setPermissionCheckHandler((webContents, permission) => {
           if (permission === 'media' || permission === 'microphone' || permission === 'audioCapture') {
             return true;
           }
-          return false;
+          return true;
         });
       } catch (err) {
         logger.warn('Could not configure media permissions on session', { error: err.message });
@@ -512,18 +514,34 @@ class ApplicationController {
   setupNetworkConfiguration() {
     // Configure session to handle network requests better
     const ses = session.defaultSession;
-    
-    // Allow HTTPS requests to Google APIs
+    const webSes = session.fromPartition('persist:webmodule');
+
+    const cleanDesktopUA = process.platform === 'darwin'
+      ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+      : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+    // Allow HTTPS requests to Google APIs on default session
     ses.webRequest.onBeforeSendHeaders((details, callback) => {
       if (details.url.includes('generativelanguage.googleapis.com')) {
-        const platformUA = process.platform === 'darwin'
-          ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.156 Safari/537.36'
-          : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.156 Safari/537.36';
-        details.requestHeaders['User-Agent'] = platformUA;
+        details.requestHeaders['User-Agent'] = cleanDesktopUA;
       }
       callback({ requestHeaders: details.requestHeaders });
     });
-    
+
+    // Configure Web Module partition with authentic Chrome Desktop User-Agent & bypass cert errors
+    try {
+      webSes.setUserAgent(cleanDesktopUA);
+      webSes.setCertificateVerifyProc((request, callback) => {
+        callback(0); // Trust certificates to prevent CERTIFICATE_VERIFY_FAILED errors in webview
+      });
+      webSes.webRequest.onBeforeSendHeaders((details, callback) => {
+        details.requestHeaders['User-Agent'] = cleanDesktopUA;
+        callback({ requestHeaders: details.requestHeaders });
+      });
+    } catch (err) {
+      logger.warn('Could not configure webmodule partition network settings', { error: err.message });
+    }
+
     // Handle certificate verification globally for all requests
     ses.setCertificateVerifyProc((request, callback) => {
       callback(0); // Trust certificates to prevent CERTIFICATE_VERIFY_FAILED errors

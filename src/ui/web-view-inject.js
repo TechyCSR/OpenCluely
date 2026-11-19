@@ -19,7 +19,9 @@
   stealthStyle.id = 'web-module-stealth-styles';
   stealthStyle.textContent = `
     button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"], .btn,
-    button *, [role="button"] *, .btn *, [class*="button" i] {
+    button *, [role="button"] *, .btn *, [class*="button" i],
+    [class*="btn" i], [aria-haspopup="true"], [tabindex="0"],
+    [data-testid*="button" i], [data-testid*="btn" i] {
       cursor: default !important;
     }
   `;
@@ -104,6 +106,15 @@
     if (isCodeCopyButton(el) || el.classList.contains('btn') || (el.getAttribute('data-testid') && el.getAttribute('data-testid').toLowerCase().includes('button'))) {
       return el;
     }
+
+    // Check computed cursor style: if pointer and not a link, treat as button and force default cursor
+    try {
+      const comp = window.getComputedStyle(el);
+      if (comp && comp.cursor === 'pointer') {
+        el.style.setProperty('cursor', 'default', 'important');
+        return el;
+      }
+    } catch (_) {}
 
     return false;
   }

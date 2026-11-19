@@ -1238,11 +1238,21 @@ class WindowManager {
       setTimeout(() => {
         if (win.isDestroyed()) return;
         win.show();
+        if (this.currentOpacity !== undefined) {
+          try { win.setOpacity(this.currentOpacity); } catch (_) {}
+        }
         if (win.isFocusable && win.isFocusable()) {
           win.focus();
         }
         setMacOSAlwaysOnTop();
-        setTimeout(() => { if (!win.isDestroyed()) setMacOSAlwaysOnTop(); }, 100);
+        setTimeout(() => {
+          if (!win.isDestroyed()) {
+            setMacOSAlwaysOnTop();
+            if (this.currentOpacity !== undefined) {
+              try { win.setOpacity(this.currentOpacity); } catch (_) {}
+            }
+          }
+        }, 100);
         setTimeout(() => {
           if (win.isDestroyed()) return;
           setMacOSAlwaysOnTop();
@@ -2587,6 +2597,15 @@ class WindowManager {
         win.setIgnoreMouseEvents(false);
       } catch (_) {}
       this.showOnCurrentDesktop(win);
+      setTimeout(() => {
+        if (win && !win.isDestroyed()) {
+          try {
+            win.setOpacity(curOp);
+            win.setIgnoreMouseEvents(false);
+          } catch (_) {}
+          win.webContents.send('update-opacity', curOp);
+        }
+      }, 80);
       win.webContents.send('update-opacity', curOp);
       logger.debug('Web module window shown with opacity', { opacity: curOp });
     } else {
