@@ -1312,12 +1312,31 @@ class ApplicationController {
 
     ipcMain.handle("start-system-audio-for-web", async () => {
       try {
+        this.audioSourceMode = "system";
+        speechService.updateSettings({ audioSourceMode: "system" });
         if (!speechService.isRecording) {
           logger.info("Starting speechService audio capture for web module system audio stream");
           await speechService.startRecording();
         }
         return true;
       } catch (err) {
+        logger.warn("Could not start speech service for web dictation", { error: err.message });
+        return false;
+      }
+    });
+
+    ipcMain.handle("stop-system-audio-for-web", async () => {
+      try {
+        if (speechService.isRecording) {
+          logger.info("Stopping speechService audio capture for web module");
+          await speechService.stopRecording();
+        }
+        return true;
+      } catch (err) {
+        logger.warn("Could not stop speech service for web dictation", { error: err.message });
+        return false;
+      }
+    });
         logger.warn("Could not start speech service for web dictation", { error: err.message });
         return false;
       }

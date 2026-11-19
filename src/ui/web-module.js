@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let isDictating = false;
     let currentTab = 'chatgpt';
+    let lastInPageTriggerTime = 0;
 
     // ── Preload Configuration via electronAPI (No require calls in renderer) ──
     async function initPreload() {
@@ -143,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     background-color: transparent !important;
                 }
                 #__next, main, [class*="bg-token-main-surface"], [class*="dark:bg-"] {
-                    background-color: rgba(18, 20, 26, 0.82) !important;
+                    background-color: rgba(18, 20, 26, 0.88) !important;
                 }
             `).catch(() => {});
         } catch (_) {}
@@ -193,27 +194,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Console message bridge: Listen for in-page actions emitted by web-view-inject.js
-    webview.addEventListener('console-message', (e) => {
+    webview.addEventListener('console-message', async (e) => {
         const msg = e.message || '';
         if (msg.includes('[CLUELY-ACTION] start-dictation') || msg.includes('[CLUELY-ACTION] start-system-audio')) {
+            const now = Date.now();
+            if (now - lastInPageTriggerTime < 1800) {
+                return; // Debounce rapid consecutive logs from the same user click
+            }
+            lastInPageTriggerTime = now;
+
             console.log('[WEB-MODULE] In-page dictation mic triggered from webview, activating system audio capture');
             setDictatingState(true);
             if (window.electronAPI && window.electronAPI.startSystemAudioForWeb) {
-                window.electronAPI.startSystemAudioForWeb();
-            }
-            if (window.electronAPI && window.electronAPI.toggleRecording) {
-                window.electronAPI.toggleRecording({ source: 'web-dictation' });
+                await window.electronAPI.startSystemAudioForWeb();
             }
         }
     });
 
     // Listen for requests originating from inside the webview via ipc-message if available
-    webview.addEventListener('ipc-message', (e) => {
+    webview.addEventListener('ipc-message', async (e) => {
         if (e.channel === 'request-system-audio-start') {
             console.log('[WEB-MODULE] Webview requested system audio capture start via IPC');
             setDictatingState(true);
             if (window.electronAPI && window.electronAPI.startSystemAudioForWeb) {
-                window.electronAPI.startSystemAudioForWeb();
+                await window.electronAPI.startSystemAudioForWeb();
             }
         } else if (e.channel === 'request-hide-web-module') {
             if (window.electronAPI && window.electronAPI.hideWebModule) {
@@ -222,21 +226,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Stream system audio PCM chunks directly into the webview for web dictation
+    // Buffer audio chunks and flush in 120ms batches to prevent executeJavaScript IPC queue flooding
+    let audioChunkQueue = [];
+    let audioFlushTimer = null;
+
+    function flushAudioChunks() {
+        if (!webview || audioChunkQueue.length === 0) return;
+        const chunks = audioChunkQueue;
+        audioChunkQueue = [];
+
+        try {
+            let totalLen = 0;
+            for (const c of chunks) totalLen += c.length;
+            const combined = new Uint8Array(totalLen);
+            let offset = 0;
+            for (const c of chunks) {
+                combined.set(new Uint8Array(c.buffer ? c.buffer : c), offset);
+                offset += c.length;
+            }
+
+            let binary = '';
+            const len = combined.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(combined[i]);
+            }
+            const b64 = btoa(binary);
+
+            webview.executeJavaScript(`if (window.ingestSystemAudioPCMBase64) window.ingestSystemAudioPCMBase64("${b64}");`).catch(() => {});
+        } catch (_) {}
+    }
+
     if (window.electronAPI && window.electronAPI.onSystemAudioStream) {
         window.electronAPI.onSystemAudioStream((chunk) => {
-            if (webview && chunk) {
-                try {
-                    let base64 = '';
-                    if (typeof chunk === 'string') {
-                        base64 = chunk;
-                    } else if (chunk.toString) {
-                        base64 = chunk.toString('base64');
-                    }
-                    if (base64) {
-                        webview.executeJavaScript(`if (window.ingestSystemAudioPCMBase64) window.ingestSystemAudioPCMBase64("${base64}");`).catch(() => {});
-                    }
-                } catch (_) {}
+            if (!chunk) return;
+            audioChunkQueue.push(chunk);
+            if (!audioFlushTimer) {
+                audioFlushTimer = setTimeout(() => {
+                    audioFlushTimer = null;
+                    flushAudioChunks();
+                }, 120);
             }
         });
     }
@@ -277,17 +305,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    btnDictate.addEventListener('click', () => {
+    btnDictate.addEventListener('click', async () => {
         const nextState = !isDictating;
         setDictatingState(nextState);
 
-        // Tell main process to toggle recording with system audio
-        if (window.electronAPI && window.electronAPI.toggleRecording) {
-            window.electronAPI.toggleRecording({ source: 'web-dictation' });
-        } else if (window.electronAPI && window.electronAPI.toggleSpeechRecognition) {
-            window.electronAPI.toggleSpeechRecognition();
-        } else if (window.api) {
-            window.api.send('toggle-recording', { source: 'web-dictation' });
+        if (nextState) {
+            if (window.electronAPI && window.electronAPI.startSystemAudioForWeb) {
+                await window.electronAPI.startSystemAudioForWeb();
+            }
+        } else {
+            if (window.electronAPI && window.electronAPI.stopSystemAudioForWeb) {
+                await window.electronAPI.stopSystemAudioForWeb();
+            }
         }
     });
 
@@ -310,7 +339,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 webview.executeJavaScript(`if (window.injectPromptAndSend) window.injectPromptAndSend(${JSON.stringify(text)});`)
                     .then(() => {
                         console.log('[WEB-MODULE] Auto-injected question into web chat');
-                        setTimeout(() => setDictatingState(false), 800);
+                        setTimeout(async () => {
+                            setDictatingState(false);
+                            if (window.electronAPI && window.electronAPI.stopSystemAudioForWeb) {
+                                await window.electronAPI.stopSystemAudioForWeb();
+                            }
+                        }, 800);
                     })
                     .catch(err => {
                         console.error('[WEB-MODULE] Failed to inject prompt:', err);
@@ -328,31 +362,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusText.textContent = 'Injecting question into chat…';
                 webview.executeJavaScript(`if (window.injectPromptAndSend) window.injectPromptAndSend(${JSON.stringify(text)});`)
                     .then(() => {
-                        setTimeout(() => setDictatingState(false), 800);
+                        setTimeout(async () => {
+                            setDictatingState(false);
+                            if (window.electronAPI && window.electronAPI.stopSystemAudioForWeb) {
+                                await window.electronAPI.stopSystemAudioForWeb();
+                            }
+                        }, 800);
                     })
                     .catch(() => setDictatingState(false));
             }
         });
     }
 
-    // Sync opacity with Cluely bar transparency setting
+    // Sync opacity with Cluely bar transparency setting 1:1
     function applyWebsiteOpacity(opacity) {
         if (opacity === undefined || opacity === null) return;
-        const opVal = typeof opacity === 'number' ? opacity : parseFloat(opacity);
+        let opVal = opacity;
+        if (typeof opVal === 'object' && opVal !== null) {
+            opVal = opVal.opacity !== undefined ? opVal.opacity : 0.38;
+        }
+        opVal = typeof opVal === 'number' ? opVal : parseFloat(opVal);
         if (isNaN(opVal)) return;
 
+        // Apply exactly 1:1 to body so window and webview match the Cluely bar opacity exactly
         const opStr = opVal.toString();
         document.body.style.opacity = opStr;
         if (webview) {
-            webview.style.opacity = opStr;
-            try {
-                webview.insertCSS(`
-                    html, body {
-                        opacity: ${opVal} !important;
-                    }
-                `).catch(() => {});
-                webview.executeJavaScript(`if (window.updateWebsiteTransparency) window.updateWebsiteTransparency(${opVal});`).catch(() => {});
-            } catch (_) {}
+            webview.style.opacity = '1';
         }
     }
 
@@ -361,7 +397,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (window.electronAPI && window.electronAPI.onOpacityUpdate) {
         window.electronAPI.onOpacityUpdate((_event, opacity) => {
-            applyWebsiteOpacity(opacity);
+            const val = opacity !== undefined ? opacity : _event;
+            applyWebsiteOpacity(val);
         });
     }
 });

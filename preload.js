@@ -228,6 +228,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleWebModule: () => ipcRenderer.invoke('toggle-web-module'),
   toggleRecording: (options) => ipcRenderer.send('toggle-recording', options),
   startSystemAudioForWeb: () => ipcRenderer.invoke('start-system-audio-for-web'),
+  stopSystemAudioForWeb: () => ipcRenderer.invoke('stop-system-audio-for-web'),
   getWebModuleInjectScript: () => ipcRenderer.invoke('get-web-module-inject-script'),
   getWebviewPreloadUrl: () => ipcRenderer.invoke('get-webview-preload-url'),
   onGlobalCursorHover: (callback) => {

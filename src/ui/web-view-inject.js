@@ -327,7 +327,8 @@
 
   function getOrCreateSystemAudioStream() {
     if (!sysAudioCtx || sysAudioCtx.state === 'closed') {
-      sysAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      sysAudioCtx = new AudioCtx();
       sysAudioDest = sysAudioCtx.createMediaStreamDestination();
       nextChunkTime = sysAudioCtx.currentTime;
 
@@ -351,8 +352,12 @@
   window.ingestSystemAudioPCM = (rawBuffer) => {
     try {
       getOrCreateSystemAudioStream();
-      const int16 = new Int16Array(rawBuffer.buffer || rawBuffer);
+      const bytes = new Uint8Array(rawBuffer.buffer || rawBuffer);
+      const safeLen = bytes.length - (bytes.length % 2);
+      if (safeLen < 2) return;
+      const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, safeLen / 2);
       if (!int16.length) return;
+
       const float32 = new Float32Array(int16.length);
       for (let i = 0; i < int16.length; i++) {
         float32[i] = int16[i] / 32768.0;
@@ -365,7 +370,7 @@
       source.connect(sysAudioDest);
 
       const now = sysAudioCtx.currentTime;
-      if (nextChunkTime < now) {
+      if (nextChunkTime < now || nextChunkTime > now + 1.0) {
         nextChunkTime = now;
       }
       source.start(nextChunkTime);
@@ -379,13 +384,15 @@
     try {
       const binaryString = atob(base64);
       const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
+      if (len < 2) return;
+      const safeLen = len - (len % 2);
+      const bytes = new Uint8Array(safeLen);
+      for (let i = 0; i < safeLen; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      window.ingestSystemAudioPCM(bytes.buffer);
+      window.ingestSystemAudioPCM(bytes);
     } catch (e) {
-      console.error('[WEB-VIEW] Base64 ingest error:', e);
+      console.error('[WEB-VIEW] Base64 audio ingest error:', e);
     }
   };
 
