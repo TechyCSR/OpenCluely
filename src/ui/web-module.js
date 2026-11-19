@@ -21,17 +21,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTab = 'chatgpt';
 
     // ── Preload Configuration via electronAPI (No require calls in renderer) ──
-    try {
-        if (window.electronAPI && window.electronAPI.getWebviewPreloadUrl && webview) {
-            const preloadUrl = window.electronAPI.getWebviewPreloadUrl();
-            if (preloadUrl) {
-                webview.preload = preloadUrl;
-                console.log('[WEB-MODULE] Configured webview preload file URL:', preloadUrl);
+    async function initPreload() {
+        try {
+            if (window.electronAPI && window.electronAPI.getWebviewPreloadUrl && webview) {
+                const preloadUrl = await window.electronAPI.getWebviewPreloadUrl();
+                if (preloadUrl) {
+                    webview.preload = preloadUrl;
+                    console.log('[WEB-MODULE] Configured webview preload file URL:', preloadUrl);
+                }
             }
+        } catch (e) {
+            console.warn('[WEB-MODULE] Error setting webview preload URL:', e);
         }
-    } catch (e) {
-        console.warn('[WEB-MODULE] Error setting webview preload URL:', e);
     }
+    initPreload();
 
     // ── Universal 1-Second Hover Dwell on Toolbar Buttons ──
     function attachDwellAutoClick(btn) {
@@ -113,18 +116,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Webview Lifecycle & Injected Userscript ──
     let injectScriptContent = '';
-    try {
-        if (window.electronAPI && window.electronAPI.getWebModuleInjectScript) {
-            injectScriptContent = window.electronAPI.getWebModuleInjectScript();
+    async function ensureInjectScript() {
+        if (!injectScriptContent && window.electronAPI && window.electronAPI.getWebModuleInjectScript) {
+            try {
+                injectScriptContent = await window.electronAPI.getWebModuleInjectScript();
+                console.log('[WEB-MODULE] Loaded inject script, size:', injectScriptContent ? injectScriptContent.length : 0);
+            } catch (e) {
+                console.warn('[WEB-MODULE] Could not retrieve web-view-inject script:', e);
+            }
         }
-    } catch (e) {
-        console.warn('Could not retrieve web-view-inject script:', e);
+        return injectScriptContent;
     }
+    ensureInjectScript();
 
-    function injectScriptIntoWebview() {
+    async function injectScriptIntoWebview() {
         if (!webview) return;
-        if (injectScriptContent) {
-            webview.executeJavaScript(injectScriptContent)
+        const script = await ensureInjectScript();
+        if (script) {
+            webview.executeJavaScript(script)
                 .then(() => console.log('[WEB-MODULE] Injected script active in webview'))
                 .catch(err => console.error('[WEB-MODULE] Script injection error:', err));
         }
@@ -164,6 +173,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     webview.addEventListener('dom-ready', () => {
+        injectScriptIntoWebview();
+    });
+
+    webview.addEventListener('did-navigate', () => {
+        injectScriptIntoWebview();
+    });
+
+    webview.addEventListener('did-navigate-in-page', () => {
         injectScriptIntoWebview();
     });
 

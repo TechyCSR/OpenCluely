@@ -1288,6 +1288,28 @@ class ApplicationController {
       return true;
     });
 
+    ipcMain.handle("get-web-module-inject-script", () => {
+      try {
+        const injectPath = path.join(__dirname, "src/ui/web-view-inject.js");
+        if (fs.existsSync(injectPath)) {
+          return fs.readFileSync(injectPath, "utf8");
+        }
+      } catch (err) {
+        logger.warn("Could not read web-view-inject.js", { error: err.message });
+      }
+      return "";
+    });
+
+    ipcMain.handle("get-webview-preload-url", () => {
+      try {
+        const injectPath = path.join(__dirname, "src/ui/web-view-inject.js");
+        const url = require("url");
+        return url.pathToFileURL(injectPath).href;
+      } catch (_) {
+        return "";
+      }
+    });
+
     ipcMain.handle("start-system-audio-for-web", async () => {
       try {
         if (!speechService.isRecording) {

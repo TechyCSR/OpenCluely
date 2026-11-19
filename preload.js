@@ -228,27 +228,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleWebModule: () => ipcRenderer.invoke('toggle-web-module'),
   toggleRecording: (options) => ipcRenderer.send('toggle-recording', options),
   startSystemAudioForWeb: () => ipcRenderer.invoke('start-system-audio-for-web'),
-  getWebModuleInjectScript: () => {
-    try {
-      const fs = require('fs');
-      const path = require('path');
-      const injectPath = path.join(__dirname, 'src/ui/web-view-inject.js');
-      return fs.existsSync(injectPath) ? fs.readFileSync(injectPath, 'utf8') : '';
-    } catch (err) {
-      console.error('Failed to read web-view-inject.js:', err);
-      return '';
-    }
-  },
-  getWebviewPreloadUrl: () => {
-    try {
-      const path = require('path');
-      const url = require('url');
-      const injectPath = path.join(__dirname, 'src/ui/web-view-inject.js');
-      return url.pathToFileURL(injectPath).href;
-    } catch (_) {
-      return '';
-    }
-  },
+  getWebModuleInjectScript: () => ipcRenderer.invoke('get-web-module-inject-script'),
+  getWebviewPreloadUrl: () => ipcRenderer.invoke('get-webview-preload-url'),
   onGlobalCursorHover: (callback) => {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on('global-cursor-hover', handler);

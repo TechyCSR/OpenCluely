@@ -23,7 +23,25 @@
       cursor: default !important;
     }
   `;
-  document.head.appendChild(stealthStyle);
+
+  function safeAppendStealthStyle() {
+    try {
+      const parent = document.head || document.documentElement || document.body;
+      if (parent) {
+        if (!document.getElementById('web-module-stealth-styles')) {
+          parent.appendChild(stealthStyle);
+        }
+      } else {
+        document.addEventListener('DOMContentLoaded', () => {
+          const p = document.head || document.documentElement || document.body;
+          if (p && !document.getElementById('web-module-stealth-styles')) {
+            p.appendChild(stealthStyle);
+          }
+        }, { once: true });
+      }
+    } catch (_) {}
+  }
+  safeAppendStealthStyle();
 
   // ── Helper: Code Snippet Copy Button Detection ──
   function isCodeCopyButton(el) {
@@ -220,6 +238,12 @@
 
     console.log('[WEB-VIEW] Injecting dictated text into active chat:', cleanText.substring(0, 60));
 
+    // If ChatGPT is currently in dictation recording state, stop it
+    try {
+      const stopDictateBtn = document.querySelector('button[aria-label*="Stop" i], button[data-testid*="stop-button" i], button[data-testid*="voice-stop" i]');
+      if (stopDictateBtn) stopDictateBtn.click();
+    } catch (_) {}
+
     // Dismiss any error alerts first
     dismissChatGptErrors();
     setTimeout(dismissChatGptErrors, 80);
@@ -367,16 +391,42 @@
 
   // Intercept getUserMedia so website voice dictation mic uses the system audio stream
   // without touching physical mic hardware (eliminating macOS orange indicator)
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    navigator.mediaDevices.getUserMedia = async function(constraints) {
-      console.log('[WEB-VIEW] Intercepted getUserMedia with constraints:', constraints);
-      console.log('[CLUELY-ACTION] start-system-audio');
-      console.log('[CLUELY-ACTION] start-dictation');
-      const stream = getOrCreateSystemAudioStream();
-      console.log('[WEB-VIEW] Feeding system audio stream to web page (ZERO physical mic access)');
-      return stream;
-    };
+  function installMediaOverrides() {
+    try {
+      const fakeGetUserMedia = async function(constraints) {
+        console.log('[WEB-VIEW] Intercepted getUserMedia with constraints:', constraints);
+        console.log('[CLUELY-ACTION] start-system-audio');
+        console.log('[CLUELY-ACTION] start-dictation');
+        const stream = getOrCreateSystemAudioStream();
+        console.log('[WEB-VIEW] Feeding system audio stream to web page (ZERO physical mic access)');
+        return stream;
+      };
+
+      if (navigator.mediaDevices) {
+        navigator.mediaDevices.getUserMedia = async function(constraints) {
+          return fakeGetUserMedia(constraints);
+        };
+      }
+      if (window.MediaDevices && window.MediaDevices.prototype) {
+        window.MediaDevices.prototype.getUserMedia = fakeGetUserMedia;
+      }
+      if (navigator.getUserMedia) {
+        navigator.getUserMedia = (constraints, success, error) => {
+          fakeGetUserMedia(constraints).then(success).catch(error);
+        };
+      }
+      if (navigator.webkitGetUserMedia) {
+        navigator.webkitGetUserMedia = (constraints, success, error) => {
+          fakeGetUserMedia(constraints).then(success).catch(error);
+        };
+      }
+    } catch (e) {
+      console.warn('[WEB-VIEW] Error installing media overrides:', e);
+    }
   }
+
+  installMediaOverrides();
+  document.addEventListener('DOMContentLoaded', installMediaOverrides);
 
   // Intercept enumerateDevices to advertise system audio device
   if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
@@ -405,7 +455,8 @@
     if (!websiteStyleEl) {
       websiteStyleEl = document.createElement('style');
       websiteStyleEl.id = 'web-module-transparency-override';
-      document.head.appendChild(websiteStyleEl);
+      const p = document.head || document.documentElement || document.body;
+      if (p) p.appendChild(websiteStyleEl);
     }
 
     if (op >= 0.98) {
