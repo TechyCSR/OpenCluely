@@ -20,14 +20,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDictating = false;
     let currentTab = 'chatgpt';
 
-    // ── Configure Absolute file:// Preload for Webview ──
-    const path = require('path');
-    const url = require('url');
+    // ── Preload Configuration via electronAPI (No require calls in renderer) ──
     try {
-        const injectPath = path.join(__dirname, 'web-view-inject.js');
-        const preloadUrl = url.pathToFileURL(injectPath).href;
-        webview.preload = preloadUrl;
-        console.log('[WEB-MODULE] Configured webview preload file URL:', preloadUrl);
+        if (window.electronAPI && window.electronAPI.getWebviewPreloadUrl && webview) {
+            const preloadUrl = window.electronAPI.getWebviewPreloadUrl();
+            if (preloadUrl) {
+                webview.preload = preloadUrl;
+                console.log('[WEB-MODULE] Configured webview preload file URL:', preloadUrl);
+            }
+        }
     } catch (e) {
         console.warn('[WEB-MODULE] Error setting webview preload URL:', e);
     }
@@ -111,15 +112,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Webview Lifecycle & Injected Userscript ──
-    const fs = require('fs');
     let injectScriptContent = '';
     try {
-        const injectPath = path.join(__dirname, 'web-view-inject.js');
-        if (fs.existsSync(injectPath)) {
-            injectScriptContent = fs.readFileSync(injectPath, 'utf8');
+        if (window.electronAPI && window.electronAPI.getWebModuleInjectScript) {
+            injectScriptContent = window.electronAPI.getWebModuleInjectScript();
         }
     } catch (e) {
-        console.warn('Could not read web-view-inject.js file:', e);
+        console.warn('Could not retrieve web-view-inject script:', e);
     }
 
     function injectScriptIntoWebview() {
@@ -139,6 +138,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             `).catch(() => {});
         } catch (_) {}
+
+        // Re-apply current opacity whenever a new page loads
+        if (window.electronAPI && window.electronAPI.getOpacity) {
+            window.electronAPI.getOpacity().then(op => applyWebsiteOpacity(op)).catch(() => {});
+        }
     }
 
     webview.addEventListener('did-start-loading', () => {
@@ -171,10 +175,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Listen for requests originating from inside the webview
+    // Console message bridge: Listen for in-page actions emitted by web-view-inject.js
+    webview.addEventListener('console-message', (e) => {
+        const msg = e.message || '';
+        if (msg.includes('[CLUELY-ACTION] start-dictation') || msg.includes('[CLUELY-ACTION] start-system-audio')) {
+            console.log('[WEB-MODULE] In-page dictation mic triggered from webview, activating system audio capture');
+            setDictatingState(true);
+            if (window.electronAPI && window.electronAPI.startSystemAudioForWeb) {
+                window.electronAPI.startSystemAudioForWeb();
+            }
+            if (window.electronAPI && window.electronAPI.toggleRecording) {
+                window.electronAPI.toggleRecording({ source: 'web-dictation' });
+            }
+        }
+    });
+
+    // Listen for requests originating from inside the webview via ipc-message if available
     webview.addEventListener('ipc-message', (e) => {
         if (e.channel === 'request-system-audio-start') {
-            console.log('[WEB-MODULE] Webview requested system audio capture start');
+            console.log('[WEB-MODULE] Webview requested system audio capture start via IPC');
+            setDictatingState(true);
             if (window.electronAPI && window.electronAPI.startSystemAudioForWeb) {
                 window.electronAPI.startSystemAudioForWeb();
             }
@@ -188,9 +208,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Stream system audio PCM chunks directly into the webview for web dictation
     if (window.electronAPI && window.electronAPI.onSystemAudioStream) {
         window.electronAPI.onSystemAudioStream((chunk) => {
-            if (webview) {
+            if (webview && chunk) {
                 try {
-                    webview.send('system-audio-chunk', chunk);
+                    let base64 = '';
+                    if (typeof chunk === 'string') {
+                        base64 = chunk;
+                    } else if (chunk.toString) {
+                        base64 = chunk.toString('base64');
+                    }
+                    if (base64) {
+                        webview.executeJavaScript(`if (window.ingestSystemAudioPCMBase64) window.ingestSystemAudioPCMBase64("${base64}");`).catch(() => {});
+                    }
                 } catch (_) {}
             }
         });
@@ -201,7 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.onGlobalCursorHover((data) => {
             if (webview && data && data.webviewY >= 0) {
                 try {
-                    webview.send('check-hover-at', { x: data.webviewX, y: data.webviewY });
                     webview.executeJavaScript(`if (window.checkHoverAt) window.checkHoverAt(${data.webviewX}, ${data.webviewY});`).catch(() => {});
                 } catch (_) {}
             }
@@ -263,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (webview && isDictating) {
                 statusText.textContent = 'Injecting question into chat…';
-                webview.executeJavaScript(`window.injectPromptAndSend(${JSON.stringify(text)})`)
+                webview.executeJavaScript(`if (window.injectPromptAndSend) window.injectPromptAndSend(${JSON.stringify(text)});`)
                     .then(() => {
                         console.log('[WEB-MODULE] Auto-injected question into web chat');
                         setTimeout(() => setDictatingState(false), 800);
@@ -281,7 +308,12 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.onWebModuleDictationText((data) => {
             const text = (data && data.text) ? data.text : (typeof data === 'string' ? data : '');
             if (webview && text) {
-                webview.executeJavaScript(`window.injectPromptAndSend(${JSON.stringify(text)})`);
+                statusText.textContent = 'Injecting question into chat…';
+                webview.executeJavaScript(`if (window.injectPromptAndSend) window.injectPromptAndSend(${JSON.stringify(text)});`)
+                    .then(() => {
+                        setTimeout(() => setDictatingState(false), 800);
+                    })
+                    .catch(() => setDictatingState(false));
             }
         });
     }
@@ -297,7 +329,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (webview) {
             webview.style.opacity = opStr;
             try {
-                webview.send('update-website-opacity', opVal);
+                webview.insertCSS(`
+                    html, body {
+                        opacity: ${opVal} !important;
+                    }
+                `).catch(() => {});
                 webview.executeJavaScript(`if (window.updateWebsiteTransparency) window.updateWebsiteTransparency(${opVal});`).catch(() => {});
             } catch (_) {}
         }

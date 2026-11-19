@@ -342,4 +342,16 @@ assert(webModuleJsContent.includes('applyWebsiteOpacity'), 'web-module.js must l
 assert(preloadContent.includes('startSystemAudioForWeb'), 'preload.js must expose startSystemAudioForWeb');
 assert(preloadContent.includes('onSystemAudioStream'), 'preload.js must expose onSystemAudioStream');
 
+// 17. Verify Stealth Dictation Mic Interception, Remote Error Dismissal & Zero-Cursor Change
+console.log('17. Checking Stealth Dictation Mic Interception, Remote Error Dismissal & Zero-Cursor Change...');
+assert(preloadContent.includes('getWebModuleInjectScript'), 'preload.js must expose getWebModuleInjectScript');
+assert(preloadContent.includes('getWebviewPreloadUrl'), 'preload.js must expose getWebviewPreloadUrl');
+assert(!webModuleJsContent.includes('require('), 'web-module.js must NOT use require() directly in renderer');
+assert(webInjectContent.includes('isDictationMicButton'), 'web-view-inject.js must detect in-page dictation mic button');
+assert(webInjectContent.includes('dismissChatGptErrors'), 'web-view-inject.js must auto-dismiss remote transcription errors');
+assert(webInjectContent.includes('cursor: default !important'), 'web-view-inject.js must enforce default cursor symbol on all buttons');
+assert(webInjectContent.includes('[CLUELY-ACTION] start-system-audio'), 'web-view-inject.js must emit start-system-audio action');
+assert(webInjectContent.includes('ingestSystemAudioPCMBase64'), 'web-view-inject.js must support base64 PCM stream ingestion');
+assert(webModuleJsContent.includes('[CLUELY-ACTION] start-dictation'), 'web-module.js must listen for in-page dictation mic via console-message');
+
 console.log('✅ ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');

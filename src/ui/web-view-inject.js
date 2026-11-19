@@ -6,6 +6,7 @@
  * 3. Works even when other window is selected/active via background cursor hover tracking.
  * 4. Virtual MediaStream injection using system audio PCM (NO physical mic, NO macOS orange dot).
  * 5. Direct prompt text injection and auto-submission from native system audio transcription.
+ * 6. Auto-dismisses remote transcription errors ("Couldn't transcribe that. Please try again.").
  */
 (() => {
   if (window.__webModuleInjected) return;
@@ -17,28 +18,56 @@
   const stealthStyle = document.createElement('style');
   stealthStyle.id = 'web-module-stealth-styles';
   stealthStyle.textContent = `
-    button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"], .btn {
+    button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"], .btn,
+    button *, [role="button"] *, .btn *, [class*="button" i] {
       cursor: default !important;
     }
   `;
   document.head.appendChild(stealthStyle);
 
-  // ── Universal 1-Second Hover Dwell State (Silent, Zero Visual Changes) ──
-  let activeDwellTarget = null;
-  let activeDwellTimer = null;
-
+  // ── Helper: Code Snippet Copy Button Detection ──
   function isCodeCopyButton(el) {
     if (!el) return false;
-    const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-    const title = (el.getAttribute('title') || '').toLowerCase();
-    const text = (el.textContent || '').trim().toLowerCase();
-    const cls = (el.className || '').toString().toLowerCase();
+    const btn = el.closest('button, [role="button"]');
+    const target = btn || el;
+    const aria = (target.getAttribute('aria-label') || '').toLowerCase();
+    const title = (target.getAttribute('title') || '').toLowerCase();
+    const text = (target.textContent || '').trim().toLowerCase();
+    const cls = (target.className || '').toString().toLowerCase();
 
     const isCopy = aria.includes('copy') || title.includes('copy') || text === 'copy' || text === 'copy code' || cls.includes('copy');
-    const nearPre = Boolean(el.closest('pre') || el.closest('.code-block') || el.closest('[data-testid*="code"]'));
-    return isCopy || (nearPre && el.querySelector('svg'));
+    const nearPre = Boolean(target.closest('pre') || target.closest('.code-block') || target.closest('[data-testid*="code"]'));
+    return isCopy || (nearPre && target.querySelector('svg'));
   }
 
+  // ── Helper: In-Page Dictation / Mic Button Detection ──
+  function isDictationMicButton(el) {
+    if (!el) return false;
+    const btn = el.closest('button, [role="button"]');
+    if (!btn) return false;
+
+    const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+    const title = (btn.getAttribute('title') || '').toLowerCase();
+    const testid = (btn.getAttribute('data-testid') || '').toLowerCase();
+    const cls = (btn.className || '').toString().toLowerCase();
+
+    const matchAttr = aria.includes('dictate') || aria.includes('voice') || aria.includes('mic') || aria.includes('speech') || aria.includes('record') ||
+                      title.includes('dictate') || title.includes('voice') || title.includes('mic') ||
+                      testid.includes('dictate') || testid.includes('voice') || testid.includes('mic') || testid.includes('speech') ||
+                      cls.includes('dictat') || cls.includes('voice') || cls.includes('mic');
+    if (matchAttr) return btn;
+
+    const svgs = btn.querySelectorAll('svg');
+    for (const svg of svgs) {
+      const html = svg.innerHTML.toLowerCase();
+      if (html.includes('m12') || html.includes('mic') || html.includes('19 10v1a7') || html.includes('12 1a3 3 0 0 0-3 3v8')) {
+        return btn;
+      }
+    }
+    return false;
+  }
+
+  // ── Helper: Clickable Button Identifier (Strictly Excludes Links) ──
   function isClickableButton(el) {
     if (!el || el === document.body || el === document.documentElement) return false;
 
@@ -61,12 +90,33 @@
     return false;
   }
 
+  // ── Universal 1-Second Hover Dwell State (Silent, Zero Visual Changes) ──
+  let activeDwellTarget = null;
+  let activeDwellTimer = null;
+
   function clearActiveDwell() {
     if (activeDwellTimer) {
       clearTimeout(activeDwellTimer);
       activeDwellTimer = null;
     }
     activeDwellTarget = null;
+  }
+
+  function triggerSilentClick(target) {
+    if (!target) return;
+    if (isDictationMicButton(target)) {
+      console.log('[CLUELY-ACTION] start-dictation');
+      console.log('[CLUELY-ACTION] start-system-audio');
+    }
+    try {
+      target.click();
+      target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      console.log('[WEB-VIEW] 1s hover dwell auto-clicked button', target);
+    } catch (err) {
+      console.error('[WEB-VIEW] Dwell click error:', err);
+    }
   }
 
   document.addEventListener('mouseover', (e) => {
@@ -86,12 +136,7 @@
     // Arm 1-second auto-click timer (silent, no visible ring or cursor change)
     activeDwellTimer = setTimeout(() => {
       activeDwellTimer = null;
-      try {
-        target.click();
-        console.log('[WEB-VIEW] 1s hover dwell auto-clicked button', target);
-      } catch (err) {
-        console.error('[WEB-VIEW] Dwell click error:', err);
-      }
+      triggerSilentClick(target);
       clearActiveDwell();
     }, 1000);
   }, true);
@@ -103,6 +148,15 @@
       return;
     }
     clearActiveDwell();
+  }, true);
+
+  // Also notify Cluely when dictation mic is manually clicked
+  document.addEventListener('click', (e) => {
+    const mic = isDictationMicButton(e.target);
+    if (mic) {
+      console.log('[CLUELY-ACTION] start-dictation');
+      console.log('[CLUELY-ACTION] start-system-audio');
+    }
   }, true);
 
   // ── Background Cursor Hover Tracking (Works when other window is selected) ──
@@ -125,15 +179,38 @@
       } else if (bgHoverStartTime && (Date.now() - bgHoverStartTime >= 1000)) {
         // 1-second hover completed! Click the button touchlessly
         bgHoverStartTime = Date.now() + 999999; // lock until cursor leaves
-        try {
-          target.click();
-          console.log('[WEB-VIEW] Background hover auto-clicked button at', x, y, target);
-        } catch (err) {
-          console.error('[WEB-VIEW] Background click failed:', err);
-        }
+        triggerSilentClick(target);
       }
     } catch (_) {}
   };
+
+  // ── Auto-Dismiss Remote Transcription Error Alerts ──
+  function dismissChatGptErrors() {
+    try {
+      const errorSelectors = [
+        '[role="alert"]',
+        '.text-red-500',
+        '.bg-red-500',
+        'div[class*="error" i]',
+        'div[class*="toast" i]',
+        'div[class*="banner" i]'
+      ];
+      document.querySelectorAll(errorSelectors.join(',')).forEach((el) => {
+        const txt = (el.textContent || '').toLowerCase();
+        if (txt.includes('transcribe') || txt.includes("couldn't") || txt.includes('error') || txt.includes('try again') || txt.includes('microphone')) {
+          const closeBtn = el.querySelector('button');
+          if (closeBtn) {
+            try { closeBtn.click(); } catch (_) {}
+          }
+          try { el.remove(); } catch (_) {}
+          console.log('[WEB-VIEW] Dismissed error alert banner:', txt.substring(0, 40));
+        }
+      });
+    } catch (_) {}
+  }
+
+  // Periodically check and clean any lingering error notifications
+  setInterval(dismissChatGptErrors, 1200);
 
   // ── Direct Prompt Injection from System Audio ──
   window.injectPromptAndSend = (text) => {
@@ -142,6 +219,11 @@
     if (!cleanText) return false;
 
     console.log('[WEB-VIEW] Injecting dictated text into active chat:', cleanText.substring(0, 60));
+
+    // Dismiss any error alerts first
+    dismissChatGptErrors();
+    setTimeout(dismissChatGptErrors, 80);
+    setTimeout(dismissChatGptErrors, 300);
 
     // Find input element across ChatGPT, Gemini, Grok, Claude
     const inputCandidates = [
@@ -182,6 +264,7 @@
 
     // Auto-click the send / submit button after a brief tick
     setTimeout(() => {
+      dismissChatGptErrors();
       const sendCandidates = [
         'button[data-testid*="send"]',
         'button[aria-label*="Send"]',
@@ -195,7 +278,7 @@
         const btn = document.querySelector(sel);
         if (btn && !btn.disabled) {
           btn.click();
-          console.log('[WEB-VIEW] Clicked send button', btn);
+          console.log('[WEB-VIEW] Auto-clicked send button', btn);
           return;
         }
       }
@@ -223,6 +306,17 @@
       sysAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
       sysAudioDest = sysAudioCtx.createMediaStreamDestination();
       nextChunkTime = sysAudioCtx.currentTime;
+
+      // Add a very low inaudible carrier dither (gain 0.000005) so MediaRecorder never sees zero-sample silence
+      try {
+        const osc = sysAudioCtx.createOscillator();
+        const gain = sysAudioCtx.createGain();
+        osc.frequency.setValueAtTime(440, sysAudioCtx.currentTime);
+        gain.gain.setValueAtTime(0.000005, sysAudioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(sysAudioDest);
+        osc.start();
+      } catch (_) {}
     }
     if (sysAudioCtx.state === 'suspended') {
       sysAudioCtx.resume();
@@ -257,28 +351,30 @@
     }
   };
 
+  window.ingestSystemAudioPCMBase64 = (base64) => {
+    try {
+      const binaryString = atob(base64);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      window.ingestSystemAudioPCM(bytes.buffer);
+    } catch (e) {
+      console.error('[WEB-VIEW] Base64 ingest error:', e);
+    }
+  };
+
   // Intercept getUserMedia so website voice dictation mic uses the system audio stream
   // without touching physical mic hardware (eliminating macOS orange indicator)
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async function(constraints) {
       console.log('[WEB-VIEW] Intercepted getUserMedia with constraints:', constraints);
-      if (constraints && (constraints.audio || constraints === true)) {
-        try {
-          if (typeof require !== 'undefined') {
-            try {
-              const { ipcRenderer } = require('electron');
-              ipcRenderer.sendToHost('request-system-audio-start');
-            } catch (_) {}
-          }
-          const stream = getOrCreateSystemAudioStream();
-          console.log('[WEB-VIEW] Feeding system audio stream to web page');
-          return stream;
-        } catch (e) {
-          console.warn('[WEB-VIEW] Fallback to original getUserMedia:', e);
-        }
-      }
-      return origGetUserMedia(constraints);
+      console.log('[CLUELY-ACTION] start-system-audio');
+      console.log('[CLUELY-ACTION] start-dictation');
+      const stream = getOrCreateSystemAudioStream();
+      console.log('[WEB-VIEW] Feeding system audio stream to web page (ZERO physical mic access)');
+      return stream;
     };
   }
 
@@ -324,18 +420,4 @@
       }
     `;
   };
-
-  // IPC listeners if available in webview context
-  try {
-    const { ipcRenderer } = require('electron');
-    ipcRenderer.on('check-hover-at', (_e, { x, y }) => {
-      window.checkHoverAt(x, y);
-    });
-    ipcRenderer.on('system-audio-chunk', (_e, chunk) => {
-      window.ingestSystemAudioPCM(chunk);
-    });
-    ipcRenderer.on('update-website-opacity', (_e, op) => {
-      window.updateWebsiteTransparency(op);
-    });
-  } catch (_) {}
 })();
