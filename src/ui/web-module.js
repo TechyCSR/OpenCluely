@@ -237,6 +237,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Console message bridge: Listen for in-page actions emitted by web-view-inject.js
     webview.addEventListener('console-message', async (e) => {
         const msg = e.message || '';
+        if (msg.includes('[CLUELY-ACTION] toggle-dictation')) {
+            const now = Date.now();
+            if (now - lastInPageTriggerTime < 800) {
+                return;
+            }
+            lastInPageTriggerTime = now;
+            btnDictate.click();
+            return;
+        }
+
         if (msg.includes('[CLUELY-ACTION] start-dictation') || msg.includes('[CLUELY-ACTION] start-system-audio')) {
             const now = Date.now();
             if (now - lastInPageTriggerTime < 1800) {
@@ -245,9 +255,8 @@ document.addEventListener('DOMContentLoaded', () => {
             lastInPageTriggerTime = now;
 
             console.log('[WEB-MODULE] In-page dictation mic triggered from webview, activating system audio capture');
-            setDictatingState(true);
-            if (window.electronAPI && window.electronAPI.startSystemAudioForWeb) {
-                await window.electronAPI.startSystemAudioForWeb();
+            if (!isDictating) {
+                btnDictate.click();
             }
         }
     });

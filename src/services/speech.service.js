@@ -1608,12 +1608,44 @@ class SpeechService extends EventEmitter {
   _getUserDataWhisperCandidate() {
     try {
       const { app } = require('electron');
-      const userData = app.getPath('userData');
       const binDir = process.platform === 'win32' ? 'Scripts' : 'bin';
       const ext = process.platform === 'win32' ? '.exe' : '';
-      const python = path.join(userData, '.venv-whisper', binDir, `python${ext}`);
-      if (fs.existsSync(python)) {
-        return { command: python, baseArgs: ['-m', 'whisper'] };
+      const candidatePaths = [];
+
+      if (app && typeof app.getPath === 'function') {
+        try {
+          const userData = app.getPath('userData');
+          if (userData) {
+            candidatePaths.push(path.join(userData, '.venv-whisper', binDir, `python${ext}`));
+          }
+        } catch (_) {}
+      }
+
+      // Check common userData locations across Setting / Settings / opencluely brands
+      if (process.platform === 'darwin') {
+        const home = process.env.HOME || '';
+        if (home) {
+          candidatePaths.push(
+            path.join(home, 'Library/Application Support/Setting/.venv-whisper/bin/python'),
+            path.join(home, 'Library/Application Support/opencluely/.venv-whisper/bin/python'),
+            path.join(home, 'Library/Application Support/Settings/.venv-whisper/bin/python')
+          );
+        }
+      } else if (process.platform === 'win32') {
+        const appData = process.env.APPDATA || '';
+        if (appData) {
+          candidatePaths.push(
+            path.join(appData, 'Setting', '.venv-whisper', 'Scripts', 'python.exe'),
+            path.join(appData, 'opencluely', '.venv-whisper', 'Scripts', 'python.exe'),
+            path.join(appData, 'Settings', '.venv-whisper', 'Scripts', 'python.exe')
+          );
+        }
+      }
+
+      for (const python of candidatePaths) {
+        if (python && fs.existsSync(python)) {
+          return { command: python, baseArgs: ['-m', 'whisper'] };
+        }
       }
     } catch (_) {
       // electron may not be available in unit tests
