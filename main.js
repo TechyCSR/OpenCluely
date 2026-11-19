@@ -1337,10 +1337,6 @@ class ApplicationController {
         return false;
       }
     });
-        logger.warn("Could not start speech service for web dictation", { error: err.message });
-        return false;
-      }
-    });
 
     ipcMain.on("toggle-recording", () => {
       this.toggleSpeechRecognition();
