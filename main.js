@@ -1335,6 +1335,11 @@ class ApplicationController {
         if (!speechService.isRecording) {
           logger.info("Starting speechService audio capture for web module system audio stream");
           await speechService.startRecording();
+        } else if (process.platform === 'darwin' && !speechService.systemAudioProcess) {
+          logger.info("Restarting speechService with system audio capture for web module");
+          await speechService.stopRecording();
+          await new Promise(r => setTimeout(r, 100));
+          await speechService.startRecording();
         }
         return true;
       } catch (err) {
@@ -2864,6 +2869,19 @@ class ApplicationController {
       windowManager.showLLMLoading(targetQuestion.substring(0, 80));
     }
 
+    // Broadcast finalized question to Web AI Workspace (ChatGPT, Gemini, Grok, Claude)
+    windowManager.broadcastToAllWindows("web-module-final-question", {
+      question: targetQuestion,
+      text: targetQuestion,
+      messageId,
+      isMergedUpdate
+    });
+    windowManager.broadcastToAllWindows("web-module-dictation-text", {
+      question: targetQuestion,
+      text: targetQuestion,
+      isFinal: true
+    });
+
     // 3. Record or update question in session history
     if (isMergedUpdate) {
       sessionManager.replaceLastUserInput(targetQuestion);
@@ -3320,6 +3338,12 @@ class ApplicationController {
       if (responseWindow && !responseWindow.isDestroyed()) {
         responseWindow.webContents.send(channel, data);
       }
+    }
+
+    // Also forward voice state events to Web Module workspace window if open
+    const webWin = windowManager.getWindow("webModule");
+    if (webWin && !webWin.isDestroyed() && webWin.isVisible()) {
+      webWin.webContents.send(channel, data);
     }
   }
 

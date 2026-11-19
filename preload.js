@@ -246,6 +246,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('web-module-dictation-text', handler);
     return () => ipcRenderer.removeListener('web-module-dictation-text', handler);
   },
+  onWebModuleFinalQuestion: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('web-module-final-question', handler);
+    return () => ipcRenderer.removeListener('web-module-final-question', handler);
+  },
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),
@@ -283,7 +288,8 @@ contextBridge.exposeInMainWorld('api', {
             'update-skill',
             'recording-started',
             'recording-stopped',
-            'web-module-dictation-text'
+            'web-module-dictation-text',
+            'web-module-final-question'
         ];
         if (validChannels.includes(channel)) {
             ipcRenderer.on(channel, (event, ...args) => func(...args));

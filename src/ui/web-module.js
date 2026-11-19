@@ -21,6 +21,25 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTab = 'chatgpt';
     let lastInPageTriggerTime = 0;
 
+    // ── Status Note Management (Ready, Listening, Processing, Idle, Error) ──
+    function getTabDisplayName() {
+        const activeTab = document.querySelector('.center-tabs .dwell-btn.active');
+        if (activeTab && activeTab.textContent) {
+            return activeTab.textContent.trim();
+        }
+        return currentTab ? (currentTab.charAt(0).toUpperCase() + currentTab.slice(1)) : 'ChatGPT';
+    }
+
+    function updateStatus(state, note) {
+        if (statusDot) {
+            statusDot.className = 'status-dot ' + state.toLowerCase();
+        }
+        if (statusText && note) {
+            statusText.textContent = note;
+        }
+    }
+    updateStatus('READY', 'Ready');
+
     // ── Preload Configuration via electronAPI (No require calls in renderer) ──
     async function initPreload() {
         try {
@@ -163,8 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.errorCode === -3 || !e.isMainFrame) {
             return;
         }
-        statusText.textContent = `Unable to connect: ${e.errorDescription || e.errorCode}. Click to retry`;
-        statusDot.style.background = '#ef4444';
+        updateStatus('ERROR', `Unable to connect: ${e.errorDescription || e.errorCode}. Click to retry`);
         loadBar.style.opacity = '0';
         loadBar.style.width = '0%';
     });
@@ -179,8 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     webview.addEventListener('did-start-loading', () => {
         loadBar.style.width = '40%';
         loadBar.style.opacity = '1';
-        statusText.textContent = 'Connecting…';
-        statusDot.style.background = '#f59e0b';
+        updateStatus('PROCESSING', 'Connecting…');
     });
 
     webview.addEventListener('did-stop-loading', () => {
@@ -189,8 +206,11 @@ document.addEventListener('DOMContentLoaded', () => {
             loadBar.style.opacity = '0';
             loadBar.style.width = '0%';
         }, 300);
-        statusText.textContent = 'Ready';
-        statusDot.style.background = '#10b981';
+        if (isDictating) {
+            updateStatus('IDLE', 'Idle: Waiting for speech…');
+        } else {
+            updateStatus('READY', 'Ready');
+        }
         injectScriptIntoWebview();
     });
 
@@ -313,19 +333,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ── Dictation (Capture System Audio & Inject into Web Chat) ──
+    // ── Continuous Speech Pipeline & Status Notes (Ready, Listening, Processing, Idle) ──
+    let isQuestionInFlight = false;
+
     function setDictatingState(active) {
         isDictating = active;
         if (active) {
             btnDictate.classList.add('recording');
-            dictateLabel.textContent = 'Listening…';
-            statusText.textContent = 'Capturing System Audio…';
-            statusDot.style.background = '#ef4444';
+            dictateLabel.textContent = 'Active';
+            updateStatus('LISTENING', 'Listening to system audio…');
         } else {
             btnDictate.classList.remove('recording');
             dictateLabel.textContent = 'Dictate';
-            statusText.textContent = 'Ready';
-            statusDot.style.background = '#10b981';
+            updateStatus('READY', 'Ready');
         }
     }
 
@@ -344,56 +364,119 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Listen to global recording state changes
-    if (window.electronAPI && window.electronAPI.receive) {
-        window.electronAPI.receive('recording-started', () => setDictatingState(true));
-        window.electronAPI.receive('recording-stopped', () => setDictatingState(false));
+    // Listen to global recording state changes from interview pipeline
+    if (window.electronAPI && window.electronAPI.onRecordingStarted) {
+        window.electronAPI.onRecordingStarted(() => {
+            if (!isDictating) setDictatingState(true);
+        });
+    }
+    if (window.electronAPI && window.electronAPI.onRecordingStopped) {
+        window.electronAPI.onRecordingStopped(() => {
+            if (isDictating) setDictatingState(false);
+        });
     }
 
-    // Listen for live speech transcription from main process
-    if (window.electronAPI && window.electronAPI.onTranscription) {
-        window.electronAPI.onTranscription((_event, data) => {
-            const text = (data && data.text) ? data.text : (typeof data === 'string' ? data : '');
-            if (!text || !text.trim()) return;
-
-            console.log('[WEB-MODULE] Received transcription from speech engine:', text);
-
-            if (webview && isDictating) {
-                statusText.textContent = 'Injecting question into chat…';
-                webview.executeJavaScript(`if (window.injectPromptAndSend) window.injectPromptAndSend(${JSON.stringify(text)});`)
-                    .then(() => {
-                        console.log('[WEB-MODULE] Auto-injected question into web chat');
-                        setTimeout(async () => {
-                            setDictatingState(false);
-                            if (window.electronAPI && window.electronAPI.stopSystemAudioForWeb) {
-                                await window.electronAPI.stopSystemAudioForWeb();
-                            }
-                        }, 800);
-                    })
-                    .catch(err => {
-                        console.error('[WEB-MODULE] Failed to inject prompt:', err);
-                        setDictatingState(false);
-                    });
+    // 1. Live speech activity (Interviewer talking)
+    if (window.electronAPI && window.electronAPI.onSpeechActive) {
+        window.electronAPI.onSpeechActive(() => {
+            if (isDictating && !isQuestionInFlight) {
+                updateStatus('LISTENING', 'Hearing speech…');
             }
         });
     }
 
-    // Direct IPC injection listener if sent via custom channel
+    // 2. Interim speech recognition (live hearing preview)
+    if (window.electronAPI && window.electronAPI.onInterimTranscription) {
+        window.electronAPI.onInterimTranscription((_event, data) => {
+            if (!isDictating || isQuestionInFlight) return;
+            const text = (data && data.text) ? data.text.trim() : (typeof data === 'string' ? data.trim() : '');
+            if (text) {
+                updateStatus('LISTENING', `Listening: "${text.substring(0, 24)}…"`);
+            }
+        });
+    }
+
+    // 3. Transcription fragment received from Whisper
+    if (window.electronAPI && window.electronAPI.onTranscriptionReceived) {
+        window.electronAPI.onTranscriptionReceived((_event, data) => {
+            if (!isDictating || isQuestionInFlight) return;
+            const text = (data && data.text) ? data.text.trim() : (typeof data === 'string' ? data.trim() : '');
+            if (text) {
+                updateStatus('PROCESSING', `Transcribing: "${text.substring(0, 24)}…"`);
+            }
+        });
+    }
+
+    // 4. Transcription finalized & LLM response starting (speaker paused, full question ready)
+    if (window.electronAPI && window.electronAPI.onTranscriptionLlmResponseStart) {
+        window.electronAPI.onTranscriptionLlmResponseStart((_event, data) => {
+            if (!isDictating) return;
+            const preview = (data && data.questionPreview) ? data.questionPreview.trim() : '';
+            if (preview) {
+                updateStatus('PROCESSING', `Sending: "${preview.substring(0, 24)}…"`);
+            }
+        });
+    }
+
+    // 5. Inject finalized question into active Web AI chat (ChatGPT, Gemini, Grok, Claude)
+    function handleFinalQuestionInjection(questionText) {
+        const text = (questionText || '').trim();
+        if (!text || !webview) return;
+
+        isQuestionInFlight = true;
+        const targetName = getTabDisplayName();
+        updateStatus('PROCESSING', `Sending to ${targetName}: "${text.substring(0, 24)}…"`);
+
+        webview.executeJavaScript(`if (window.injectPromptAndSend) window.injectPromptAndSend(${JSON.stringify(text)});`)
+            .then(() => {
+                console.log(`[WEB-MODULE] Successfully sent question into ${targetName}:`, text);
+                // DO NOT STOP DICTATION! Remain continuously listening for next question!
+                setTimeout(() => {
+                    isQuestionInFlight = false;
+                    if (isDictating) {
+                        updateStatus('IDLE', 'Idle: Waiting for next question…');
+                    } else {
+                        updateStatus('READY', 'Ready');
+                    }
+                }, 1800);
+            })
+            .catch((err) => {
+                console.error('[WEB-MODULE] Error injecting prompt into chat:', err);
+                isQuestionInFlight = false;
+                if (isDictating) {
+                    updateStatus('IDLE', 'Idle: Waiting for next question…');
+                }
+            });
+    }
+
+    // Listen for complete coalesced question from interview speech engine
+    if (window.electronAPI && window.electronAPI.onWebModuleFinalQuestion) {
+        window.electronAPI.onWebModuleFinalQuestion((data) => {
+            const question = (data && (data.question || data.text)) ? (data.question || data.text) : '';
+            if (question) {
+                handleFinalQuestionInjection(question);
+            }
+        });
+    }
+
+    // Listen for web-module-dictation-text (broadcast compatibility)
     if (window.electronAPI && window.electronAPI.onWebModuleDictationText) {
         window.electronAPI.onWebModuleDictationText((data) => {
-            const text = (data && data.text) ? data.text : (typeof data === 'string' ? data : '');
-            if (webview && text) {
-                statusText.textContent = 'Injecting question into chat…';
-                webview.executeJavaScript(`if (window.injectPromptAndSend) window.injectPromptAndSend(${JSON.stringify(text)});`)
-                    .then(() => {
-                        setTimeout(async () => {
-                            setDictatingState(false);
-                            if (window.electronAPI && window.electronAPI.stopSystemAudioForWeb) {
-                                await window.electronAPI.stopSystemAudioForWeb();
-                            }
-                        }, 800);
-                    })
-                    .catch(() => setDictatingState(false));
+            if (data && data.isFinal && data.text) {
+                handleFinalQuestionInjection(data.text);
+            }
+        });
+    }
+
+    // 6. Speech Status Watchdog (Transitions between Idle & Listening)
+    if (window.electronAPI && window.electronAPI.onSpeechStatus) {
+        window.electronAPI.onSpeechStatus((_event, data) => {
+            if (!isDictating || isQuestionInFlight) return;
+            const statusMsg = (data && data.status) ? data.status.toLowerCase() : '';
+            if (statusMsg.includes('waiting') || statusMsg.includes('idle') || statusMsg.includes('silence')) {
+                updateStatus('IDLE', 'Idle: Waiting for speech…');
+            } else if (statusMsg.includes('listening')) {
+                updateStatus('LISTENING', 'Listening to system audio…');
             }
         });
     }
