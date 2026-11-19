@@ -416,7 +416,8 @@ class SpeechService extends EventEmitter {
     this.recording = null;
     this.available = false;
     this.provider = 'disabled';
-    this.runtimeSettings = {};
+    this.runtimeSettings = { audioSourceMode: 'system' };
+    this.systemAudioProcess = null;
     this.segmentBuffers = [];
     this.segmentBytes = 0;
     this.segmentTimer = null;
@@ -428,7 +429,9 @@ class SpeechService extends EventEmitter {
     this.whisperWorker = new WhisperWorkerService();
     this.isProcessingAudio = false;
     this.manualStopRequested = false;
+    this._transcriptionStartedAt = 0;
     this._resetVadState();
+    this._startPipelineWatchdog();
 
     this.initializeClient();
   }
@@ -484,8 +487,8 @@ class SpeechService extends EventEmitter {
       this.speechConfig.speechRecognitionLanguage = azureConfig.language || 'en-US';
       this.speechConfig.outputFormat = sdk.OutputFormat.Detailed;
       this.speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, '5000');
-      this.speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '2000');
-      this.speechConfig.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, '2000');
+      this.speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '650');
+      this.speechConfig.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, '650');
 
       if (azureConfig.enableDictation) {
         this.speechConfig.enableDictation();
@@ -523,6 +526,7 @@ class SpeechService extends EventEmitter {
 
       this.available = true;
       this._configureWhisperWorker();
+      this.warmup().catch(() => {});
       logger.info('Local Whisper service initialized successfully', {
         command: [this.whisperCommand.command, ...this.whisperCommand.baseArgs].join(' '),
         model: this._getWhisperModel(),
@@ -537,6 +541,27 @@ class SpeechService extends EventEmitter {
       this.available = false;
       this.emit('status', 'Local Whisper unavailable');
     }
+  }
+
+  warmup() {
+    if (this.whisperWorker && typeof this.whisperWorker.warmup === 'function' && this.whisperWorker.isConfigured()) {
+      return this.whisperWorker.warmup({
+        model: this._getWhisperModel(),
+        modelDir: this._getWhisperModelDir(),
+        device: this._getWhisperDevice()
+      }).then((result) => {
+        logger.info('Whisper background warmup ready', {
+          model: result.model,
+          device: result.device,
+          gpu: result.gpu
+        });
+        return result;
+      }).catch((error) => {
+        logger.warn('Whisper background warmup notice', { error: error.message });
+        return null;
+      });
+    }
+    return Promise.resolve(null);
   }
 
   startRecording() {
@@ -684,37 +709,30 @@ class SpeechService extends EventEmitter {
     this.pendingFlush = false;
     this.pendingFinal = false;
     this.manualStopRequested = false;
+    this._chunksReceivedCount = 0;
     this._resetVadState();
     this.emit('recording-started');
-    this.emit('status', 'Local Whisper recording started');
+    this.emit('status', 'Waiting for speech…');
 
-    if (this.whisperWorker.isConfigured()) {
-      this.whisperWorker.warmup({
-        model: this._getWhisperModel(),
-        modelDir: this._getWhisperModelDir(),
-        device: this._getWhisperDevice()
-      }).then((result) => {
-        logger.info('Whisper GPU warmup completed while recording', {
-          model: result.model,
-          device: result.device,
-          gpu: result.gpu
-        });
-      }).catch((error) => {
-        logger.warn('Whisper warmup failed; transcription will use fallback', {
-          error: error.message
-        });
-      });
+    // On macOS in system mode (interviewer speaking from device), capture direct internal
+    // audio via the ScreenCaptureKit system_audio_recorder helper so all interviewer speech
+    // (from Zoom, Meet, Teams, Chrome, bot interview, internal speakers or headphones) is captured.
+    if (process.platform === 'darwin' && this.runtimeSettings.audioSourceMode === 'system') {
+      const started = this._startSystemAudioCapture();
+      if (started) {
+        return;
+      }
     }
 
     // Capture microphone audio in the renderer via the Web Audio API on Windows
     // and macOS. Windows lacks the Unix sox/rec/arecord tools node-record-lpcm16
-    // needs; macOS would otherwise require a Homebrew `sox` install (not bundled)
-    // and a child-process mic that the system TCC prompt can't attribute. The
-    // renderer path uses getUserMedia, which macOS prompts for cleanly via the
-    // app's NSMicrophoneUsageDescription. Linux keeps the native recorder path.
+    // needs; macOS uses it for microphone input mode. Linux keeps the native recorder path.
     this.useRendererCapture = process.platform === 'win32' || process.platform === 'darwin';
     if (this.useRendererCapture) {
-      this.emit('status', 'Waiting for microphone audio…');
+      const waitMsg = this.runtimeSettings.audioSourceMode === 'system'
+        ? 'Waiting for interviewer audio…'
+        : 'Waiting for microphone audio…';
+      this.emit('status', waitMsg);
       // The renderer starts sending chunks once it receives the recording-started event.
       if (!this._isManualCaptureMode()) {
         this._startSegmentWatchdog();
@@ -727,6 +745,90 @@ class SpeechService extends EventEmitter {
       this._startSegmentWatchdog();
     }
 
+  }
+
+  /**
+   * Start native macOS ScreenCaptureKit system audio capture.
+   * Directly intercepts and streams 16kHz mono 16-bit PCM internal device audio.
+   */
+  _startSystemAudioCapture() {
+    this._stopSystemAudioCapture();
+    const helperPaths = [
+      path.join(process.resourcesPath || '', '../MacOS/system_audio_recorder'),
+      path.join(__dirname, '../../scripts/system_audio_recorder'),
+      path.join(process.cwd(), 'scripts/system_audio_recorder')
+    ];
+    const binPath = helperPaths.find((p) => p && fs.existsSync(p));
+    if (!binPath) {
+      logger.warn('system_audio_recorder binary not found; falling back to renderer audio capture', { helperPaths });
+      return false;
+    }
+
+    try {
+      this.useRendererCapture = false;
+      this.emit('status', 'Waiting for speech…');
+      logger.info('Starting native ScreenCaptureKit system audio recorder', { binPath });
+
+      this.systemAudioProcess = spawn(binPath, [], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      this.systemAudioProcess.stdout.on('data', (chunk) => {
+        if (!this.isRecording) return;
+        this._chunksReceivedCount = (this._chunksReceivedCount || 0) + 1;
+        if (this._chunksReceivedCount === 1) {
+          this.emit('status', 'Waiting for speech…');
+          logger.info('System audio capture active: first audio chunk received from device');
+        }
+        this.emit('system-audio-chunk', chunk);
+        this._ingestWhisperAudio(chunk);
+      });
+
+      this.systemAudioProcess.stderr.on('data', (data) => {
+        const msg = data.toString();
+        if (msg.includes('[SYSTEM_AUDIO_READY]')) {
+          this.emit('status', 'Waiting for speech…');
+          logger.info('Native ScreenCaptureKit system audio capture ready');
+        } else if (msg.includes('[SYSTEM_AUDIO_ERROR]')) {
+          logger.warn('System audio recorder warning:', { msg: msg.trim() });
+        }
+      });
+
+      this.systemAudioProcess.on('error', (err) => {
+        logger.error('Failed to run system audio recorder helper', { error: err.message });
+      });
+
+      this.systemAudioProcess.on('exit', (code, signal) => {
+        logger.info('System audio recorder exited', { code, signal });
+        this.systemAudioProcess = null;
+        // Auto-heal: If recording is still supposed to be active, automatically resurrect recorder
+        if (this.isRecording && this.runtimeSettings.audioSourceMode === 'system') {
+          logger.warn('System audio recorder exited unexpectedly; automatically restarting in 400ms');
+          setTimeout(() => {
+            if (this.isRecording && this.runtimeSettings.audioSourceMode === 'system' && !this.systemAudioProcess) {
+              this._startSystemAudioCapture();
+            }
+          }, 400);
+        }
+      });
+
+      if (!this._isManualCaptureMode()) {
+        this._startSegmentWatchdog();
+      }
+      return true;
+    } catch (err) {
+      logger.error('Error starting system audio recorder process', { error: err.message });
+      return false;
+    }
+  }
+
+  _stopSystemAudioCapture() {
+    if (this.systemAudioProcess) {
+      try {
+        this.systemAudioProcess.kill('SIGINT');
+      } catch (_) {}
+      this.systemAudioProcess = null;
+    }
   }
 
   /**
@@ -746,6 +848,57 @@ class SpeechService extends EventEmitter {
     this.vadPreRoll = [];            // ring of recent pre-speech chunks
     this.vadPreRollMs = 0;           // duration held in the pre-roll ring
     this.vadLastChunkAt = 0;         // timestamp of the last ingested chunk
+  }
+
+  /**
+   * Global pipeline watchdog to guarantee self-healing from stuck states.
+   * Runs continuously to detect and immediately unlock any hung transcription or stalled recorder.
+   */
+  _startPipelineWatchdog() {
+    if (this._pipelineWatchdog) clearInterval(this._pipelineWatchdog);
+    this._pipelineWatchdog = setInterval(() => {
+      // 1. If not actively recording and transcription has been stuck, unlock it
+      if (!this.isRecording) {
+        if (this.transcriptionInFlight || this.isProcessingAudio) {
+          const stuckTime = this._transcriptionStartedAt ? (Date.now() - this._transcriptionStartedAt) : 0;
+          if (stuckTime > 15000) {
+            logger.warn('Failsafe: clearing stuck speech transcription state while idle', { stuckTime });
+            this.transcriptionInFlight = false;
+            this.isProcessingAudio = false;
+            this._transcriptionStartedAt = 0;
+            this.segmentBuffers = [];
+            this.segmentBytes = 0;
+            this.emit('status', 'Waiting for speech…');
+          }
+        }
+        return;
+      }
+
+      // 2. If actively recording, check if transcription has been in flight for > 20s
+      if (this.transcriptionInFlight) {
+        const stuckTime = this._transcriptionStartedAt ? (Date.now() - this._transcriptionStartedAt) : 0;
+        if (stuckTime > 20000) {
+          logger.warn('Failsafe: transcription in flight stuck for >20s, unlocking pipeline so next questions are captured', { stuckTime });
+          this.transcriptionInFlight = false;
+          this.isProcessingAudio = false;
+          this._transcriptionStartedAt = 0;
+          this.pendingFlush = false;
+          this.pendingFinal = false;
+          this.segmentBuffers = [];
+          this.segmentBytes = 0;
+          this.emit('status', 'Waiting for speech…');
+        }
+      }
+
+      // 3. If recording system audio on macOS and no chunks received for >8 seconds, verify helper is running
+      if (this.isRecording && this.runtimeSettings.audioSourceMode === 'system' && process.platform === 'darwin') {
+        const lastChunkTime = this.vadLastChunkAt ? (Date.now() - this.vadLastChunkAt) : 0;
+        if (!this.systemAudioProcess || lastChunkTime > 8000) {
+          logger.warn('Failsafe: system audio process absent or stalled (>8s silence), resurrecting helper...', { lastChunkTime });
+          this._startSystemAudioCapture();
+        }
+      }
+    }, 2000);
   }
 
   /**
@@ -795,6 +948,15 @@ class SpeechService extends EventEmitter {
       return;
     }
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    if (!this._chunksReceivedCount) {
+      this._chunksReceivedCount = 0;
+    }
+    this._chunksReceivedCount++;
+    if (this._chunksReceivedCount === 1) {
+      const modeText = this.runtimeSettings.audioSourceMode === 'system' ? 'system audio (interviewer)' : 'microphone';
+      this.emit('status', `Listening to ${modeText}…`);
+      logger.info('Live audio chunk received from renderer', { mode: this.runtimeSettings.audioSourceMode });
+    }
     this._ingestWhisperAudio(buffer);
   }
 
@@ -856,18 +1018,18 @@ class SpeechService extends EventEmitter {
 
     const floor = this._getVadEnergyFloor();
     // Seed / adapt the background noise floor while not actively speaking so
-    // the threshold tracks the room rather than a hard-coded constant. Seed
-    // conservatively: if the very first chunk is already loud (the user started
-    // talking immediately), clamp to the configured floor so a high seed can't
-    // push the enter-threshold out of reach and stall VAD for the whole session.
+    // the threshold tracks the room rather than a hard-coded constant.
+    const maxNoiseCeiling = Math.max(floor * 1.5, 0.005);
     if (!this.vadNoiseInit) {
-      this.vadNoiseFloor = Math.min(energy, floor);
+      this.vadNoiseFloor = Math.min(energy, maxNoiseCeiling);
       this.vadNoiseInit = true;
     }
-    // Hysteresis: it takes more energy to *start* an utterance than to keep
-    // one going, so a brief dip mid-sentence doesn't end it prematurely.
-    const enterThreshold = Math.max(floor, this.vadNoiseFloor * 2.5);
-    const exitThreshold = Math.max(floor * 0.7, this.vadNoiseFloor * 1.6);
+    // Dynamic hysteresis:
+    // enterThreshold: onset triggers when energy exceeds noise floor by 50% and meets calibrated floor
+    const enterThreshold = Math.min(0.006, Math.max(floor, this.vadNoiseFloor * 1.5));
+    // exitThreshold: silence detected when energy drops toward noise floor or below calibrated floor
+    // This ensures ambient hiss / speaker noise (0.0015-0.0028) is immediately recognized as silence!
+    const exitThreshold = Math.max(floor * 0.85, this.vadNoiseFloor * 1.2);
     const isVoiced = this.vadSpeaking ? energy >= exitThreshold : energy >= enterThreshold;
 
     if (!this.vadSpeaking) {
@@ -876,6 +1038,7 @@ class SpeechService extends EventEmitter {
         this.vadSpeaking = true;
         this.vadSpeechMs = 0;
         this.vadSilenceMs = 0;
+        this.emit('speech-active', true);
         for (const pre of this.vadPreRoll) {
           this.segmentBuffers.push(pre);
           this.segmentBytes += pre.length;
@@ -886,8 +1049,8 @@ class SpeechService extends EventEmitter {
         this.segmentBytes += buffer.length;
         this.vadSpeechMs += chunkMs;
       } else {
-        // Background: adapt the noise floor and keep a short pre-roll ring.
-        this.vadNoiseFloor = this.vadNoiseFloor * 0.95 + energy * 0.05;
+        // Background: adapt the noise floor with strict upper ceiling clamp
+        this.vadNoiseFloor = Math.min(this.vadNoiseFloor * 0.95 + energy * 0.05, maxNoiseCeiling);
         this.vadPreRoll.push(buffer);
         this.vadPreRollMs += chunkMs;
         const preRollLimit = this._getPreRollMs();
@@ -906,6 +1069,11 @@ class SpeechService extends EventEmitter {
     if (isVoiced) {
       this.vadSpeechMs += chunkMs;
       this.vadSilenceMs = 0;
+      const now = Date.now();
+      if (!this._lastSpeechActiveEmit || now - this._lastSpeechActiveEmit > 400) {
+        this._lastSpeechActiveEmit = now;
+        this.emit('speech-active', true);
+      }
     } else {
       this.vadSilenceMs += chunkMs;
     }
@@ -924,6 +1092,7 @@ class SpeechService extends EventEmitter {
       this.vadSpeaking = false;
       this.vadSpeechMs = 0;
       this.vadSilenceMs = 0;
+      this.emit('status', 'Waiting for speech…');
     }
   }
 
@@ -934,6 +1103,7 @@ class SpeechService extends EventEmitter {
     this.vadSilenceMs = 0;
     this.vadPreRoll = [];
     this.vadPreRollMs = 0;
+    this.emit('status', 'Processing speech…');
     this._flushWhisperSegment({ final: false }).catch((error) => {
       logger.error('Whisper segment transcription failed', { error: error.message });
     });
@@ -986,6 +1156,7 @@ class SpeechService extends EventEmitter {
   }
 
   async _finalizeWhisperStop({ captureAlreadyStopped = false } = {}) {
+    this._stopSystemAudioCapture();
     if (this.segmentTimer) {
       clearInterval(this.segmentTimer);
       this.segmentTimer = null;
@@ -1023,6 +1194,7 @@ class SpeechService extends EventEmitter {
   }
 
   _cleanup() {
+    this._stopSystemAudioCapture();
     if (this.segmentTimer) {
       clearInterval(this.segmentTimer);
       this.segmentTimer = null;
@@ -1244,19 +1416,23 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperModel() {
-    return this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'small';
+    return this._getSetting('whisperModel') || process.env.WHISPER_MODEL || config.get('speech.whisper.model') || 'base';
   }
 
   _getWhisperModelDir() {
     const configured = this._getSetting('whisperModelDir') || process.env.WHISPER_MODEL_DIR || '';
-    // Honor an absolute configured dir. Empty or relative values (the old
-    // `.whisper-models` default resolved against an unstable cwd) are replaced
-    // with the stable userData location the installer downloads weights into,
-    // so --model_dir and download_root always agree.
-    if (configured && path.isAbsolute(configured)) {
+    if (configured && path.isAbsolute(configured) && fs.existsSync(configured)) {
       return configured;
     }
-    return this._getUserDataModelDir() || configured;
+    const userDataDir = this._getUserDataModelDir();
+    if (userDataDir && fs.existsSync(userDataDir)) {
+      return userDataDir;
+    }
+    const projectDir = path.resolve(__dirname, '..', '..', '.whisper-models');
+    if (fs.existsSync(projectDir)) {
+      return projectDir;
+    }
+    return configured;
   }
 
   /**
@@ -1273,7 +1449,11 @@ class SpeechService extends EventEmitter {
   }
 
   _getWhisperLanguage() {
-    return this._getSetting('whisperLanguage') || process.env.WHISPER_LANGUAGE || config.get('speech.whisper.language') || 'auto';
+    const lang = this._getSetting('whisperLanguage') || process.env.WHISPER_LANGUAGE || config.get('speech.whisper.language') || 'en';
+    if (!lang || lang === 'auto' || lang === 'detect') {
+      return 'en';
+    }
+    return lang;
   }
 
   _getWhisperSegmentMs() {
@@ -1299,15 +1479,21 @@ class SpeechService extends EventEmitter {
   }
 
   _getSilenceHangoverMs() {
-    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 700, 200);
+    if (this.runtimeSettings.audioSourceMode === 'system') {
+      return 480; // Natural speech pause handling; avoids cutting utterances on minor speech pauses
+    }
+    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 480, 160);
   }
 
   _getMinUtteranceMs() {
+    if (this.runtimeSettings.audioSourceMode === 'system') {
+      return 250;
+    }
     return this._vadNumber('whisperMinUtteranceMs', 'WHISPER_MIN_UTTERANCE_MS', 'speech.whisper.minUtteranceMs', 350, 100);
   }
 
   _getMaxUtteranceMs() {
-    return this._vadNumber('whisperMaxUtteranceMs', 'WHISPER_MAX_UTTERANCE_MS', 'speech.whisper.maxUtteranceMs', 15000, 2000);
+    return this._vadNumber('whisperMaxUtteranceMs', 'WHISPER_MAX_UTTERANCE_MS', 'speech.whisper.maxUtteranceMs', 7500, 2000);
   }
 
   _getPreRollMs() {
@@ -1315,7 +1501,10 @@ class SpeechService extends EventEmitter {
   }
 
   _getVadEnergyFloor() {
-    return this._vadNumber('whisperVadEnergyFloor', 'WHISPER_VAD_ENERGY_FLOOR', 'speech.whisper.vadEnergyFloor', 0.008, 0.0005);
+    if (this.runtimeSettings.audioSourceMode === 'system') {
+      return 0.0035; // Calibrated floor for system audio stream (eliminates false continuous speech)
+    }
+    return this._vadNumber('whisperVadEnergyFloor', 'WHISPER_VAD_ENERGY_FLOOR', 'speech.whisper.vadEnergyFloor', 0.0045, 0.001);
   }
 
   _getSetting(key) {
@@ -1324,6 +1513,9 @@ class SpeechService extends EventEmitter {
   }
 
   _isManualCaptureMode() {
+    if (this.runtimeSettings.audioSourceMode === 'system') {
+      return false; // Always use zero-click VAD for system audio / bot interview questions
+    }
     return this._getWhisperCaptureMode() === 'manual';
   }
 
@@ -1396,7 +1588,7 @@ class SpeechService extends EventEmitter {
   _configureWhisperWorker() {
     const pythonPath = this._getWhisperPythonPath();
     const scriptPath = this._getWhisperWorkerScriptPath();
-    const idleUnloadMs = Math.max(10000, Number(process.env.WHISPER_GPU_IDLE_MS || 60000));
+    const idleUnloadMs = Math.max(10000, Number(process.env.WHISPER_GPU_IDLE_MS || 900000));
     this.whisperWorker.configure({ pythonPath, scriptPath, idleUnloadMs });
 
     logger.info('Whisper worker configuration', {
@@ -1416,12 +1608,44 @@ class SpeechService extends EventEmitter {
   _getUserDataWhisperCandidate() {
     try {
       const { app } = require('electron');
-      const userData = app.getPath('userData');
       const binDir = process.platform === 'win32' ? 'Scripts' : 'bin';
       const ext = process.platform === 'win32' ? '.exe' : '';
-      const python = path.join(userData, '.venv-whisper', binDir, `python${ext}`);
-      if (fs.existsSync(python)) {
-        return { command: python, baseArgs: ['-m', 'whisper'] };
+      const candidatePaths = [];
+
+      if (app && typeof app.getPath === 'function') {
+        try {
+          const userData = app.getPath('userData');
+          if (userData) {
+            candidatePaths.push(path.join(userData, '.venv-whisper', binDir, `python${ext}`));
+          }
+        } catch (_) {}
+      }
+
+      // Check common userData locations across Setting / Settings / opencluely brands
+      if (process.platform === 'darwin') {
+        const home = process.env.HOME || '';
+        if (home) {
+          candidatePaths.push(
+            path.join(home, 'Library/Application Support/Setting/.venv-whisper/bin/python'),
+            path.join(home, 'Library/Application Support/opencluely/.venv-whisper/bin/python'),
+            path.join(home, 'Library/Application Support/Settings/.venv-whisper/bin/python')
+          );
+        }
+      } else if (process.platform === 'win32') {
+        const appData = process.env.APPDATA || '';
+        if (appData) {
+          candidatePaths.push(
+            path.join(appData, 'Setting', '.venv-whisper', 'Scripts', 'python.exe'),
+            path.join(appData, 'opencluely', '.venv-whisper', 'Scripts', 'python.exe'),
+            path.join(appData, 'Settings', '.venv-whisper', 'Scripts', 'python.exe')
+          );
+        }
+      }
+
+      for (const python of candidatePaths) {
+        if (python && fs.existsSync(python)) {
+          return { command: python, baseArgs: ['-m', 'whisper'] };
+        }
       }
     } catch (_) {
       // electron may not be available in unit tests
@@ -1592,17 +1816,58 @@ class SpeechService extends EventEmitter {
     }
 
     const candidates = [];
-    // Normalize forward slashes to platform separator before trying anything
     const normalizedCmd = path.normalize(parsed.command);
 
-    candidates.push({
-      command: normalizedCmd,
-      baseArgs: parsed.baseArgs,
-      source: 'configured (normalized)'
-    });
+    // If an absolute path is provided, prioritize it directly
+    if (path.isAbsolute(normalizedCmd)) {
+      candidates.push({
+        command: normalizedCmd,
+        baseArgs: parsed.baseArgs,
+        source: 'configured (absolute)'
+      });
+    } else {
+      // Relative path: resolve against userData venv, project root, and cwd to prevent ENOENT in packaged builds
+      try {
+        const { app } = require('electron');
+        if (app && typeof app.getPath === 'function') {
+          const userDataPath = path.join(app.getPath('userData'), normalizedCmd);
+          if (fs.existsSync(userDataPath)) {
+            candidates.push({
+              command: userDataPath,
+              baseArgs: parsed.baseArgs,
+              source: 'configured (userData resolved)'
+            });
+          }
+        }
+      } catch (_) {}
+
+      const projectPath = path.resolve(__dirname, '..', '..', normalizedCmd);
+      if (fs.existsSync(projectPath)) {
+        candidates.push({
+          command: projectPath,
+          baseArgs: parsed.baseArgs,
+          source: 'configured (project resolved)'
+        });
+      }
+
+      const cwdPath = path.resolve(normalizedCmd);
+      if (fs.existsSync(cwdPath)) {
+        candidates.push({
+          command: cwdPath,
+          baseArgs: parsed.baseArgs,
+          source: 'configured (cwd resolved)'
+        });
+      }
+
+      candidates.push({
+        command: normalizedCmd,
+        baseArgs: parsed.baseArgs,
+        source: 'configured (normalized)'
+      });
+    }
 
     const resolvedPath = path.resolve(normalizedCmd);
-    if (resolvedPath !== normalizedCmd) {
+    if (resolvedPath !== normalizedCmd && !candidates.some(c => c.command === resolvedPath)) {
       candidates.push({
         command: resolvedPath,
         baseArgs: parsed.baseArgs,
@@ -1821,6 +2086,7 @@ class SpeechService extends EventEmitter {
     }
 
     if (!this.segmentBytes) {
+      this.emit('status', 'Waiting for speech…');
       return;
     }
 
@@ -1829,6 +2095,8 @@ class SpeechService extends EventEmitter {
     this.segmentBytes = 0;
 
     this.transcriptionInFlight = true;
+    this._transcriptionStartedAt = Date.now();
+    this.emit('status', 'Processing speech…');
 
     try {
       const transcript = await this._transcribeWhisperBuffer(audioBuffer);
@@ -1838,8 +2106,13 @@ class SpeechService extends EventEmitter {
       } else if (clean) {
         logger.debug('Dropped likely Whisper silence hallucination', { transcript: clean });
       }
+    } catch (err) {
+      logger.warn('Whisper transcription segment error', { error: err.message });
     } finally {
       this.transcriptionInFlight = false;
+      this._transcriptionStartedAt = 0;
+      // Always reset speech status to active listening so frontend never gets permanently stuck on "Processing speech…"
+      this.emit('status', 'Waiting for speech…');
 
       if (this.pendingFlush) {
         this.pendingFlush = false;
@@ -1881,7 +2154,7 @@ class SpeechService extends EventEmitter {
   }
 
   async _transcribeWhisperBuffer(audioBuffer) {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencluely-whisper-'));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sys-audio-'));
     const audioFilePath = path.join(tempDir, 'segment.wav');
 
     try {
@@ -1899,13 +2172,23 @@ class SpeechService extends EventEmitter {
 
     if (this.whisperWorker.isConfigured()) {
       const startedAt = Date.now();
+      let timeoutHandle = null;
       try {
-        const result = await this.whisperWorker.transcribe(audioFilePath, {
+        const timeoutMs = 25000;
+        const transcribePromise = this.whisperWorker.transcribe(audioFilePath, {
           model: this._getWhisperModel(),
           language: this._getWhisperLanguage(),
           modelDir: this._getWhisperModelDir(),
           device: this._getWhisperDevice()
         });
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutHandle = setTimeout(() => reject(new Error(`Whisper worker transcription timed out after ${timeoutMs}ms`)), timeoutMs);
+        });
+        const result = await Promise.race([transcribePromise, timeoutPromise]);
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
         logger.info('Persistent Whisper transcription completed', {
           processingTime: Date.now() - startedAt,
           model: result.model,
@@ -1915,16 +2198,30 @@ class SpeechService extends EventEmitter {
         });
         return result.text || '';
       } catch (error) {
-        logger.warn('Persistent Whisper worker failed; falling back to CLI', {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
+        logger.warn('Persistent Whisper worker failed; restarting worker and falling back to CLI', {
           error: error.message,
           workerTraceback: error.workerTraceback
         });
+        // Restart the worker process to avoid queue stall
+        try {
+          this.whisperWorker.restart();
+        } catch (_) {}
       }
     }
 
-    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencluely-whisper-out-'));
+    if (!this.whisperCommand || !this.whisperCommand.command) {
+      logger.warn('No Whisper CLI fallback configured; returning empty transcript');
+      return '';
+    }
+
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sys-audio-out-'));
+    const baseArgs = Array.isArray(this.whisperCommand.baseArgs) ? this.whisperCommand.baseArgs : [];
     const args = [
-      ...this.whisperCommand.baseArgs,
+      ...baseArgs,
       audioFilePath,
       '--model', this._getWhisperModel(),
       '--task', 'transcribe',
@@ -1950,15 +2247,22 @@ class SpeechService extends EventEmitter {
         });
 
         let stderr = '';
+        const timer = setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch (_) {}
+          reject(new Error('Whisper CLI timed out after 15000ms'));
+        }, 15000);
+
         child.stderr.on('data', (chunk) => {
           stderr += chunk.toString();
         });
 
         child.on('error', (error) => {
+          clearTimeout(timer);
           reject(error);
         });
 
         child.on('close', (code) => {
+          clearTimeout(timer);
           if (code === 0) {
             resolve();
             return;

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Target Box</title>
+  <link href="./dist/output.css" rel="stylesheet">
+  <link href="./src/styles/common.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: transparent !important;
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .box-container {
+      width: 100%;
+      height: 100%;
+      border: 1px dashed rgba(255, 255, 255, 0.25);
+      box-sizing: border-box;
+      position: relative;
+      background: rgba(255, 255, 255, 0.015);
+      -webkit-app-region: drag;
+    }
+    .toolbar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(15, 15, 15, 0.6);
+      backdrop-filter: blur(16px);
+      padding: 3px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      -webkit-app-region: no-drag;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      height: 28px;
+      box-sizing: border-box;
+    }
+    .btn {
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer !important;
+      font-size: 11px;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    /* Neutral Segmented Switch for OCR / No OCR (No colors) */
+    .segmented-switch {
+      display: inline-flex;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      padding: 1px;
+      gap: 1px;
+    }
+    .switch-option {
+      padding: 2px 7px;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.5);
+      border-radius: 3px;
+      cursor: pointer !important;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+    .switch-option.active {
+      background: rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.95);
+      font-weight: 600;
+    }
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .close-btn {
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer !important;
+      font-size: 10px;
+      transition: all 0.15s ease;
+    }
+    .close-btn:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    /* ── Close Button 3-Second Hover Dwell Ring ── */
+    .close-dwell-ring {
+      position: absolute;
+      inset: -2px;
+      pointer-events: none;
+      display: none;
+    }
+    .close-btn.dwelling .close-dwell-ring {
+      display: block;
+    }
+    .close-dwell-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+    .close-dwell-bg {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.18);
+      stroke-width: 8;
+    }
+    .close-dwell-bar {
+      fill: none;
+      stroke: #ef4444;
+      stroke-width: 9;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.04s linear;
+    }
+    .close-btn.dwell-fired {
+      animation: target-close-flash 0.3s ease;
+    }
+    @keyframes target-close-flash {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.15); background: #ef4444; color: #fff; }
+      100% { transform: scale(1); }
+    }
+
+    /* ── Alternate Theme: Light Mode (Stealth on White Backgrounds) ── */
+    body.theme-light .box-container {
+      border: 1px dashed rgba(0, 0, 0, 0.35);
+      background: rgba(0, 0, 0, 0.015);
+    }
+    body.theme-light .toolbar {
+      background: rgba(255, 255, 255, 0.88);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+      color: #0f172a;
+    }
+    body.theme-light .btn {
+      background: rgba(0, 0, 0, 0.05);
+      color: #0f172a;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+    body.theme-light .btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    body.theme-light .segmented-switch {
+      background: rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    body.theme-light .switch-option {
+      color: rgba(15, 23, 42, 0.6);
+    }
+    body.theme-light .switch-option.active {
+      background: rgba(255, 255, 255, 0.95);
+      color: #0f172a;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    body.theme-light .close-btn {
+      background: rgba(0, 0, 0, 0.05);
+      color: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    body.theme-light .close-dwell-bg {
+      stroke: rgba(0, 0, 0, 0.12);
+    }
+  </style>
+</head>
+<body>
+  <div class="box-container">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="btn" id="extractBtn"><i class="fas fa-bolt"></i> Extract</button>
+      </div>
+      <div class="toolbar-right">
+        <div class="segmented-switch">
+          <div class="switch-option active" id="ocrModeBtn" title="Apple Vision OCR">OCR</div>
+          <div class="switch-option" id="axModeBtn" title="Accessibility API">No OCR</div>
+        </div>
+        <button class="close-btn" id="closeBtn"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+  </div>
+  <script src="./src/ui/target-box.js"></script>
+</body>
+</html>

@@ -1,7 +1,11 @@
-/* Common Styles for OpenCluely UI Components */
+/* Common Styles for UI Components */
 
 /* Font imports */
 @import url('../../node_modules/@fortawesome/fontawesome-free/css/all.min.css');
+
+*, *::before, *::after, html, body {
+    cursor: default !important;
+}
 
 /* Base styles */
 body {
@@ -10,7 +14,7 @@ body {
     padding: 0;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    cursor: default;
+    cursor: default !important;
 }
 
 /* Common container styles */
@@ -134,7 +138,7 @@ body {
     border-radius: 6px;
     padding: 6px 10px;
     color: rgba(255, 255, 255, 0.9);
-    cursor: pointer;
+    cursor: default !important;
     transition: all 0.2s ease;
     font-size: 12px;
     font-weight: 500;
@@ -196,7 +200,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(5px);
     transition: all 0.3s ease;
-    cursor: pointer;
+    cursor: default !important;
     position: relative;
     overflow: hidden;
 }

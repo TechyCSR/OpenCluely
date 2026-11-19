@@ -9,6 +9,16 @@ import numpy as np
 import torch
 import whisper
 
+# Resource Governance: Cap CPU thread usage to up to 4 performance cores
+# for sub-second Whisper inference without starving browser/system audio.
+try:
+    num_threads = min(4, os.cpu_count() or 4)
+    torch.set_num_threads(num_threads)
+    if hasattr(torch, 'set_num_interop_threads'):
+        torch.set_num_interop_threads(1)
+except Exception:
+    pass
+
 
 model = None
 model_name = None
@@ -34,7 +44,7 @@ def unload_model():
 
 def ensure_model(request):
     global model, model_name, model_dir, model_device
-    requested_name = request.get('model') or 'small'
+    requested_name = request.get('model') or 'base'
     requested_dir = request.get('model_dir') or None
     requested_device = request.get('device') or 'auto'
     if requested_device == 'auto':
@@ -99,15 +109,18 @@ def load_audio_input(audio_path):
 
 def transcribe(request):
     loaded_model, device = ensure_model(request)
-    language = request.get('language') or None
-    if language in ('auto', 'detect'):
-        language = None
+    language = request.get('language') or 'en'
+    if language in ('auto', 'detect', ''):
+        language = 'en'
 
+    # Ultra-low latency transcription: beam_size=1 and best_of=1 for greedy decoding
     result = loaded_model.transcribe(
         load_audio_input(request['audio_path']),
         language=language,
         task='transcribe',
         fp16=device == 'cuda',
+        beam_size=1,
+        best_of=1,
         verbose=None,
         temperature=0,
         condition_on_previous_text=False,
@@ -145,7 +158,21 @@ for raw_line in sys.stdin:
         if action == 'transcribe':
             send({'id': request_id, 'ok': True, **transcribe(request)})
         elif action == 'warmup':
-            _, device = ensure_model(request)
+            requested_name = request.get('model') or 'base'
+            if model is not None and model_name == requested_name:
+                send({
+                    'id': request_id,
+                    'ok': True,
+                    'warmed': True,
+                    'already_warm': True,
+                    'device': model_device,
+                    'model': model_name,
+                    'cuda_available': torch.cuda.is_available(),
+                    'gpu': torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+                })
+                continue
+
+            loaded_model, device = ensure_model(request)
             send({
                 'id': request_id,
                 'ok': True,

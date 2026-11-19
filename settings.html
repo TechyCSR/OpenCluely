@@ -270,6 +270,98 @@
         .settings-note code {
             color: rgba(255, 255, 255, 0.9);
         }
+
+        /* ── Close Button 3-Second Hover Dwell Ring ── */
+        .close-dwell-ring {
+            position: absolute;
+            inset: -2px;
+            pointer-events: none;
+            display: none;
+        }
+        .btn.dwelling .close-dwell-ring {
+            display: block;
+        }
+        .close-dwell-svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+        .close-dwell-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.18);
+            stroke-width: 8;
+        }
+        .close-dwell-bar {
+            fill: none;
+            stroke: #ef4444;
+            stroke-width: 9;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.04s linear;
+        }
+        .btn.dwell-fired {
+            animation: settings-close-flash 0.3s ease;
+        }
+        @keyframes settings-close-flash {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); background: #ef4444; color: #fff; }
+            100% { transform: scale(1); }
+        }
+
+        /* ── Alternate Theme: Light Mode (Stealth on White Backgrounds) ── */
+        body.theme-light {
+            color: #0f172a !important;
+        }
+        body.theme-light .settings-container {
+            background: rgba(255, 255, 255, 0.94) !important;
+            border: 1px solid rgba(0, 0, 0, 0.14) !important;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+            color: #0f172a !important;
+        }
+        body.theme-light .settings-header {
+            background: rgba(248, 250, 252, 0.95) !important;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+        }
+        body.theme-light .header-title {
+            color: #0f172a !important;
+        }
+        body.theme-light .btn {
+            background: rgba(0, 0, 0, 0.05) !important;
+            border: 1px solid rgba(0, 0, 0, 0.12) !important;
+            color: #0f172a !important;
+        }
+        body.theme-light .btn:hover {
+            background: rgba(0, 0, 0, 0.1) !important;
+        }
+        body.theme-light #closeButton:hover {
+            background: rgba(239, 68, 68, 0.18) !important;
+            color: #dc2626 !important;
+            border-color: rgba(239, 68, 68, 0.4) !important;
+        }
+        body.theme-light .settings-section {
+            background: rgba(248, 250, 252, 0.9) !important;
+            border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        }
+        body.theme-light .settings-section-title {
+            color: #0f172a !important;
+        }
+        body.theme-light .settings-item-label {
+            color: #0f172a !important;
+        }
+        body.theme-light .settings-item-description {
+            color: #64748b !important;
+        }
+        body.theme-light .input-field {
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid rgba(0, 0, 0, 0.15) !important;
+            color: #0f172a !important;
+        }
+        body.theme-light select.input-field option {
+            background: #ffffff !important;
+            color: #0f172a !important;
+        }
+        body.theme-light .close-dwell-bg {
+            stroke: rgba(0, 0, 0, 0.12) !important;
+        }
     </style>
 </head>
 <body>
@@ -304,11 +396,11 @@
                             <div class="settings-item-description">Select your preferred programming language</div>
                         </div>
                         <select class="input-field" id="codingLanguage">
+                            <option value="python" selected>Python (Default)</option>
                             <option value="cpp">C++</option>
                             <option value="c">C</option>
-                            <option value="python">Python</option>
-                            <option value="java">Java</option>
                             <option value="javascript">JavaScript</option>
+                            <option value="java">Java</option>
                         </select>
                     </div>
                     <div class="settings-item">
@@ -318,7 +410,53 @@
                         </div>
                         <select class="input-field" id="activeSkill">
                             <option value="dsa">Data Structures & Algorithms</option>
+                            <option value="interview">AI Bot & Technical Interview</option>
                         </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-keyboard"></i>
+                    Auto-Typing Speed
+                </div>
+                <div class="settings-section-content">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Typing Cadence</div>
+                            <div class="settings-item-description">Keystroke pace when stealth-typing into external editors</div>
+                        </div>
+                        <select class="input-field" id="typingSpeed">
+                            <option value="super_slow_mix" selected>Super Slow + Slow & Deliberate (20 - 50 WPM, Random Switch) [Default]</option>
+                            <option value="super_slow">Super Slow (20 - 32 WPM)</option>
+                            <option value="slow">Slow & Deliberate (35 - 50 WPM)</option>
+                            <option value="natural">Natural / Human (50 - 70 WPM)</option>
+                            <option value="fast">Fast (75 - 95 WPM)</option>
+                            <option value="turbo">Turbo (95 - 120 WPM)</option>
+                            <option value="custom">Custom WPM Range</option>
+                        </select>
+                    </div>
+
+                    <div id="customWpmGroup" class="settings-group" style="display: none;">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Minimum Speed (WPM)</div>
+                                <div class="settings-item-description">Lower speed boundary with human jitter</div>
+                            </div>
+                            <input type="number" class="input-field" id="typingMinWpm" placeholder="20" min="15" max="200" step="5">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Maximum Speed (WPM)</div>
+                                <div class="settings-item-description">Upper speed boundary for keystroke bursts</div>
+                            </div>
+                            <input type="number" class="input-field" id="typingMaxWpm" placeholder="50" min="20" max="250" step="5">
+                        </div>
+                    </div>
+
+                    <div class="settings-note">
+                        Auto-typing generates authentic human keystrokes with natural cognitive pauses, punctuation timing, and smart indentation without modifier keys. Natural (50–70 WPM) is recommended for realistic technical interviews and coding assessments.
                     </div>
                 </div>
             </div>
@@ -360,6 +498,17 @@
                         <select class="input-field" id="speechProvider">
                             <option value="azure">Azure Speech</option>
                             <option value="whisper">Local Whisper</option>
+                        </select>
+                    </div>
+
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Audio Source Mode</div>
+                            <div class="settings-item-description">System audio captures interviewer bot questions without clicks; microphone captures your voice</div>
+                        </div>
+                        <select class="input-field" id="audioSourceMode">
+                            <option value="system">System Audio (Interviewer Bot Speech)</option>
+                            <option value="microphone">Microphone (Candidate Voice)</option>
                         </select>
                     </div>
 
@@ -464,10 +613,17 @@
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Google API Key</div>
-                            <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            <div class="settings-item-label">Google API Key (Primary)</div>
+                            <div class="settings-item-description">Primary Google API key for Gemini models</div>
                         </div>
                         <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Google API Key (Backup / Secondary)</div>
+                            <div class="settings-item-description">Automatic failover if primary key hits quota or rate limits</div>
+                        </div>
+                        <input type="password" class="input-field" id="geminiKeySecondary" placeholder="Enter secondary backup API key">
                     </div>
                 </div>
             </div>
@@ -490,6 +646,12 @@
         </div>
     </div>
 
+    <script src="./src/ui/corner-hover-drag.js"></script>
     <script src="./src/ui/settings-window.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.initCornerHoverDrag) window.initCornerHoverDrag('settings');
+        });
+    </script>
 </body>
 </html>

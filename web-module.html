@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct Web AI Workspace</title>
+    <link rel="stylesheet" href="./node_modules/@fortawesome/fontawesome-free/css/all.min.css">
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        :root {
+            --bg-glass: rgba(15, 18, 25, 0.94);
+            --header-glass: rgba(22, 27, 38, 0.88);
+            --border-glass: rgba(255, 255, 255, 0.12);
+            --accent-cyan: #38bdf8;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-purple: #a855f7;
+            --text-primary: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: transparent;
+            color: var(--text-primary);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border-radius: 12px;
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 16px 45px rgba(0, 0, 0, 0.65);
+        }
+
+        /* ── Top Header Toolbar ── */
+        .header-bar {
+            height: 44px;
+            background: var(--header-glass);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            border-bottom: 1px solid var(--border-glass);
+            -webkit-app-region: drag;
+            gap: 10px;
+            flex-shrink: 0;
+            z-index: 100;
+        }
+
+        .left-controls, .center-tabs, .right-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            -webkit-app-region: no-drag;
+        }
+
+        /* ── 1-Second Hover Dwell Buttons ── */
+        .dwell-btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text-muted);
+            border-radius: 7px;
+            padding: 4px 9px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: default;
+            transition: all 0.2s ease;
+            outline: none;
+            overflow: visible;
+        }
+
+        .dwell-btn:hover {
+            background: rgba(255, 255, 255, 0.14);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+
+        .dwell-btn.active {
+            background: rgba(56, 189, 248, 0.18);
+            border-color: rgba(56, 189, 248, 0.55);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+        }
+
+        /* Universal Dwell Ring in Header */
+        .btn-dwell-ring {
+            position: absolute;
+            inset: -2px;
+            pointer-events: none;
+            border-radius: 9px;
+            overflow: visible;
+        }
+
+        .btn-dwell-svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .btn-dwell-rect {
+            fill: none;
+            stroke: #38bdf8;
+            stroke-width: 2px;
+            stroke-linecap: round;
+            stroke-dasharray: 200;
+            stroke-dashoffset: 200;
+            transition: stroke-dashoffset 1000ms linear;
+            filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.8));
+        }
+
+        /* ── Specific Tab Styling ── */
+        .tab-chatgpt.active {
+            color: #10b981;
+            border-color: rgba(16, 185, 129, 0.5);
+            background: rgba(16, 185, 129, 0.16);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);
+        }
+        .tab-gemini.active {
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.5);
+            background: rgba(56, 189, 248, 0.16);
+        }
+        .tab-grok.active {
+            color: #f59e0b;
+            border-color: rgba(245, 158, 11, 0.5);
+            background: rgba(245, 158, 11, 0.16);
+        }
+        .tab-claude.active {
+            color: #c084fc;
+            border-color: rgba(192, 132, 252, 0.5);
+            background: rgba(192, 132, 252, 0.16);
+        }
+
+        /* ── Dictation Button ── */
+        .dictation-btn {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            color: #34d399;
+        }
+
+        .dictation-btn.recording {
+            background: rgba(239, 68, 68, 0.22) !important;
+            border-color: rgba(239, 68, 68, 0.7) !important;
+            color: #f87171 !important;
+            box-shadow: 0 0 14px rgba(239, 68, 68, 0.5);
+            animation: pulse-red 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-red {
+            from { box-shadow: 0 0 6px rgba(239, 68, 68, 0.4); }
+            to { box-shadow: 0 0 16px rgba(239, 68, 68, 0.8); }
+        }
+
+        /* ── Status Pill ── */
+        .status-pill {
+            font-size: 10px;
+            color: var(--text-muted);
+            padding: 3px 8px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            max-width: 250px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .status-pill:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.16);
+        }
+
+        #statusText {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+            flex-shrink: 0;
+            transition: all 0.25s ease;
+        }
+
+        .status-dot.ready {
+            background: #10b981;
+            box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+            animation: none;
+        }
+
+        .status-dot.listening {
+            background: #06b6d4;
+            box-shadow: 0 0 10px #06b6d4;
+            animation: pulse-dot 1.2s infinite ease-in-out;
+        }
+
+        .status-dot.processing {
+            background: #f59e0b;
+            box-shadow: 0 0 10px #f59e0b;
+            animation: pulse-dot 0.9s infinite ease-in-out;
+        }
+
+        .status-dot.idle {
+            background: #34d399;
+            box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+            animation: breathe-dot 2.5s infinite ease-in-out;
+        }
+
+        .status-dot.error {
+            background: #ef4444;
+            box-shadow: 0 0 8px #ef4444;
+            animation: none;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(0.85); opacity: 0.7; }
+            50% { transform: scale(1.3); opacity: 1; }
+        }
+
+        @keyframes breathe-dot {
+            0%, 100% { opacity: 0.55; }
+            50% { opacity: 1; }
+        }
+
+        /* ── Webview Area ── */
+        .webview-container {
+            flex: 1;
+            width: 100%;
+            height: calc(100% - 44px);
+            background: transparent !important;
+            position: relative;
+        }
+
+        webview {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent !important;
+        }
+
+        /* ── Loading Bar ── */
+        .page-load-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #38bdf8, #10b981);
+            width: 0%;
+            transition: width 0.3s ease, opacity 0.3s ease;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Header / Stealth Toolbar -->
+    <header class="header-bar">
+        <div class="left-controls">
+            <button class="dwell-btn" id="btnBack" title="Back (1s hover or click)"><i class="fas fa-chevron-left"></i></button>
+            <button class="dwell-btn" id="btnForward" title="Forward (1s hover or click)"><i class="fas fa-chevron-right"></i></button>
+            <button class="dwell-btn" id="btnReload" title="Reload Tab (1s hover or click)"><i class="fas fa-rotate-right"></i></button>
+            <button class="dwell-btn" id="btnNewChat" title="New Chat (1s hover or click)"><i class="fas fa-plus"></i></button>
+        </div>
+
+        <div class="center-tabs">
+            <button class="dwell-btn tab-chatgpt active" data-url="https://chatgpt.com" data-tab="chatgpt" title="ChatGPT (1s hover or click)">
+                <i class="fas fa-robot"></i> ChatGPT
+            </button>
+            <button class="dwell-btn tab-gemini" data-url="https://gemini.google.com/app" data-tab="gemini" title="Gemini (1s hover or click)">
+                <i class="fas fa-sparkles"></i> Gemini
+            </button>
+            <button class="dwell-btn tab-grok" data-url="https://grok.com" data-tab="grok" title="Grok (1s hover or click)">
+                <i class="fas fa-bolt"></i> Grok
+            </button>
+            <button class="dwell-btn tab-claude" data-url="https://claude.ai/new" data-tab="claude" title="Claude (1s hover or click)">
+                <i class="fas fa-brain"></i> Claude
+            </button>
+        </div>
+
+        <div class="right-controls">
+            <!-- Dictate System Audio Button (Interviewer Speech -> Chat) -->
+            <button class="dwell-btn dictation-btn" id="btnDictate" title="Dictate System Audio into Chat (1s hover or click)">
+                <i class="fas fa-headphones" id="dictateIcon"></i>
+                <span id="dictateLabel">Dictate</span>
+            </button>
+
+            <div class="status-pill" id="statusPill">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Ready</span>
+            </div>
+
+            <button class="dwell-btn" id="btnClose" title="Hide Web Window (1s hover or click)"><i class="fas fa-times"></i></button>
+        </div>
+    </header>
+
+    <!-- Webview Host -->
+    <main class="webview-container">
+        <div class="page-load-bar" id="loadBar"></div>
+        <webview id="chatWebview" partition="persist:webmodule" autosize="on" allowpopups webpreferences="contextIsolation=false"></webview>
+    </main>
+
+    <script src="./src/ui/web-module.js"></script>
+</body>
+</html>
+

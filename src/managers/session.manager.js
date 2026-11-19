@@ -8,7 +8,7 @@ class SessionManager {
     this.compressionEnabled = true;
     this.maxSize = config.get('session.maxMemorySize');
     this.compressionThreshold = config.get('session.compressionThreshold');
-    this.currentSkill = 'dsa'; // Default skill is DSA
+    this.currentSkill = 'interview'; // Default skill is Interview
     this.isInitialized = false;
     
     this.initializeWithSkillPrompts();
@@ -118,6 +118,43 @@ class SessionManager {
         textLength: text.length
       }
     });
+  }
+
+  /**
+   * Replace the last user question in session memory with a merged multi-part question
+   */
+  replaceLastUserInput(text) {
+    for (let i = this.sessionMemory.length - 1; i >= 0; i--) {
+      if (this.sessionMemory[i].role === 'user') {
+        this.sessionMemory[i].content = text;
+        if (this.sessionMemory[i].metadata) {
+          this.sessionMemory[i].metadata.textLength = text.length;
+          this.sessionMemory[i].metadata.isMerged = true;
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Replace or remove the last model response (e.g. when updating speculative response)
+   */
+  replaceOrRemoveLastModelResponse(newText = null) {
+    for (let i = this.sessionMemory.length - 1; i >= 0; i--) {
+      if (this.sessionMemory[i].role === 'model') {
+        if (newText) {
+          this.sessionMemory[i].content = newText;
+          if (this.sessionMemory[i].metadata) {
+            this.sessionMemory[i].metadata.responseLength = newText.length;
+          }
+        } else {
+          this.sessionMemory.splice(i, 1);
+        }
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -237,12 +274,8 @@ class SessionManager {
       // Use prompt loader to get language-enhanced prompt
       skillPrompt = promptLoader.getSkillPrompt(targetSkill, programmingLanguage);
     } else {
-      // Find skill prompt from session memory (fallback)
-      const skillPromptEvent = this.sessionMemory.find(event => 
-        event.action === 'skill_prompt_initialization' && 
-        event.skill === targetSkill
-      );
-      skillPrompt = skillPromptEvent?.content || null;
+      // Get live skill prompt from prompt loader with session memory fallback
+      skillPrompt = promptLoader.getSkillPrompt(targetSkill) || (skillPromptEvent?.content || null);
     }
     
     // Get recent events for this skill

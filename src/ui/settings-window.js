@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeButton = document.getElementById('closeButton');
     const quitButton = document.getElementById('quitButton');
     const speechProviderSelect = document.getElementById('speechProvider');
+    const audioSourceModeSelect = document.getElementById('audioSourceMode');
     const azureKeyInput = document.getElementById('azureKey');
     const azureRegionInput = document.getElementById('azureRegion');
     const whisperCommandInput = document.getElementById('whisperCommand');
@@ -17,10 +18,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const whisperResponseTargetSelect = document.getElementById('whisperResponseTarget');
     const whisperSegmentMsInput = document.getElementById('whisperSegmentMs');
     const geminiKeyInput = document.getElementById('geminiKey');
+    const geminiKeySecondaryInput = document.getElementById('geminiKeySecondary');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
+    const typingSpeedSelect = document.getElementById('typingSpeed');
+    const customWpmGroup = document.getElementById('customWpmGroup');
+    const typingMinWpmInput = document.getElementById('typingMinWpm');
+    const typingMaxWpmInput = document.getElementById('typingMaxWpm');
     const iconGrid = document.getElementById('iconGrid');
+
+    const SPEED_PRESETS = {
+        super_slow_mix: { min: 20, max: 50 },
+        super_slow: { min: 20, max: 32 },
+        slow: { min: 35, max: 50 },
+        natural: { min: 50, max: 70 },
+        fast: { min: 75, max: 95 },
+        turbo: { min: 95, max: 120 }
+    };
+
+    const updateTypingSpeedFieldStates = () => {
+        const speed = typingSpeedSelect ? typingSpeedSelect.value : 'super_slow_mix';
+        if (customWpmGroup) {
+            customWpmGroup.style.display = speed === 'custom' ? '' : 'none';
+        }
+        if (speed !== 'custom' && SPEED_PRESETS[speed]) {
+            if (typingMinWpmInput) typingMinWpmInput.value = SPEED_PRESETS[speed].min;
+            if (typingMaxWpmInput) typingMaxWpmInput.value = SPEED_PRESETS[speed].max;
+        }
+    };
 
     // Check if window.api exists
     if (!window.api) {
@@ -39,11 +65,75 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Close button handler
+    // Close button handler with both immediate click AND 3-second hover dwell
     if (closeButton) {
-        closeButton.addEventListener('click', () => {
-            window.api.send('close-settings');
+        closeButton.style.position = 'relative';
+
+        const ring = document.createElement('div');
+        ring.className = 'close-dwell-ring';
+        ring.innerHTML = `
+            <svg viewBox="0 0 100 100" class="close-dwell-svg">
+                <circle cx="50" cy="50" r="42" class="close-dwell-bg" />
+                <circle cx="50" cy="50" r="42" class="close-dwell-bar" stroke-dasharray="264" stroke-dashoffset="264" />
+            </svg>
+        `;
+        closeButton.appendChild(ring);
+        const bar = ring.querySelector('.close-dwell-bar');
+
+        let dwellAnimId = null;
+        let dwellStartTime = null;
+        const dwellDuration = 3000;
+
+        const doClose = () => {
+            if (window.api && window.api.send) {
+                window.api.send('close-settings');
+            } else {
+                window.close();
+            }
+        };
+
+        const cancelDwell = () => {
+            if (dwellAnimId) {
+                cancelAnimationFrame(dwellAnimId);
+                dwellAnimId = null;
+            }
+            dwellStartTime = null;
+            closeButton.classList.remove('dwelling');
+            if (bar) bar.style.strokeDashoffset = '264';
+        };
+
+        const startDwell = () => {
+            cancelDwell();
+            dwellStartTime = performance.now();
+            closeButton.classList.add('dwelling');
+
+            const step = (now) => {
+                if (!dwellStartTime) return;
+                const elapsed = now - dwellStartTime;
+                const progress = Math.min(elapsed / dwellDuration, 1);
+                if (bar) {
+                    bar.style.strokeDashoffset = (264 * (1 - progress)).toString();
+                }
+                if (progress >= 1) {
+                    cancelDwell();
+                    closeButton.classList.add('dwell-fired');
+                    doClose();
+                    return;
+                }
+                dwellAnimId = requestAnimationFrame(step);
+            };
+            dwellAnimId = requestAnimationFrame(step);
+        };
+
+        closeButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            cancelDwell();
+            doClose();
         });
+
+        closeButton.addEventListener('mouseenter', startDwell);
+        closeButton.addEventListener('mouseleave', cancelDwell);
+        window.addEventListener('mousedown', cancelDwell, true);
     }
 
     // Quit button handler with multiple attempts
@@ -75,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Function to load settings into UI
     const loadSettingsIntoUI = (settings) => {
         if (settings.speechProvider && speechProviderSelect) speechProviderSelect.value = settings.speechProvider;
+        if (settings.audioSourceMode && audioSourceModeSelect) audioSourceModeSelect.value = settings.audioSourceMode;
         // Always set the input value, even if empty, so the user sees what's
         // currently configured (including env-derived defaults). Previously
         // empty strings were skipped which left stale UI values.
@@ -88,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperResponseTargetSelect) whisperResponseTargetSelect.value = settings.whisperResponseTarget || 'both';
         if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
         if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
+        if (geminiKeySecondaryInput) geminiKeySecondaryInput.value = settings.geminiKeySecondary || '';
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
 
         // Set C++ as default if no coding language is specified
@@ -96,6 +188,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
+
+        if (typingSpeedSelect) typingSpeedSelect.value = settings.typingSpeed || 'super_slow_mix';
+        if (typingMinWpmInput) typingMinWpmInput.value = settings.typingMinWpm !== undefined ? settings.typingMinWpm : 20;
+        if (typingMaxWpmInput) typingMaxWpmInput.value = settings.typingMaxWpm !== undefined ? settings.typingMaxWpm : 50;
+        updateTypingSpeedFieldStates();
 
         // Handle icon selection
         const selectedIcon = settings.selectedIcon || settings.appIcon;
@@ -137,6 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveSettings = () => {
         const settings = {};
         if (speechProviderSelect) settings.speechProvider = speechProviderSelect.value;
+        if (audioSourceModeSelect) settings.audioSourceMode = audioSourceModeSelect.value;
         if (azureKeyInput) settings.azureKey = azureKeyInput.value;
         if (azureRegionInput) settings.azureRegion = azureRegionInput.value;
         if (whisperCommandInput) settings.whisperCommand = whisperCommandInput.value;
@@ -147,9 +245,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperResponseTargetSelect) settings.whisperResponseTarget = whisperResponseTargetSelect.value;
         if (whisperSegmentMsInput) settings.whisperSegmentMs = whisperSegmentMsInput.value;
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
+        if (geminiKeySecondaryInput) settings.geminiKeySecondary = geminiKeySecondaryInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
+        if (typingSpeedSelect) settings.typingSpeed = typingSpeedSelect.value;
+        if (typingMinWpmInput) settings.typingMinWpm = typingMinWpmInput.value;
+        if (typingMaxWpmInput) settings.typingMaxWpm = typingMaxWpmInput.value;
         
         window.api.send('save-settings', settings);
     };
@@ -196,7 +298,11 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperResponseTargetSelect,
         whisperSegmentMsInput,
         geminiKeyInput,
-        windowGapInput
+        geminiKeySecondaryInput,
+        windowGapInput,
+        audioSourceModeSelect,
+        typingMinWpmInput,
+        typingMaxWpmInput
     ];
 
     inputs.forEach(input => {
@@ -205,6 +311,13 @@ document.addEventListener('DOMContentLoaded', () => {
             input.addEventListener('blur', saveSettings);
         }
     });
+
+    if (typingSpeedSelect) {
+        typingSpeedSelect.addEventListener('change', () => {
+            updateTypingSpeedFieldStates();
+            saveSettings();
+        });
+    }
 
     if (speechProviderSelect) {
         speechProviderSelect.addEventListener('change', () => {
@@ -333,4 +446,35 @@ document.addEventListener('DOMContentLoaded', () => {
             window.api.send('close-settings');
         }
     });
+
+    // Opacity and Theme Synchronization
+    if (window.electronAPI) {
+        if (window.electronAPI.getOpacity) {
+            window.electronAPI.getOpacity().then(op => {
+                if (op !== undefined && op !== null) document.body.style.opacity = op.toString();
+            }).catch(() => {});
+        }
+        if (window.electronAPI.onOpacityUpdate) {
+            window.electronAPI.onOpacityUpdate((event, opacity) => {
+                document.body.style.opacity = opacity.toString();
+            });
+        }
+
+        const applyTheme = (theme) => {
+            if (theme === 'light') {
+                document.body.classList.add('theme-light');
+            } else {
+                document.body.classList.remove('theme-light');
+            }
+        };
+
+        if (window.electronAPI.getTheme) {
+            window.electronAPI.getTheme().then(applyTheme).catch(() => {});
+        }
+        if (window.electronAPI.onThemeChanged) {
+            window.electronAPI.onThemeChanged((event, theme) => {
+                applyTheme(theme);
+            });
+        }
+    }
 }); 

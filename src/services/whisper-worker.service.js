@@ -12,12 +12,12 @@ class WhisperWorkerService {
     this.pending = new Map();
     this.sequence = 0;
     this.idleTimer = null;
-    this.idleUnloadMs = 60000;
+    this.idleUnloadMs = 900000; // Keep model resident for 15 minutes during interviews to eliminate cold starts
     this.readyInfo = null;
     this.closing = false;
   }
 
-  configure({ pythonPath, scriptPath, idleUnloadMs = 60000 }) {
+  configure({ pythonPath, scriptPath, idleUnloadMs = 900000 }) {
     const changed = this.pythonPath !== pythonPath || this.scriptPath !== scriptPath;
     this.pythonPath = pythonPath;
     this.scriptPath = scriptPath;
@@ -44,8 +44,8 @@ class WhisperWorkerService {
     const result = await this._request({
       action: 'transcribe',
       audio_path: audioPath,
-      model: options.model || 'small',
-      language: options.language || 'auto',
+      model: options.model || 'base',
+      language: options.language || 'en',
       model_dir: options.modelDir || null,
       device: options.device || 'auto'
     });
@@ -60,7 +60,7 @@ class WhisperWorkerService {
     this._clearIdleTimer();
     return this._request({
       action: 'warmup',
-      model: options.model || 'small',
+      model: options.model || 'base',
       model_dir: options.modelDir || null,
       device: options.device || 'auto'
     });
@@ -199,7 +199,7 @@ class WhisperWorkerService {
     if (this.process && !this.process.killed) {
       try {
         this.closing = true;
-        this.process.kill();
+        this.process.kill('SIGKILL');
       } catch (_) {
         // Ignore shutdown races.
       }
@@ -207,6 +207,12 @@ class WhisperWorkerService {
     this.process = null;
     this.readyInfo = null;
     this._rejectAll(new Error('Whisper worker closed'));
+  }
+
+  restart() {
+    logger.info('Restarting persistent Whisper worker process');
+    this.close();
+    this._ensureProcess();
   }
 }
 

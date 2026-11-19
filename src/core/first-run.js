@@ -6,7 +6,7 @@ const os = require('os');
  * First-run detection and onboarding helper.
  *
  * Responsibilities:
- *   - Decide whether this is the user's first launch of OpenCluely
+ *   - Decide whether this is the user's first launch of the application
  *   - Auto-create a default `.env` from `env.example` if one is missing
  *   - Report whether a Gemini API key is configured (the only required key)
  *   - Persist a "first-run completed" sentinel so we don't nag on every launch
@@ -19,7 +19,7 @@ class FirstRunManager {
   constructor(options = {}) {
     this.cwd = options.cwd || process.cwd();
     this.envPath = options.envPath || path.join(this.cwd, '.env');
-    this.sentinelPath = options.sentinelPath || path.join(this.cwd, '.opencluely-firstrun-completed');
+    this.sentinelPath = options.sentinelPath || path.join(this.cwd, '.setting-init-done');
     this.logger = options.logger || console;
   }
 
@@ -28,10 +28,13 @@ class FirstRunManager {
    * sentinel file, or .env exists but has no Gemini key.
    */
   needsOnboarding() {
-    if (!fs.existsSync(this.sentinelPath)) return true;
-    if (!fs.existsSync(this.envPath)) return true;
     const content = this._readEnv();
     const gemini = (content.GEMINI_API_KEY || '').trim();
+    if (gemini && gemini !== 'your_gemini_api_key_here' && gemini.length > 10) {
+      return false;
+    }
+    if (!fs.existsSync(this.sentinelPath)) return true;
+    if (!fs.existsSync(this.envPath)) return true;
     return !gemini || gemini === 'your_gemini_api_key_here';
   }
 
@@ -138,8 +141,8 @@ class FirstRunManager {
       } catch (_) { /* try next */ }
     }
     return [
-      '# OpenCluely configuration',
-      '# Add your Google Gemini API key below — the app picks it up immediately.',
+      '# Application configuration',
+      '# Add your Google Gemini API key below.',
       '# Get a key from: https://aistudio.google.com/',
       '',
       'GEMINI_API_KEY=your_gemini_api_key_here',

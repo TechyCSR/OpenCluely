@@ -21,35 +21,29 @@
       .chat-container {
         width: 100%;
         height: 100vh;
-        background: linear-gradient(
-          135deg,
-          rgba(0, 0, 0, 0.3) 0%,
-          rgba(20, 20, 20, 0.4) 100%
-        );
-        backdrop-filter: blur(25px);
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.45) 0%, rgba(20, 20, 20, 0.6) 100%);
+        backdrop-filter: blur(20px);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
         display: flex;
         flex-direction: column;
         -webkit-app-region: drag;
       }
       .chat-header {
-        padding: 16px 20px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         display: flex;
         align-items: center;
         justify-content: space-between;
         -webkit-app-region: drag;
-        background: rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(10px);
         cursor: move;
         flex-shrink: 0;
       }
       .header-title {
-        color: rgba(255, 255, 255, 0.95);
-        font-size: 14px;
-        font-weight: 600;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 12px;
+        font-weight: normal;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -63,9 +57,9 @@
         gap: 8px;
       }
       .icon-button {
-        background: rgba(255, 255, 255, 0.12);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        color: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.6);
         border-radius: 6px;
         padding: 6px 10px;
         cursor: pointer;
@@ -76,13 +70,12 @@
         color: #fff;
       }
       .recording-indicator {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
-        background: #ff4757;
+        background: #ef4444;
         animation: pulse 2s infinite;
         display: none;
-        box-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
       }
       @keyframes pulse {
         0% {
@@ -120,7 +113,7 @@
         position: relative;
       }
       .message.transcription {
-        background: rgba(76, 175, 80, 0.15);
+        background: rgba(255, 255, 255, 0.03);
         animation: fadeInSlide 0.1s ease-out;
         position: relative;
       }
@@ -130,7 +123,7 @@
         left: -8px;
         top: 8px;
         font-size: 12px;
-        color: white;
+        color: rgba(255, 255, 255, 0.5);
         width: 20px;
         height: 20px;
         border-radius: 50%;
@@ -143,26 +136,25 @@
         from {
           opacity: 0;
           transform: translateX(-20px);
-          background: rgba(76, 175, 80, 0.3);
         }
         to {
           opacity: 1;
           transform: translateX(0);
-          background: rgba(76, 175, 80, 0.15);
         }
       }
       .message.system {
-        background: rgba(33, 150, 243, 0.1);
+        background: rgba(255, 255, 255, 0.02);
       }
       .message.error {
-        background: rgba(244, 67, 54, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+        border-left: 3px solid rgba(239, 68, 68, 0.5);
       }
       .message.user {
-        background: rgba(255, 152, 0, 0.1);
+        background: rgba(255, 255, 255, 0.04);
       }
       .message.assistant {
-        background: rgba(156, 39, 176, 0.1);
-        border-left: 3px solid #9c27b0;
+        background: rgba(255, 255, 255, 0.05);
+        border-left: 3px solid rgba(255, 255, 255, 0.3);
         /* Removed all height restrictions and overflow hidden */
         display: block;
       }
@@ -280,23 +272,51 @@
         position: absolute;
         top: 8px;
         right: 8px;
-        background: rgba(0, 0, 0, 0.5);
+        background: rgba(18, 18, 24, 0.75);
         color: rgba(255, 255, 255, 0.9);
         border: 1px solid rgba(255, 255, 255, 0.2);
-        padding: 4px 8px;
+        padding: 4px 10px;
         font-size: 11px;
-        border-radius: 4px;
+        font-weight: 500;
+        border-radius: 5px;
         cursor: pointer;
         -webkit-app-region: no-drag;
         transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        user-select: none;
+        z-index: 10;
       }
       .copy-btn:hover {
-        background: rgba(0,0,0,0.7);
+        background: rgba(30, 30, 42, 0.9);
+        border-color: rgba(255, 255, 255, 0.35);
       }
       .copy-btn.copied {
-        background: rgba(76, 175, 80, 0.8);
-        border-color: rgba(76, 175, 80, 0.9);
+        background: rgba(34, 197, 94, 0.85);
+        border-color: rgba(34, 197, 94, 0.95);
+        color: #fff;
         transform: scale(0.98);
+      }
+      .copy-dwell-track {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 2.5px;
+        background: rgba(255, 255, 255, 0.12);
+        display: none;
+      }
+      .copy-dwell-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #60a5fa, #34d399);
+        box-shadow: 0 0 6px rgba(96, 165, 250, 0.8);
+      }
+      .copy-btn.dwelling .copy-dwell-track {
+        display: block;
       }
       
       /* Ensure lists are fully visible */
@@ -671,6 +691,97 @@
           transform: translateY(0);
         }
       }
+
+      /* ── Close Button 3-Second Hover Dwell Ring ── */
+      .close-dwell-ring {
+        position: absolute;
+        inset: -2px;
+        pointer-events: none;
+        display: none;
+      }
+      .icon-button.dwelling .close-dwell-ring {
+        display: block;
+      }
+      .close-dwell-svg {
+        width: 100%;
+        height: 100%;
+        transform: rotate(-90deg);
+      }
+      .close-dwell-bg {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.18);
+        stroke-width: 8;
+      }
+      .close-dwell-bar {
+        fill: none;
+        stroke: #ef4444;
+        stroke-width: 9;
+        stroke-linecap: round;
+        transition: stroke-dashoffset 0.04s linear;
+      }
+      .icon-button.dwell-fired {
+        animation: chat-close-flash 0.3s ease;
+      }
+      @keyframes chat-close-flash {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.18); background: #ef4444; color: #fff; }
+        100% { transform: scale(1); }
+      }
+
+      /* ── Alternate Theme: Light Mode (Stealth on White Backgrounds) ── */
+      body.theme-light {
+        color: #0f172a !important;
+      }
+      body.theme-light .chat-container {
+        background: rgba(255, 255, 255, 0.94) !important;
+        border: 1px solid rgba(0, 0, 0, 0.14) !important;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+        color: #0f172a !important;
+      }
+      body.theme-light .chat-header {
+        background: rgba(248, 250, 252, 0.95) !important;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+      }
+      body.theme-light .header-title {
+        color: #0f172a !important;
+      }
+      body.theme-light .icon-button {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border: 1px solid rgba(0, 0, 0, 0.12) !important;
+        color: #0f172a !important;
+      }
+      body.theme-light .icon-button:hover {
+        background: rgba(0, 0, 0, 0.1) !important;
+      }
+      body.theme-light #closeChatBtn:hover {
+        background: rgba(239, 68, 68, 0.18) !important;
+        color: #dc2626 !important;
+        border-color: rgba(239, 68, 68, 0.4) !important;
+      }
+      body.theme-light .message.user .message-bubble {
+        background: rgba(37, 99, 235, 0.12) !important;
+        color: #1e3a8a !important;
+        border: 1px solid rgba(37, 99, 235, 0.25) !important;
+      }
+      body.theme-light .message.assistant .message-bubble {
+        background: rgba(241, 245, 249, 0.95) !important;
+        color: #0f172a !important;
+        border: 1px solid rgba(0, 0, 0, 0.1) !important;
+      }
+      body.theme-light .chat-input {
+        background: rgba(248, 250, 252, 0.95) !important;
+        border-top: 1px solid rgba(0, 0, 0, 0.1) !important;
+      }
+      body.theme-light .input-container {
+        background: rgba(255, 255, 255, 0.9) !important;
+        border: 1px solid rgba(0, 0, 0, 0.15) !important;
+      }
+      body.theme-light .input-container input {
+        color: #0f172a !important;
+      }
+      body.theme-light .close-dwell-bg {
+        stroke: rgba(0, 0, 0, 0.12) !important;
+      }
     </style>
   </head>
   <body>
@@ -684,6 +795,9 @@
         <div class="header-actions">
           <button class="icon-button" id="clearHistoryBtn" title="Clear chat history">
             <i class="fas fa-trash"></i>
+          </button>
+          <button class="icon-button" id="closeChatBtn" title="Close Chat">
+            <i class="fas fa-times"></i>
           </button>
         </div>
       </div>
@@ -1052,8 +1166,12 @@
       }
       function attachCopy(btn, codeText) {
         if (!btn) return;
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
+        let dwellAnimId = null;
+        let dwellStartTime = null;
+        const dwellDuration = 3000; // 3 seconds hover dwell feature
+
+        const doCopy = async () => {
+          cancelDwell();
           try {
             let ok = false;
             if (window.electronAPI && typeof window.electronAPI.copyToClipboard === 'function') {
@@ -1075,13 +1193,63 @@
             }
             if (ok) {
               btn.classList.add('copied');
-              const original = btn.textContent;
-              btn.textContent = 'Copied';
-              setTimeout(() => { btn.classList.remove('copied'); btn.textContent = original || 'Copy'; }, 1200);
+              const labelEl = btn.querySelector('.copy-btn-text') || btn;
+              const original = labelEl.textContent;
+              labelEl.textContent = 'Copied!';
+              setTimeout(() => {
+                btn.classList.remove('copied');
+                labelEl.textContent = original && original !== 'Copied!' ? original : 'Copy';
+              }, 1400);
             }
           } catch (err) {
             console.warn('Copy failed', err);
           }
+        };
+
+        const cancelDwell = () => {
+          if (dwellAnimId) {
+            cancelAnimationFrame(dwellAnimId);
+            dwellAnimId = null;
+          }
+          dwellStartTime = null;
+          btn.classList.remove('dwelling');
+          const fill = btn.querySelector('.copy-dwell-fill');
+          if (fill) fill.style.width = '0%';
+        };
+
+        const startDwell = () => {
+          cancelDwell();
+          dwellStartTime = performance.now();
+          btn.classList.add('dwelling');
+          const fill = btn.querySelector('.copy-dwell-fill');
+
+          const step = () => {
+            if (!dwellStartTime) return;
+            const elapsed = performance.now() - dwellStartTime;
+            const progress = Math.min(elapsed / dwellDuration, 1);
+            if (fill) {
+              fill.style.width = `${progress * 100}%`;
+            }
+            if (progress >= 1) {
+              doCopy();
+              return;
+            }
+            dwellAnimId = requestAnimationFrame(step);
+          };
+          dwellAnimId = requestAnimationFrame(step);
+        };
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          doCopy();
+        });
+
+        btn.addEventListener('mouseenter', () => {
+          startDwell();
+        });
+
+        btn.addEventListener('mouseleave', () => {
+          cancelDwell();
         });
       }
       function addCodeSnippet(language, code, skipPersist = false) {
@@ -1102,7 +1270,11 @@
 
         const copyBtn = document.createElement('button');
         copyBtn.className = 'copy-btn';
-        copyBtn.textContent = 'Copy';
+        copyBtn.title = 'Click or hover 3s to copy code';
+        copyBtn.innerHTML = `
+          <span class="copy-btn-text">Copy</span>
+          <div class="copy-dwell-track"><div class="copy-dwell-fill"></div></div>
+        `;
         attachCopy(copyBtn, code || '');
 
         pre.appendChild(copyBtn);
@@ -1212,7 +1384,84 @@
 
       // UI Event Listeners
       if (clearHistoryBtn) {
-        clearHistoryBtn.addEventListener('click', () => clearChatHistory());
+        clearHistoryBtn.addEventListener('click', () => {
+          chatMessages.innerHTML = '';
+          chatHistory = [];
+          if (whysperAPI && whysperAPI.clearSessionMemory) {
+            whysperAPI.clearSessionMemory();
+          }
+        });
+      }
+      
+      const closeChatBtn = document.getElementById('closeChatBtn');
+      if (closeChatBtn) {
+        closeChatBtn.style.position = 'relative';
+
+        const ring = document.createElement('div');
+        ring.className = 'close-dwell-ring';
+        ring.innerHTML = `
+          <svg viewBox="0 0 100 100" class="close-dwell-svg">
+            <circle cx="50" cy="50" r="42" class="close-dwell-bg" />
+            <circle cx="50" cy="50" r="42" class="close-dwell-bar" stroke-dasharray="264" stroke-dashoffset="264" />
+          </svg>
+        `;
+        closeChatBtn.appendChild(ring);
+        const bar = ring.querySelector('.close-dwell-bar');
+
+        let dwellAnimId = null;
+        let dwellStartTime = null;
+        const dwellDuration = 3000;
+
+        const doClose = () => {
+          if (whysperAPI && whysperAPI.hideChatWindow) {
+            whysperAPI.hideChatWindow();
+          } else {
+            window.close();
+          }
+        };
+
+        const cancelDwell = () => {
+          if (dwellAnimId) {
+            cancelAnimationFrame(dwellAnimId);
+            dwellAnimId = null;
+          }
+          dwellStartTime = null;
+          closeChatBtn.classList.remove('dwelling');
+          if (bar) bar.style.strokeDashoffset = '264';
+        };
+
+        const startDwell = () => {
+          cancelDwell();
+          dwellStartTime = performance.now();
+          closeChatBtn.classList.add('dwelling');
+
+          const step = (now) => {
+            if (!dwellStartTime) return;
+            const elapsed = now - dwellStartTime;
+            const progress = Math.min(elapsed / dwellDuration, 1);
+            if (bar) {
+              bar.style.strokeDashoffset = (264 * (1 - progress)).toString();
+            }
+            if (progress >= 1) {
+              cancelDwell();
+              closeChatBtn.classList.add('dwell-fired');
+              doClose();
+              return;
+            }
+            dwellAnimId = requestAnimationFrame(step);
+          };
+          dwellAnimId = requestAnimationFrame(step);
+        };
+
+        closeChatBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          cancelDwell();
+          doClose();
+        });
+
+        closeChatBtn.addEventListener('mouseenter', startDwell);
+        closeChatBtn.addEventListener('mouseleave', cancelDwell);
+        window.addEventListener('mousedown', cancelDwell, true);
       }
 
       if (micButton) {
@@ -1315,6 +1564,42 @@
       if (!chatHistory || chatHistory.length === 0) {
         addMessage('Recording in Progress. press Alt+R to stop recording.', 'system');
       }
+
+      if (window.electronAPI) {
+        if (window.electronAPI.getOpacity) {
+          window.electronAPI.getOpacity().then(op => {
+            if (op !== undefined && op !== null) document.body.style.opacity = op.toString();
+          }).catch(() => {});
+        }
+        if (window.electronAPI.onOpacityUpdate) {
+          window.electronAPI.onOpacityUpdate((event, opacity) => {
+            document.body.style.opacity = opacity.toString();
+          });
+        }
+
+        const applyTheme = (theme) => {
+          if (theme === 'light') {
+            document.body.classList.add('theme-light');
+          } else {
+            document.body.classList.remove('theme-light');
+          }
+        };
+
+        if (window.electronAPI.getTheme) {
+          window.electronAPI.getTheme().then(applyTheme).catch(() => {});
+        }
+        if (window.electronAPI.onThemeChanged) {
+          window.electronAPI.onThemeChanged((event, theme) => {
+            applyTheme(theme);
+          });
+        }
+      }
+    </script>
+    <script src="./src/ui/corner-hover-drag.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        if (window.initCornerHoverDrag) window.initCornerHoverDrag('chat');
+      });
     </script>
   </body>
 </html>
